@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  fullName     String       @map("full_name")
+  role         String       @default("creator")
+  plan         String       @default("free")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  bots         Bot[]
+  campaigns    AdCampaign[]
+  @@map("users")
+}
+
+model Bot {
+  id                     String        @id @default(uuid())
+  creatorId              String        @map("creator_id")
+  creator                User          @relation(fields: [creatorId], references: [id])
+  botToken               String        @unique @map("bot_token")
+  botUsername            String?       @map("bot_username")
+  botName                String?       @map("bot_name")
+  webhookSet             Boolean       @default(false) @map("webhook_set")
+  isActive               Boolean       @default(true) @map("is_active")
+  category               String        @default("general")
+  platformAdminConfirmed Boolean       @default(false) @map("platform_admin_confirmed")
+  createdAt              DateTime      @default(now()) @map("created_at")
+  settings               BotSettings?
+  botUsers               BotUser[]
+  transactions           Transaction[]
+  adImpressions          AdImpression[]
+  @@map("bots")
+}
+
+model BotSettings {
+  id                      String  @id @default(uuid())
+  botId                   String  @unique @map("bot_id")
+  bot                     Bot     @relation(fields: [botId], references: [id])
+  welcomeMessage          String  @default("Welcome! Use the buttons below to get started.") @map("welcome_message")
+  currencyName            String  @default("Coins") @map("currency_name")
+  currencySymbol          String  @default("🪙") @map("currency_symbol")
+  usdToCurrencyRate       Decimal @default(1000) @map("usd_to_currency_rate")
+  minDepositUsd           Decimal @default(1.00) @map("min_deposit_usd")
+  minWithdrawUsd          Decimal @default(0.50) @map("min_withdraw_usd")
+  withdrawFeePercent      Decimal @default(0) @map("withdraw_fee_percent")
+  oxapayMerchantKey       String? @map("oxapay_merchant_key")
+  faucetpayApiKey         String? @map("faucetpay_api_key")
+  requireChannelJoin      Boolean @default(false) @map("require_channel_join")
+  requiredChannelId       String? @map("required_channel_id")
+  requiredChannelUsername String? @map("required_channel_username")
+  @@map("bot_settings")
+}
+
+model BotUser {
+  id               String        @id @default(uuid())
+  botId            String        @map("bot_id")
+  bot              Bot           @relation(fields: [botId], references: [id])
+  telegramUserId   BigInt        @map("telegram_user_id")
+  telegramUsername String?       @map("telegram_username")
+  firstName        String        @map("first_name")
+  balance          Decimal       @default(0)
+  joinedAt         DateTime      @default(now()) @map("joined_at")
+  lastActive       DateTime      @default(now()) @map("last_active")
+  isBanned         Boolean       @default(false) @map("is_banned")
+  channelVerified  Boolean       @default(false) @map("channel_verified")
+  transactions     Transaction[]
+  adImpressions    AdImpression[]
+  @@unique([botId, telegramUserId])
+  @@map("bot_users")
+}
+
+model Transaction {
+  id                String   @id @default(uuid())
+  botId             String   @map("bot_id")
+  bot               Bot      @relation(fields: [botId], references: [id])
+  botUserId         String   @map("bot_user_id")
+  botUser           BotUser  @relation(fields: [botUserId], references: [id])
+  type              String
+  amountCurrency    Decimal  @map("amount_currency")
+  amountUsd         Decimal  @map("amount_usd")
+  status            String   @default("pending")
+  gateway           String?
+  gatewayTxId       String?  @map("gateway_tx_id")
+  depositAddress    String?  @map("deposit_address")
+  withdrawAddress   String?  @map("withdraw_address")
+  platformFeeAmount Decimal  @default(0) @map("platform_fee_amount")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  @@map("transactions")
+}
+
+model AdCampaign {
+  id                   String         @id @default(uuid())
+  advertiserId         String         @map("advertiser_id")
+  advertiser           User           @relation(fields: [advertiserId], references: [id])
+  title                String
+  messageText          String         @map("message_text")
+  buttonText           String?        @map("button_text")
+  buttonUrl            String?        @map("button_url")
+  targetCategory       String         @default("all") @map("target_category")
+  budgetUsd            Decimal        @map("budget_usd")
+  spentUsd             Decimal        @default(0) @map("spent_usd")
+  costPerImpressionUsd Decimal        @default(0.001) @map("cost_per_impression_usd")
+  isActive             Boolean        @default(false) @map("is_active")
+  isPaid               Boolean        @default(false) @map("is_paid")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  impressions          AdImpression[]
+  @@map("ad_campaigns")
+}
+
+model AdImpression {
+  id         String     @id @default(uuid())
+  campaignId String     @map("campaign_id")
+  campaign   AdCampaign @relation(fields: [campaignId], references: [id])
+  botId      String     @map("bot_id")
+  bot        Bot        @relation(fields: [botId], references: [id])
+  botUserId  String     @map("bot_user_id")
+  botUser    BotUser    @relation(fields: [botUserId], references: [id])
+  shownAt    DateTime   @default(now()) @map("shown_at")
+  wasClicked Boolean    @default(false) @map("was_clicked")
+  @@map("ad_impressions")
+}
+
