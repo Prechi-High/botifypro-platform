@@ -1,6 +1,6 @@
 require('dotenv').config()
 
-import express from 'express'
+import express, { type Request, type Response } from 'express'
 import cors from 'cors'
 import { handleWebhook } from './webhook'
 import { registerBot, registerBotRoute, validateBotTokenRoute } from './registration'
@@ -12,7 +12,7 @@ const app = express()
 app.use(express.json())
 app.use(cors())
 
-app.get('/health', async (_req, res) => {
+app.get('/health', async (_req: Request, res: Response) => {
   try {
     res.json({ status: 'ok', timestamp: new Date(), service: 'BotifyPro Bot Engine' })
   } catch (err: any) {
@@ -20,7 +20,7 @@ app.get('/health', async (_req, res) => {
   }
 })
 
-app.post('/webhook/:botToken', async (req, res) => {
+app.post('/webhook/:botToken', async (req: Request, res: Response) => {
   try {
     await handleWebhook(req, res)
   } catch (err: any) {
@@ -28,7 +28,7 @@ app.post('/webhook/:botToken', async (req, res) => {
   }
 })
 
-app.post('/api/bots/validate', async (req, res) => {
+app.post('/api/bots/validate', async (req: Request, res: Response) => {
   try {
     await validateBotTokenRoute(req, res)
   } catch (err: any) {
@@ -36,7 +36,7 @@ app.post('/api/bots/validate', async (req, res) => {
   }
 })
 
-app.post('/api/bots/register', async (req, res) => {
+app.post('/api/bots/register', async (req: Request, res: Response) => {
   try {
     await registerBotRoute(req, res)
   } catch (err: any) {
@@ -44,7 +44,7 @@ app.post('/api/bots/register', async (req, res) => {
   }
 })
 
-app.post('/webhooks/oxapay', async (req, res) => {
+app.post('/webhooks/oxapay', async (req: Request, res: Response) => {
   try {
     await handleOxapayWebhook(req, res)
   } catch (err: any) {
@@ -52,7 +52,7 @@ app.post('/webhooks/oxapay', async (req, res) => {
   }
 })
 
-app.post('/api/admin/refresh-webhooks', async (_req, res) => {
+app.post('/api/admin/refresh-webhooks', async (_req: Request, res: Response) => {
   try {
     const bots = await prisma.bot.findMany({ where: { isActive: true } })
     for (const bot of bots) {
