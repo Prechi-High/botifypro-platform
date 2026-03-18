@@ -4,6 +4,10 @@ import { redisDel, redisGet, redisSet } from '../redis'
 import { sendMessage } from '../commands'
 
 export async function createOxapayInvoice(bot: any, botUser: any, chatId: number) {
+  if (!bot.settings) {
+    console.error('Bot settings not found for bot:', bot.id)
+    return
+  }
   const merchantKey = bot.settings.oxapayMerchantKey
   if (!merchantKey) {
     await sendMessage(bot.botToken, chatId, '💳 Deposits not configured yet. Contact bot owner.')
@@ -67,6 +71,10 @@ export async function handleOxapayWebhook(req: any, res: any) {
     })
     const botUser = await prisma.botUser.findUnique({ where: { id: invoiceData.botUserId } })
     if (!bot || !botUser) return
+    if (!bot.settings) {
+      console.error('Bot settings not found for bot:', bot.id)
+      return
+    }
 
     const amountUsd = parseFloat(amount)
     const platformFee = amountUsd * 0.02
@@ -115,6 +123,10 @@ export async function handleOxapayWebhook(req: any, res: any) {
 }
 
 export async function processOxapayWithdrawal(bot: any, botUser: any, address: string, chatId: number) {
+  if (!bot.settings) {
+    console.error('Bot settings not found for bot:', bot.id)
+    return
+  }
   const merchantKey = bot.settings.oxapayMerchantKey
   const usdAmount = Number(botUser.balance) / Number(bot.settings.usdToCurrencyRate)
   const feePercent = Number(bot.settings.withdrawFeePercent) || 0
