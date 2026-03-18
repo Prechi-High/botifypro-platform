@@ -8,28 +8,32 @@ import { AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [error, setError] = useState<string>('')
 
-  async function onSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-      if (signInError) {
-        setError(signInError.message)
-        return
-      }
-      setSuccess('Logged in successfully.')
-      router.push('/dashboard')
-    } finally {
+    setError('')
+
+    const supabase = createClient()
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
+
+    if (error) {
+      setError('Invalid email or password')
       setLoading(false)
+      return
+    }
+
+    if (data.session) {
+      router.refresh()
+      router.push('/dashboard')
     }
   }
 
@@ -47,14 +51,7 @@ export default function LoginPage() {
         </div>
       )}
 
-      {success && (
-        <div className="flex gap-2 items-start text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg p-3">
-          <CheckCircle size={18} className="mt-0.5" />
-          <div>{success}</div>
-        </div>
-      )}
-
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">Email</label>
           <input

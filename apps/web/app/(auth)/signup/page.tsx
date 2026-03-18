@@ -8,7 +8,6 @@ import { AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function SignupPage() {
   const router = useRouter()
-  const supabase = createClient()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,8 +20,9 @@ export default function SignupPage() {
     setLoading(true)
     setError(null)
     setSuccess(null)
+    const supabase = createClient()
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -31,10 +31,16 @@ export default function SignupPage() {
       })
       if (signUpError) {
         setError(signUpError.message)
+        setLoading(false)
         return
       }
-      setSuccess('Account created. You can now log in.')
-      router.push('/login')
+      if (data.session) {
+        router.refresh()
+        router.push('/dashboard')
+      } else if (data.user) {
+        router.refresh()
+        router.push('/dashboard')
+      }
     } finally {
       setLoading(false)
     }
