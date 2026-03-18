@@ -1,34 +1,45 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
+
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options))
-        }
+  const { pathname } = request.nextUrl
+
+  const isDashboard = pathname.startsWith('/dashboard')
+  const isAuthPage = pathname === '/login' || pathname === '/signup'
+
+  if (!isDashboard && !isAuthPage) {
+    return NextResponse.next()
+  }
+
+  const cookies = request.cookies
+
+  let hasSession = false
+
+  cookies.getAll().forEach((cookie) => {
+    if (cookie.name.includes('auth-token') || cookie.name.includes('supabase')) {
+      if (cookie.value && cookie.value.length > 50) {
+        hasSession = true
       }
     }
-  )
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup')
-  const isDashboard = request.nextUrl.pathname.startsWith('/dashboard')
-  if (isDashboard && !user) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  })
+
+  if (isDashboard && !hasSession) {
+    const loginUrl = new URL('/login', request.url)
+    return NextResponse.redirect(loginUrl)
   }
-  if (isAuthPage && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+
+  if (isAuthPage && hasSession) {
+    const dashboardUrl = new URL('/dashboard', request.url)
+    return NextResponse.redirect(dashboardUrl)
   }
-  return supabaseResponse
+
+  return NextResponse.next()
 }
+
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/signup']
+  matcher: [
+    '/dashboard/:path*',
+    '/login',
+    '/signup',
+  ],
 }
 
