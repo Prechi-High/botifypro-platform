@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "cd ../../packages/database && npx prisma generate && cd ../../apps/bot-engine && tsc",
+    "render-build": "cd ../../ && npm install && cd packages/database && npx prisma generate && cd ../../apps/bot-engine && npm run build",
     "start": "node dist/index.js"
   },
   "dependencies": {
