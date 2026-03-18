@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { prisma } from '@botifypro/database'
 
 const logsDir = path.join(process.cwd(), 'logs')
 
@@ -28,6 +29,21 @@ function writeLog(level: string, message: string, data?: any) {
     fs.appendFileSync(getLogFile(), formatted)
   } catch (err) {
     process.stdout.write(`[LOGGER ERROR] Could not write to log file: ${err}\n`)
+  }
+
+  if (level === 'INFO' || level === 'WARN' || level === 'ERROR') {
+    try {
+      prisma.log.create({
+        data: {
+          level,
+          message,
+          data: data ? JSON.stringify(data) : null,
+          service: 'bot-engine'
+        }
+      }).catch(() => {})
+    } catch {
+      // ignore db logging errors
+    }
   }
 }
 

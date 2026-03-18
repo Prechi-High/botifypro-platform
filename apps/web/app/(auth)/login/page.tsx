@@ -1,104 +1,96 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string>('')
+  const [error, setError] = useState('')
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     try {
       const supabase = createClient()
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email,
-        password: password
+        password: password,
       })
 
       if (error) {
-        console.error('Login error:', error.message)
-        setError(error.message || 'Invalid email or password')
+        setError(error.message)
         setLoading(false)
         return
       }
 
       if (data?.user) {
         window.location.href = '/dashboard'
-      } else {
-        setError('Login failed. Please try again.')
-        setLoading(false)
+        return
       }
+
+      setError('Login failed. Please try again.')
+      setLoading(false)
+
     } catch (err: any) {
-      console.error('Unexpected login error:', err)
       setError('Something went wrong. Please try again.')
       setLoading(false)
     }
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Login</h1>
-        <p className="text-sm text-gray-600 mt-1">Access your BotifyPro dashboard.</p>
-      </div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+      <div style={{ background: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 2px 16px rgba(0,0,0,0.08)', width: '100%', maxWidth: '400px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.25rem', color: '#1e293b' }}>Welcome back</h1>
+        <p style={{ color: '#64748b', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Sign in to your BotifyPro account</p>
 
-      {error && (
-        <div className="flex gap-2 items-start text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
-          <AlertCircle size={18} className="mt-0.5" />
-          <div>{error}</div>
-        </div>
-      )}
+        {error && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem', color: '#dc2626', fontSize: '0.875rem' }}>
+            {error}
+          </div>
+        )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Email</label>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            required
-            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-            placeholder="you@example.com"
-          />
-        </div>
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              style={{ width: '100%', padding: '0.625rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Password</label>
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            required
-            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-            placeholder="••••••••"
-          />
-        </div>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Your password"
+              style={{ width: '100%', padding: '0.625rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
 
-        <button
-          disabled={loading}
-          className="w-full rounded-lg bg-blue-600 text-white py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-          type="submit"
-        >
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', padding: '0.75rem', background: loading ? '#93c5fd' : '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '500', cursor: loading ? 'not-allowed' : 'pointer' }}
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
 
-      <div className="text-sm text-gray-600">
-        No account?{' '}
-        <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-medium">
-          Create one
-        </Link>
+        <p style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.875rem', color: '#64748b' }}>
+          Don't have an account?{' '}
+          <a href="/signup" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>Sign up</a>
+        </p>
       </div>
     </div>
   )

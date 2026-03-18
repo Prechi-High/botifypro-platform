@@ -129,3 +129,13 @@ model AdImpression {
   @@map("ad_impressions")
 }
 
+model Log {
+  id        String   @id @default(uuid())
+  level     String
+  message   String
+  data      String?
+  service   String   @default("bot-engine")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("logs")
+}
+

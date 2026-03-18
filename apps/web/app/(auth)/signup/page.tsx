@@ -1,122 +1,122 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function SignupPage() {
-  const router = useRouter()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
-  async function onSubmit(e: React.FormEvent) {
+  const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
-    setError(null)
-    setSuccess(null)
+    setError('')
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      setLoading(false)
+      return
+    }
+
     try {
       const supabase = createClient()
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: { full_name: fullName }
-        }
+        options: { data: { full_name: fullName } }
       })
-      if (signUpError) {
-        setError(signUpError.message)
+
+      if (error) {
+        setError(error.message)
         setLoading(false)
         return
       }
-      if (data.session) {
-        window.location.href = '/dashboard'
-      } else if (data.user) {
-        window.location.href = '/dashboard'
-      }
-    } finally {
+
+      window.location.href = '/dashboard'
+    } catch (err: any) {
+      setError('Something went wrong. Please try again.')
       setLoading(false)
     }
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Sign up</h1>
-        <p className="text-sm text-gray-600 mt-1">Create your BotifyPro account.</p>
-      </div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+      <div style={{ background: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 2px 16px rgba(0,0,0,0.08)', width: '100%', maxWidth: '400px' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.25rem', color: '#1e293b' }}>Create account</h1>
+        <p style={{ color: '#64748b', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Sign up for BotifyPro</p>
 
-      {error && (
-        <div className="flex gap-2 items-start text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
-          <AlertCircle size={18} className="mt-0.5" />
-          <div>{error}</div>
-        </div>
-      )}
+        {error && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem', color: '#dc2626', fontSize: '0.875rem' }}>
+            {error}
+          </div>
+        )}
 
-      {success && (
-        <div className="flex gap-2 items-start text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg p-3">
-          <CheckCircle size={18} className="mt-0.5" />
-          <div>{success}</div>
-        </div>
-      )}
+        <form onSubmit={handleSignup}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>Full Name</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+              placeholder="Your full name"
+              style={{ width: '100%', padding: '0.625rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
 
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Full name</label>
-          <input
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            type="text"
-            required
-            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-            placeholder="Your name"
-          />
-        </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              style={{ width: '100%', padding: '0.625rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Email</label>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            required
-            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-            placeholder="you@example.com"
-          />
-        </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Your password"
+              style={{ width: '100%', padding: '0.625rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Password</label>
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            required
-            minLength={6}
-            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-            placeholder="At least 6 characters"
-          />
-        </div>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>Confirm Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              placeholder="Confirm password"
+              style={{ width: '100%', padding: '0.625rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
 
-        <button
-          disabled={loading}
-          className="w-full rounded-lg bg-blue-600 text-white py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-          type="submit"
-        >
-          {loading ? 'Creating account...' : 'Create account'}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', padding: '0.75rem', background: loading ? '#93c5fd' : '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '500', cursor: loading ? 'not-allowed' : 'pointer' }}
+          >
+            {loading ? 'Creating...' : 'Sign Up'}
+          </button>
+        </form>
 
-      <div className="text-sm text-gray-600">
-        Already have an account?{' '}
-        <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
-          Login
-        </Link>
+        <p style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.875rem', color: '#64748b' }}>
+          Already have an account?{' '}
+          <a href="/login" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>Sign in</a>
+        </p>
       </div>
     </div>
   )
