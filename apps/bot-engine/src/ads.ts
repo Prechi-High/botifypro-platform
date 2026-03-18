@@ -16,8 +16,8 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
     })
 
     const eligible = campaigns
-      .filter((c) => Number(c.spentUsd) < Number(c.budgetUsd))
-      .filter((c) => c.targetCategory === 'all' || c.targetCategory === bot.category)
+      .filter((c: any) => Number(c.spentUsd) < Number(c.budgetUsd))
+      .filter((c: any) => c.targetCategory === 'all' || c.targetCategory === bot.category)
 
     if (eligible.length === 0) return
 
