@@ -18,22 +18,31 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const supabase = createClient()
+    try {
+      const supabase = createClient()
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password
+      })
 
-    if (error) {
-      setError('Invalid email or password')
+      if (error) {
+        console.error('Login error:', error.message)
+        setError(error.message || 'Invalid email or password')
+        setLoading(false)
+        return
+      }
+
+      if (data?.user) {
+        window.location.href = '/dashboard'
+      } else {
+        setError('Login failed. Please try again.')
+        setLoading(false)
+      }
+    } catch (err: any) {
+      console.error('Unexpected login error:', err)
+      setError('Something went wrong. Please try again.')
       setLoading(false)
-      return
-    }
-
-    if (data.session) {
-      router.refresh()
-      router.push('/dashboard')
     }
   }
 

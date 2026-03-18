@@ -4,6 +4,7 @@ import { handleBalance, handleDeposit, handleHelp, handleStart, handleWithdraw, 
 import { redisDel, redisGet, redisIncr, redisSet } from './redis'
 import { maybeServeAd } from './ads'
 import { processOxapayWithdrawal } from './payments/oxapay'
+import logger from './logger'
 
 export async function getOrCreateBotUser(botId: string, telegramUser: any) {
   return await prisma.botUser.upsert({
@@ -59,7 +60,10 @@ export async function handleWebhook(req: any, res: any) {
       where: { botToken },
       include: { settings: true }
     })
-    if (!bot || !bot.isActive) return
+    if (!bot || !bot.isActive) {
+      logger.warn('Bot not found for token', { token: String(botToken).substring(0, 8) + '****' })
+      return
+    }
 
     const telegramUser = update?.message?.from || update?.callback_query?.from
     const chatId = update?.message?.chat?.id || update?.callback_query?.message?.chat?.id
@@ -71,6 +75,7 @@ export async function handleWebhook(req: any, res: any) {
     if (bot.settings?.requireChannelJoin && bot.settings?.requiredChannelId) {
       if (!botUser.channelVerified) {
         const member = await checkChannelMembership(bot.settings.requiredChannelId, telegramUser.id)
+        logger.info('Channel check', { botId: bot.id, userId: botUser.id, result: member })
         if (member) {
           await prisma.botUser.update({ where: { id: botUser.id }, data: { channelVerified: true } })
         } else {
@@ -118,15 +123,30 @@ export async function handleWebhook(req: any, res: any) {
       } catch {}
     }
 
-    if (text.startsWith('/start') || callback === 'cmd_start') await handleStart(bot, botUser, chatId)
-    if (text.startsWith('/balance') || callback === 'cmd_balance') await handleBalance(bot, botUser, chatId)
-    if (text.startsWith('/deposit') || callback === 'cmd_deposit') await handleDeposit(bot, botUser, chatId)
-    if (text.startsWith('/withdraw') || callback === 'cmd_withdraw') await handleWithdraw(bot, botUser, chatId)
-    if (text.startsWith('/help') || callback === 'cmd_help') await handleHelp(bot, chatId)
+    if (text.startsWith('/start') || callback === 'cmd_start') {
+      logger.info('Command handled', { command: 'start', botId: bot.id, userId: botUser.id })
+      await handleStart(bot, botUser, chatId)
+    }
+    if (text.startsWith('/balance') || callback === 'cmd_balance') {
+      logger.info('Command handled', { command: 'balance', botId: bot.id, userId: botUser.id })
+      await handleBalance(bot, botUser, chatId)
+    }
+    if (text.startsWith('/deposit') || callback === 'cmd_deposit') {
+      logger.info('Command handled', { command: 'deposit', botId: bot.id, userId: botUser.id })
+      await handleDeposit(bot, botUser, chatId)
+    }
+    if (text.startsWith('/withdraw') || callback === 'cmd_withdraw') {
+      logger.info('Command handled', { command: 'withdraw', botId: bot.id, userId: botUser.id })
+      await handleWithdraw(bot, botUser, chatId)
+    }
+    if (text.startsWith('/help') || callback === 'cmd_help') {
+      logger.info('Command handled', { command: 'help', botId: bot.id, userId: botUser.id })
+      await handleHelp(bot, chatId)
+    }
 
     await maybeServeAd(bot, botUser, chatId)
-  } catch (err) {
-    console.error('Webhook error:', err)
+  } catch (err: any) {
+    logger.error('Webhook processing error', { error: err?.message })
     return
   }
 }

@@ -2,6 +2,7 @@ import axios from 'axios'
 import { prisma } from '@botifypro/database'
 import { redisDel, redisGet, redisSet } from '../redis'
 import { sendMessage } from '../commands'
+import logger from '../logger'
 
 export async function createOxapayInvoice(bot: any, botUser: any, chatId: number) {
   if (!bot.settings) {
@@ -38,6 +39,8 @@ export async function createOxapayInvoice(bot: any, botUser: any, chatId: number
     2100
   )
 
+  logger.info('Deposit invoice created', { botId: bot.id, botUserId: botUser.id, orderId })
+
   await sendMessage(
     bot.botToken,
     chatId,
@@ -56,6 +59,7 @@ export async function handleOxapayWebhook(req: any, res: any) {
   res.status(200).json({ ok: true })
   try {
     const { trackId, status, amount } = req.body || {}
+    logger.info('OxaPay webhook received', { trackId, status })
     if (status !== 'Paid') return
 
     const existing = await prisma.transaction.findFirst({ where: { gatewayTxId: trackId } })
@@ -102,6 +106,8 @@ export async function handleOxapayWebhook(req: any, res: any) {
 
     await redisDel('invoice:' + trackId)
 
+    logger.info('Payment confirmed', { trackId, amountUsd, currencyAmount })
+
     const updated = await prisma.botUser.findUnique({ where: { id: botUser.id } })
     const newBalance = updated?.balance ?? botUser.balance
 
@@ -116,8 +122,8 @@ export async function handleOxapayWebhook(req: any, res: any) {
       bot.settings.currencySymbol
 
     await sendMessage(invoiceData.botToken, Number(botUser.telegramUserId), text)
-  } catch (err) {
-    console.error('OxaPay webhook error:', err)
+  } catch (err: any) {
+    logger.error('Payment error', { error: err?.message, trackId: req?.body?.trackId })
     return
   }
 }
@@ -132,6 +138,8 @@ export async function processOxapayWithdrawal(bot: any, botUser: any, address: s
   const feePercent = Number(bot.settings.withdrawFeePercent) || 0
   const netUsd = usdAmount * (1 - feePercent / 100)
 
+  logger.info('Withdrawal initiated', { botUserId: botUser.id, amountUsd: netUsd })
+
   try {
     await axios.post('https://api.oxapay.com/merchants/send-money', {
       merchant: merchantKey,
@@ -141,6 +149,7 @@ export async function processOxapayWithdrawal(bot: any, botUser: any, address: s
       callbackUrl: process.env.WEBHOOK_BASE_URL + '/webhooks/oxapay-payout'
     })
   } catch {
+    logger.error('Payment error', { error: 'Withdrawal failed', trackId: undefined })
     await sendMessage(bot.botToken, chatId, 'Withdrawal failed. Try again later.')
     return
   }

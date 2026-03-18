@@ -20,8 +20,8 @@ export default function SignupPage() {
     setLoading(true)
     setError(null)
     setSuccess(null)
-    const supabase = createClient()
     try {
+      const supabase = createClient()
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -35,11 +35,9 @@ export default function SignupPage() {
         return
       }
       if (data.session) {
-        router.refresh()
-        router.push('/dashboard')
+        window.location.href = '/dashboard'
       } else if (data.user) {
-        router.refresh()
-        router.push('/dashboard')
+        window.location.href = '/dashboard'
       }
     } finally {
       setLoading(false)

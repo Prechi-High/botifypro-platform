@@ -1,5 +1,6 @@
 import { prisma } from '@botifypro/database'
 import { redisIncr, redisSet } from './redis'
+import logger from './logger'
 
 export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
   try {
@@ -19,7 +20,10 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
       .filter((c: any) => Number(c.spentUsd) < Number(c.budgetUsd))
       .filter((c: any) => c.targetCategory === 'all' || c.targetCategory === bot.category)
 
-    if (eligible.length === 0) return
+    if (eligible.length === 0) {
+      logger.debug('No ads available', { botId: bot.id, category: bot.category })
+      return
+    }
 
     const campaign = eligible[Math.floor(Math.random() * eligible.length)]
     const { sendMessage } = await import('./commands')
@@ -41,6 +45,8 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
       where: { id: campaign.id },
       data: { spentUsd: { increment: campaign.costPerImpressionUsd } }
     })
+
+    logger.info('Ad served', { campaignId: campaign.id, botId: bot.id, botUserId: botUser.id })
   } catch {
     return
   }
