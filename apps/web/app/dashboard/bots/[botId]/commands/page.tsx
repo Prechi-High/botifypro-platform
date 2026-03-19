@@ -1,8 +1,386 @@
 'use client'
-
-import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { PREBUILT_COMMANDS, COMMAND_CATEGORIES } from '@/lib/prebuiltCommands'
+
+export default function CommandsPage({ params }: { params: { botId: string } }) {
+  const botId = params.botId
+  const supabase = createClient()
+
+  const [activeTab, setActiveTab] = useState<'library' | 'custom'>('library')
+  const [selectedCategory, setSelectedCategory] = useState('Universal')
+  const [savedCommands, setSavedCommands] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+  const [newCommand, setNewCommand] = useState('')
+  const [newResponse, setNewResponse] = useState('')
+  const [addingCustom, setAddingCustom] = useState(false)
+  const [toast, setToast] = useState<{msg:string,type:'success'|'error'}|null>(null)
+
+  function showToast(msg: string, type: 'success'|'error' = 'success') {
+    setToast({msg, type})
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  useEffect(() => { loadCommands() }, [botId])
+
+  async function loadCommands() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('bot_commands')
+      .select('*')
+      .eq('bot_id', botId)
+    if (error) console.error('Load error:', error)
+    if (data) setSavedCommands(data)
+    setLoading(false)
+  }
+
+  function getSaved(prebuiltKey: string) {
+    return savedCommands.find((c: any) => c.prebuilt_key === prebuiltKey)
+  }
+
+  function isEnabled(prebuiltKey: string) {
+    const s = getSaved(prebuiltKey)
+    return !!(s && s.is_active)
+  }
+
+  async function toggleCommand(cmd: typeof PREBUILT_COMMANDS[0]) {
+    setSaving(cmd.key)
+    const existing = getSaved(cmd.key)
+    try {
+      if (existing) {
+        const { error } = await supabase
+          .from('bot_commands')
+          .update({ is_active: !existing.is_active })
+          .eq('id', existing.id)
+        if (error) throw error
+        showToast(existing.is_active ? cmd.command + ' disabled' : cmd.command + ' enabled ✓')
+      } else {
+        const { error } = await supabase
+          .from('bot_commands')
+          .insert({
+            id: crypto.randomUUID(),
+            bot_id: botId,
+            command: cmd.command,
+            response_text: cmd.defaultResponse,
+            is_active: true,
+            command_category: cmd.category,
+            is_prebuilt: true,
+            prebuilt_key: cmd.key
+          })
+        if (error) throw error
+        showToast(cmd.command + ' enabled ✓')
+      }
+      await loadCommands()
+    } catch (err: any) {
+      showToast('Error: ' + err.message, 'error')
+    }
+    setSaving(null)
+  }
+
+  async function saveResponse(id: string, text: string) {
+    const { error } = await supabase
+      .from('bot_commands')
+      .update({ response_text: text })
+      .eq('id', id)
+    if (!error) showToast('Response saved ✓')
+    else showToast('Save failed', 'error')
+  }
+
+  async function addCustom() {
+    if (!newCommand.trim() || !newResponse.trim()) {
+      showToast('Command and response are required', 'error')
+      return
+    }
+    setAddingCustom(true)
+    const cmd = newCommand.trim().toLowerCase().startsWith('/')
+      ? newCommand.trim().toLowerCase()
+      : '/' + newCommand.trim().toLowerCase()
+
+    const reserved = ['/start','/help','/balance','/deposit','/withdraw']
+    if (reserved.includes(cmd)) {
+      showToast(cmd + ' is a reserved command', 'error')
+      setAddingCustom(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('bot_commands')
+      .insert({
+        id: crypto.randomUUID(),
+        bot_id: botId,
+        command: cmd,
+        response_text: newResponse.trim(),
+        is_active: true,
+        command_category: 'custom',
+        is_prebuilt: false,
+        prebuilt_key: null
+      })
+
+    if (error) {
+      if (error.message.includes('unique') || error.code === '23505') {
+        showToast('This command already exists', 'error')
+      } else {
+        showToast('Error: ' + error.message, 'error')
+      }
+    } else {
+      showToast('Custom command added ✓')
+      setNewCommand('')
+      setNewResponse('')
+      await loadCommands()
+    }
+    setAddingCustom(false)
+  }
+
+  async function deleteCommand(id: string, command: string) {
+    if (!confirm('Delete ' + command + '?')) return
+    const { error } = await supabase.from('bot_commands').delete().eq('id', id)
+    if (!error) { showToast('Deleted ✓'); await loadCommands() }
+    else showToast('Delete failed', 'error')
+  }
+
+  const prebuiltInCategory = PREBUILT_COMMANDS.filter(c => c.category === selectedCategory)
+  const customCommands = savedCommands.filter((c: any) => !c.is_prebuilt)
+
+  return (
+    <div style={{padding:'20px',maxWidth:'960px',position:'relative'}}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position:'fixed',top:'20px',right:'20px',zIndex:9999,
+          padding:'10px 16px',borderRadius:'8px',fontSize:'13px',fontWeight:'500',
+          background: toast.type==='success' ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${toast.type==='success' ? '#bbf7d0' : '#fecaca'}`,
+          color: toast.type==='success' ? '#166534' : '#dc2626',
+          boxShadow:'0 4px 12px rgba(0,0,0,0.1)'
+        }}>{toast.msg}</div>
+      )}
+
+      {/* Header */}
+      <div style={{marginBottom:'20px'}}>
+        <h1 style={{fontSize:'20px',fontWeight:'600',color:'#1e293b',margin:'0 0 4px'}}>Bot Commands</h1>
+        <p style={{color:'#64748b',fontSize:'13px',margin:0}}>
+          Enable pre-built commands from the library or create your own custom commands.
+          {' '}<strong style={{color:'#2563eb'}}>{savedCommands.filter((c:any)=>c.is_active).length} active commands</strong>
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:'4px',background:'#f1f5f9',borderRadius:'10px',padding:'4px',marginBottom:'20px',width:'fit-content'}}>
+        {(['library','custom'] as const).map(t => (
+          <button key={t} onClick={()=>setActiveTab(t)} style={{
+            padding:'7px 18px',borderRadius:'8px',border:'none',cursor:'pointer',fontSize:'13px',
+            fontWeight: activeTab===t ? '500' : '400',
+            background: activeTab===t ? 'white' : 'transparent',
+            color: activeTab===t ? '#1e293b' : '#64748b',
+            boxShadow: activeTab===t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            transition:'all 0.15s'
+          }}>
+            {t==='library' ? '📚 Command Library' : '✏️ Custom Commands'}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div style={{color:'#94a3b8',padding:'20px'}}>Loading commands...</div>}
+
+      {!loading && activeTab === 'library' && (
+        <div style={{display:'grid',gridTemplateColumns:'190px 1fr',gap:'12px'}}>
+
+          {/* Category sidebar */}
+          <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
+            {COMMAND_CATEGORIES.map(cat => {
+              const catCmds = PREBUILT_COMMANDS.filter(c=>c.category===cat)
+              const enabledCount = catCmds.filter(c=>isEnabled(c.key)).length
+              return (
+                <button key={cat} onClick={()=>setSelectedCategory(cat)} style={{
+                  padding:'8px 10px',borderRadius:'8px',cursor:'pointer',fontSize:'12px',
+                  textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',
+                  border: selectedCategory===cat ? '1px solid #bfdbfe' : '1px solid transparent',
+                  background: selectedCategory===cat ? '#eff6ff' : 'transparent',
+                  color: selectedCategory===cat ? '#1d4ed8' : '#475569',
+                  fontWeight: selectedCategory===cat ? '500' : '400'
+                }}>
+                  <span>{cat}</span>
+                  {enabledCount > 0 && (
+                    <span style={{background:'#2563eb',color:'white',borderRadius:'10px',padding:'1px 6px',fontSize:'10px',fontWeight:'600'}}>
+                      {enabledCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Commands list */}
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            {prebuiltInCategory.map(cmd => {
+              const enabled = isEnabled(cmd.key)
+              const existing = getSaved(cmd.key)
+              const isSaving = saving === cmd.key
+
+              return (
+                <div key={cmd.key} style={{
+                  background: enabled ? '#f0fdf4' : 'white',
+                  border: `1px solid ${enabled ? '#bbf7d0' : '#e2e8f0'}`,
+                  borderRadius:'10px',padding:'12px 14px',transition:'all 0.2s'
+                }}>
+                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'12px'}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',flexWrap:'wrap'}}>
+                        <code style={{
+                          background: enabled ? '#dcfce7' : '#f1f5f9',
+                          color: enabled ? '#166534' : '#475569',
+                          padding:'2px 8px',borderRadius:'6px',
+                          fontSize:'12px',fontWeight:'600',fontFamily:'monospace'
+                        }}>{cmd.command}</code>
+                        {cmd.needsSetup && (
+                          <span style={{background:'#fef3c7',color:'#92400e',padding:'1px 7px',borderRadius:'20px',fontSize:'10px',fontWeight:'500'}}>
+                            Requires setup
+                          </span>
+                        )}
+                        {enabled && (
+                          <span style={{background:'#dcfce7',color:'#166534',padding:'1px 7px',borderRadius:'20px',fontSize:'10px',fontWeight:'500'}}>
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p style={{color:'#64748b',fontSize:'12px',margin:'0 0 2px'}}>{cmd.description}</p>
+                      {cmd.needsSetup && cmd.setupInstructions && (
+                        <p style={{color:'#d97706',fontSize:'11px',margin:'3px 0 0',fontStyle:'italic'}}>
+                          ⚠️ {cmd.setupInstructions}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Toggle switch */}
+                    <div
+                      onClick={() => !isSaving && toggleCommand(cmd)}
+                      style={{
+                        width:'40px',height:'22px',borderRadius:'11px',flexShrink:0,marginTop:'2px',
+                        background: enabled ? '#16a34a' : '#cbd5e1',
+                        position:'relative',cursor: isSaving ? 'wait' : 'pointer',
+                        transition:'background 0.2s',opacity: isSaving ? 0.6 : 1
+                      }}
+                    >
+                      <div style={{
+                        position:'absolute',top:'3px',
+                        left: enabled ? '21px' : '3px',
+                        width:'16px',height:'16px',borderRadius:'50%',
+                        background:'white',boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+                        transition:'left 0.2s'
+                      }}/>
+                    </div>
+                  </div>
+
+                  {/* Editable response shown when enabled */}
+                  {enabled && existing && (
+                    <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid #dcfce7'}}>
+                      <label style={{fontSize:'11px',fontWeight:'500',color:'#166534',display:'block',marginBottom:'4px'}}>
+                        Customise bot response (click outside to save):
+                      </label>
+                      <textarea
+                        key={existing.id}
+                        defaultValue={existing.response_text}
+                        onBlur={e => saveResponse(existing.id, e.target.value)}
+                        rows={3}
+                        style={{
+                          width:'100%',padding:'8px',border:'1px solid #bbf7d0',borderRadius:'6px',
+                          fontSize:'12px',fontFamily:'monospace',background:'white',
+                          resize:'vertical',boxSizing:'border-box'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {!loading && activeTab === 'custom' && (
+        <div>
+          {/* Add custom command */}
+          <div style={{background:'white',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'16px',marginBottom:'16px'}}>
+            <h3 style={{fontSize:'14px',fontWeight:'600',color:'#1e293b',margin:'0 0 12px'}}>Add Custom Command</h3>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:'10px',marginBottom:'10px'}}>
+              <div>
+                <label style={{fontSize:'12px',fontWeight:'500',color:'#374151',display:'block',marginBottom:'4px'}}>Command</label>
+                <input
+                  value={newCommand}
+                  onChange={e=>setNewCommand(e.target.value)}
+                  placeholder="/mycommand"
+                  style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:'8px',fontSize:'13px',fontFamily:'monospace',boxSizing:'border-box'}}
+                />
+              </div>
+              <div>
+                <label style={{fontSize:'12px',fontWeight:'500',color:'#374151',display:'block',marginBottom:'4px'}}>Response</label>
+                <input
+                  value={newResponse}
+                  onChange={e=>setNewResponse(e.target.value)}
+                  placeholder="What the bot says when users send this command"
+                  onKeyDown={e=>{ if(e.key==='Enter') addCustom() }}
+                  style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:'8px',fontSize:'13px',boxSizing:'border-box'}}
+                />
+              </div>
+            </div>
+            <button
+              onClick={addCustom}
+              disabled={addingCustom || !newCommand.trim() || !newResponse.trim()}
+              style={{
+                padding:'8px 16px',background: addingCustom ? '#93c5fd' : '#2563eb',color:'white',
+                border:'none',borderRadius:'8px',fontSize:'13px',fontWeight:'500',
+                cursor: addingCustom ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {addingCustom ? 'Adding...' : 'Add Command'}
+            </button>
+            <div style={{marginTop:'10px',padding:'8px 12px',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:'6px',fontSize:'12px',color:'#92400e'}}>
+              Reserved (cannot be used): /start · /help · /balance · /deposit · /withdraw
+            </div>
+          </div>
+
+          {/* Custom commands list */}
+          {customCommands.length === 0 ? (
+            <div style={{textAlign:'center',padding:'32px',background:'white',borderRadius:'12px',border:'1px dashed #e2e8f0'}}>
+              <p style={{color:'#94a3b8',fontSize:'13px',margin:0}}>No custom commands yet. Add your first one above.</p>
+            </div>
+          ) : (
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              {customCommands.map((cmd:any) => (
+                <div key={cmd.id} style={{
+                  background:'white',border:`1px solid ${cmd.is_active?'#e2e8f0':'#f1f5f9'}`,
+                  borderRadius:'10px',padding:'12px 14px',opacity:cmd.is_active?1:0.6,
+                  display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px'
+                }}>
+                  <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:0}}>
+                    <code style={{background:'#f1f5f9',padding:'2px 8px',borderRadius:'6px',fontSize:'12px',fontWeight:'600',fontFamily:'monospace',color:'#1e293b',flexShrink:0}}>
+                      {cmd.command}
+                    </code>
+                    <span style={{color:'#64748b',fontSize:'12px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                      {cmd.response_text.substring(0,80)}{cmd.response_text.length>80?'...':''}
+                    </span>
+                  </div>
+                  <div style={{display:'flex',gap:'6px',flexShrink:0}}>
+                    <button
+                      onClick={async()=>{ await supabase.from('bot_commands').update({is_active:!cmd.is_active}).eq('id',cmd.id); await loadCommands() }}
+                      style={{padding:'4px 10px',border:'1px solid #e2e8f0',borderRadius:'6px',background:'white',color:'#64748b',fontSize:'12px',cursor:'pointer'}}
+                    >{cmd.is_active?'Disable':'Enable'}</button>
+                    <button
+                      onClick={()=>deleteCommand(cmd.id, cmd.command)}
+                      style={{padding:'4px 10px',border:'1px solid #fecaca',borderRadius:'6px',background:'#fef2f2',color:'#dc2626',fontSize:'12px',cursor:'pointer'}}
+                    >Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 import { useToast, ToastContainer } from '@/components/ui/Toast'
 import Button from '@/components/ui/Button'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
