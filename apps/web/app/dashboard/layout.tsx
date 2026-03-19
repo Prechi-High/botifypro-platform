@@ -76,7 +76,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           const Icon = item.icon
           const active = isActive(item.href)
           return (
-            <a
+            
+              <a
               key={item.href}
               href={item.href}
               onClick={() => mobile && setOpen(false)}
