@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Plus, AlertCircle } from 'lucide-react'
+import { Bot, Plus, AlertCircle, Settings, Terminal, Users } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function BotsPage() {
@@ -97,12 +97,14 @@ export default function BotsPage() {
                   display: 'flex',
                   gap: '6px',
                   flexWrap: 'wrap',
-                  marginTop: '12px'
+                  marginTop: '12px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid #f1f5f9'
                 }}>
                   <a 
                     href={`/dashboard/bots/${b.id}/settings`} 
                     style={{
-                      padding: '6px 12px',
+                      padding: '7px 12px',
                       border: '1px solid #e2e8f0',
                       borderRadius: '8px',
                       background: 'white',
@@ -110,18 +112,17 @@ export default function BotsPage() {
                       fontSize: '12px',
                       fontWeight: '500',
                       textDecoration: 'none',
-                      cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '5px'
                     }}
                   >
-                    ⚙️ Settings
+                    <Settings size={13} />Settings
                   </a>
                   <a 
                     href={`/dashboard/bots/${b.id}/commands`} 
                     style={{
-                      padding: '6px 12px',
+                      padding: '7px 12px',
                       border: '1px solid #e2e8f0',
                       borderRadius: '8px',
                       background: 'white',
@@ -129,18 +130,17 @@ export default function BotsPage() {
                       fontSize: '12px',
                       fontWeight: '500',
                       textDecoration: 'none',
-                      cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '5px'
                     }}
                   >
-                    🤖 Commands
+                    <Terminal size={13} />Commands
                   </a>
                   <a 
                     href={`/dashboard/bots/${b.id}/users`} 
                     style={{
-                      padding: '6px 12px',
+                      padding: '7px 12px',
                       border: '1px solid #e2e8f0',
                       borderRadius: '8px',
                       background: 'white',
@@ -148,13 +148,12 @@ export default function BotsPage() {
                       fontSize: '12px',
                       fontWeight: '500',
                       textDecoration: 'none',
-                      cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '5px'
                     }}
                   >
-                    👥 Users
+                    <Users size={13} />Users
                   </a>
                 </div>
               </div>
