@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, CheckCircle, Settings as SettingsIcon } from 'lucide-react'
 import Button from '@/components/ui/Button'
+import Toggle from '@/components/ui/Toggle'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function BotSettingsPage() {
@@ -14,13 +15,26 @@ export default function BotSettingsPage() {
   const supabase = useMemo(() => createClient(), [])
   const { toasts, removeToast, toast } = useToast()
   const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
+  
+  // Loading states
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [fetchingChannel, setFetchingChannel] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [botToken, setBotToken] = useState<string>('')
-
+  
+  // Webhook states
+  const [webhookStatus, setWebhookStatus] = useState(false)
+  const [checkingWebhook, setCheckingWebhook] = useState(false)
+  const [fixingWebhook, setFixingWebhook] = useState(false)
+  
+  // Channel verification states
+  const [verifyingAdmin, setVerifyingAdmin] = useState(false)
+  const [adminVerified, setAdminVerified] = useState(false)
+  const [adminVerifyResult, setAdminVerifyResult] = useState('')
+  
+  // Settings states
   const [welcomeMessage, setWelcomeMessage] = useState('')
   const [currencyName, setCurrencyName] = useState('')
   const [currencySymbol, setCurrencySymbol] = useState('')
@@ -29,9 +43,16 @@ export default function BotSettingsPage() {
   const [minWithdrawUsd, setMinWithdrawUsd] = useState<number>(0.5)
   const [withdrawFeePercent, setWithdrawFeePercent] = useState<number>(0)
   const [oxapayMerchantKey, setOxapayMerchantKey] = useState<string>('')
+  const [faucetpayApiKey, setFaucetpayApiKey] = useState<string>('')
   const [requireChannelJoin, setRequireChannelJoin] = useState<boolean>(false)
   const [requiredChannelId, setRequiredChannelId] = useState<string>('')
   const [requiredChannelUsername, setRequiredChannelUsername] = useState<string>('')
+  
+  // Payment feature toggles
+  const [balanceEnabled, setBalanceEnabled] = useState(false)
+  const [depositEnabled, setDepositEnabled] = useState(false)
+  const [withdrawEnabled, setWithdrawEnabled] = useState(false)
+  const [referralEnabled, setReferralEnabled] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -39,13 +60,15 @@ export default function BotSettingsPage() {
       setLoading(true)
       setError(null)
       try {
+        // Load bot data
         const { data: botRow, error: botTokenErr } = await supabase
           .from('bots')
-          .select('bot_token')
+          .select('bot_token, webhook_set')
           .eq('id', botId)
           .single()
         if (botTokenErr) throw botTokenErr
 
+        // Load settings
         const { data, error: botErr } = await supabase
           .from('bot_settings')
           .select('*')
@@ -53,7 +76,9 @@ export default function BotSettingsPage() {
           .single()
         if (botErr) throw botErr
         if (cancelled) return
+        
         setBotToken(botRow?.bot_token || '')
+        setWebhookStatus(botRow?.webhook_set || false)
         setWelcomeMessage(data.welcome_message)
         setCurrencyName(data.currency_name)
         setCurrencySymbol(data.currency_symbol)
@@ -62,19 +87,26 @@ export default function BotSettingsPage() {
         setMinWithdrawUsd(Number(data.min_withdraw_usd))
         setWithdrawFeePercent(Number(data.withdraw_fee_percent))
         setOxapayMerchantKey(data.oxapay_merchant_key || '')
+        setFaucetpayApiKey(data.faucetpay_api_key || '')
         setRequireChannelJoin(Boolean(data.require_channel_join))
         setRequiredChannelId(data.required_channel_id || '')
         setRequiredChannelUsername(data.required_channel_username || '')
+        
+        // Payment toggles
+        setBalanceEnabled(Boolean(data.balance_enabled))
+        setDepositEnabled(Boolean(data.deposit_enabled))
+        setWithdrawEnabled(Boolean(data.withdraw_enabled))
+        setReferralEnabled(Boolean(data.referral_enabled))
       } catch (e: any) {
         if (cancelled) return
         const message = e?.message || 'Failed to load settings'
         setError(message)
         toast.error(message)
       } finally {
-        if (!cancelled) setLoading(false)
+        setLoading(false)
       }
     }
-    if (botId) load()
+    load()
     return () => {
       cancelled = true
     }
@@ -94,12 +126,75 @@ export default function BotSettingsPage() {
         setRequiredChannelId(data.channelId)
         toast.success('Channel ID found: ' + data.channelId)
       } else {
-        toast.error('Could not find channel. Make sure the username is correct and our platform bot is admin there.')
+        toast.error('Could not find channel. Make sure username is correct and our platform bot is admin there.')
       }
     } catch {
       toast.error('Failed to fetch channel info')
     }
     setFetchingChannel(false)
+  }
+
+  async function checkWebhookStatus() {
+    setCheckingWebhook(true)
+    try {
+      const response = await fetch(`${BOT_ENGINE_URL}/api/bots/${botId}/webhook-status`)
+      const data = await response.json()
+      if (data.webhookSet) {
+        toast.success(`Webhook is active: ${data.url}`)
+        setWebhookStatus(true)
+      } else {
+        toast.error(`Webhook not set. Current URL: ${data.url || 'none'}`)
+        setWebhookStatus(false)
+      }
+    } catch (err: any) {
+      toast.error('Failed to check webhook status: ' + err.message)
+    }
+    setCheckingWebhook(false)
+  }
+
+  async function fixWebhook() {
+    setFixingWebhook(true)
+    try {
+      const response = await fetch(`${BOT_ENGINE_URL}/api/bots/register-webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botId })
+      })
+      const data = await response.json()
+      if (data.success) {
+        toast.success('Webhook registered! Bot is now active.')
+        setWebhookStatus(true)
+      } else {
+        toast.error('Failed: ' + (data.error || 'Unknown error'))
+      }
+    } catch (err: any) {
+      toast.error('Failed: ' + err.message)
+    }
+    setFixingWebhook(false)
+  }
+
+  async function verifyChannelAdmin() {
+    setVerifyingAdmin(true)
+    try {
+      const response = await fetch(`${BOT_ENGINE_URL}/api/bots/verify-channel-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId: requiredChannelId, botToken })
+      })
+      const data = await response.json()
+      if (data.isAdmin) {
+        setAdminVerified(true)
+        setAdminVerifyResult('@twinbot_twinbot is admin ✓')
+        toast.success('Verified! Channel requirement can now be saved.')
+      } else {
+        setAdminVerified(false)
+        setAdminVerifyResult(data.message || '@twinbot_twinbot is not admin yet')
+        toast.error('Please add @twinbot_twinbot as admin first')
+      }
+    } catch (err: any) {
+      toast.error('Verification failed: ' + err.message)
+    }
+    setVerifyingAdmin(false)
   }
 
   async function save() {
@@ -118,9 +213,14 @@ export default function BotSettingsPage() {
           min_withdraw_usd: minWithdrawUsd,
           withdraw_fee_percent: withdrawFeePercent,
           oxapay_merchant_key: oxapayMerchantKey || null,
+          faucetpay_api_key: faucetpayApiKey || null,
           require_channel_join: requireChannelJoin,
           required_channel_id: requiredChannelId || null,
-          required_channel_username: requiredChannelUsername || null
+          required_channel_username: requiredChannelUsername || null,
+          balance_enabled: balanceEnabled,
+          deposit_enabled: depositEnabled,
+          withdraw_enabled: withdrawEnabled,
+          referral_enabled: referralEnabled
         })
         .eq('bot_id', botId)
       if (upErr) throw upErr
@@ -135,179 +235,600 @@ export default function BotSettingsPage() {
     }
   }
 
+  const canSaveChannel = !requireChannelJoin || (requireChannelJoin && adminVerified)
+
   return (
-    <div className="space-y-6">
+    <div style={{ padding: '1.5rem' }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Bot settings</h1>
-        <p className="text-sm text-gray-600 mt-1">
+      
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937', margin: 0 }}>
+          Bot settings
+        </h1>
+        <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '4px' }}>
           Configure behavior, currency, and payments.{' '}
-          <Link href={`/dashboard/bots/${botId}/commands`} className="text-blue-600 hover:text-blue-700 font-medium">
+          <Link 
+            href={`/dashboard/bots/${botId}/commands`} 
+            style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}
+          >
             Custom Commands
           </Link>
         </p>
       </div>
 
       {error && (
-        <div className="flex gap-2 items-start text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
-          <AlertCircle size={18} className="mt-0.5" />
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'flex-start',
+          fontSize: '0.875rem',
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          color: '#991b1b',
+          borderRadius: '8px',
+          padding: '12px',
+          marginBottom: '1rem'
+        }}>
+          <AlertCircle size={18} style={{ marginTop: '2px' }} />
           <div>{error}</div>
         </div>
       )}
 
       {success && (
-        <div className="flex gap-2 items-start text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg p-3">
-          <CheckCircle size={18} className="mt-0.5" />
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'flex-start',
+          fontSize: '0.875rem',
+          background: '#f0fdf4',
+          border: '1px solid #bbf7d0',
+          color: '#166534',
+          borderRadius: '8px',
+          padding: '12px',
+          marginBottom: '1rem'
+        }}>
+          <CheckCircle size={18} style={{ marginTop: '2px' }} />
           <div>{success}</div>
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+      <div style={{
+        background: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+        padding: '20px'
+      }}>
+        
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          color: '#374151',
+          marginBottom: '1rem'
+        }}>
           <SettingsIcon size={18} />
           Settings
         </div>
 
         {loading ? (
-          <div className="text-sm text-gray-600">Loading...</div>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Loading...</div>
         ) : (
           <>
+            {/* Webhook Status Section */}
+            <div style={{
+              background: webhookStatus ? '#f0fdf4' : '#fef2f2',
+              border: `1px solid ${webhookStatus ? '#bbf7d0' : '#fecaca'}`,
+              borderRadius: '10px',
+              padding: '14px 16px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: webhookStatus ? '#16a34a' : '#dc2626',
+                  animation: webhookStatus ? 'none' : 'pulse 1s infinite'
+                }} />
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: webhookStatus ? '#166534' : '#991b1b'
+                }}>
+                  {webhookStatus ? 'Webhook Active — Bot is receiving messages' : 'Webhook Not Set — Bot cannot receive messages'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button
+                  onClick={checkWebhookStatus}
+                  loading={checkingWebhook}
+                  loadingText="Checking..."
+                  variant="secondary"
+                  size="sm"
+                >
+                  Check Status
+                </Button>
+                <Button
+                  onClick={fixWebhook}
+                  loading={fixingWebhook}
+                  loadingText="Fixing..."
+                  variant={webhookStatus ? "secondary" : "danger"}
+                  size="sm"
+                >
+                  Fix Webhook
+                </Button>
+              </div>
+            </div>
+            <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+
+            {/* General Settings */}
             <div>
-              <label className="block text-sm font-medium text-gray-700">Welcome message</label>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                Welcome message
+              </label>
               <textarea
                 value={welcomeMessage}
                 onChange={(e) => setWelcomeMessage(e.target.value)}
-                className="mt-1 w-full min-h-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                style={{
+                  width: '100%',
+                  minHeight: '96px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  padding: '12px',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Currency name</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                  Currency name
+                </label>
                 <input
                   value={currencyName}
                   onChange={(e) => setCurrencyName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  style={{
+                    width: '100%',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    background: 'white',
+                    padding: '12px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Currency symbol</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                  Currency symbol
+                </label>
                 <input
                   value={currencySymbol}
                   onChange={(e) => setCurrencySymbol(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  style={{
+                    width: '100%',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    background: 'white',
+                    padding: '12px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">USD to currency rate</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                  USD to currency rate
+                </label>
                 <input
                   value={usdToCurrencyRate}
                   onChange={(e) => setUsdToCurrencyRate(Number(e.target.value))}
                   type="number"
-                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  style={{
+                    width: '100%',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    background: 'white',
+                    padding: '12px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Min deposit (USD)</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                  Min deposit (USD)
+                </label>
                 <input
                   value={minDepositUsd}
                   onChange={(e) => setMinDepositUsd(Number(e.target.value))}
                   type="number"
                   step="0.01"
-                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  style={{
+                    width: '100%',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    background: 'white',
+                    padding: '12px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Min withdraw (USD)</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                  Min withdraw (USD)
+                </label>
                 <input
                   value={minWithdrawUsd}
                   onChange={(e) => setMinWithdrawUsd(Number(e.target.value))}
                   type="number"
                   step="0.01"
-                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  style={{
+                    width: '100%',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    background: 'white',
+                    padding: '12px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Withdraw fee (%)</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                  Withdraw fee (%)
+                </label>
                 <input
                   value={withdrawFeePercent}
                   onChange={(e) => setWithdrawFeePercent(Number(e.target.value))}
                   type="number"
                   step="0.01"
-                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">OxaPay merchant key</label>
-                <input
-                  value={oxapayMerchantKey}
-                  onChange={(e) => setOxapayMerchantKey(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                  placeholder="Optional"
+                  style={{
+                    width: '100%',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    background: 'white',
+                    padding: '12px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
                 />
               </div>
             </div>
 
-            <div className="border-t border-gray-200 pt-4 space-y-3">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-sm font-medium text-gray-900">Require channel join</div>
-                  <div className="text-xs text-gray-600">Force users to join a channel before using the bot.</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={requireChannelJoin}
-                  onChange={(e) => setRequireChannelJoin(e.target.checked)}
-                  className="h-4 w-4"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700">Channel Username</label>
-                    <input
-                      value={requiredChannelUsername}
-                      onChange={(e) => setRequiredChannelUsername(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                      placeholder="@mychannel"
-                    />
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => fetchChannelId(requiredChannelUsername)}
-                    disabled={fetchingChannel || !requiredChannelUsername || !botToken}
-                    loading={fetchingChannel}
-                    loadingText="Fetching..."
-                  >
-                    Get ID
-                  </Button>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Channel ID (auto-filled)</label>
+            {/* API Keys Section */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                    OxaPay merchant key
+                  </label>
                   <input
-                    value={requiredChannelId}
-                    onChange={(e) => setRequiredChannelId(e.target.value)}
-                    readOnly
-                    className="mt-1 w-full rounded-lg border border-gray-300 bg-slate-50 px-3 py-2 text-sm outline-none"
-                    placeholder="-1001234567890"
+                    value={oxapayMerchantKey}
+                    onChange={(e) => setOxapayMerchantKey(e.target.value)}
+                    style={{
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1px solid #d1d5db',
+                      background: 'white',
+                      padding: '12px',
+                      fontSize: '0.875rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                    FaucetPay API key
+                  </label>
+                  <input
+                    value={faucetpayApiKey}
+                    onChange={(e) => setFaucetpayApiKey(e.target.value)}
+                    style={{
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1px solid #d1d5db',
+                      background: 'white',
+                      padding: '12px',
+                      fontSize: '0.875rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                    placeholder="Optional"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="pt-2">
+            {/* Payment Features Section */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#1f2937', margin: 0, marginBottom: '4px' }}>
+                  Payment Features
+                </h3>
+                <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: 0 }}>
+                  Enable or disable specific payment commands for your bot users.
+                </p>
+              </div>
+              
+              <Toggle
+                enabled={balanceEnabled}
+                onChange={setBalanceEnabled}
+                label="💰 Balance Command (/balance)"
+                description="Users can check their coin balance"
+              />
+              
+              <Toggle
+                enabled={depositEnabled}
+                onChange={setDepositEnabled}
+                label="📥 Deposit Command (/deposit)"
+                description="Users can deposit funds via crypto"
+              />
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '12px', marginBottom: '8px' }}>
+                Only works if OxaPay or FaucetPay key is configured above
+              </div>
+              
+              <Toggle
+                enabled={withdrawEnabled}
+                onChange={setWithdrawEnabled}
+                label="📤 Withdrawal Command (/withdraw)"
+                description="Users can withdraw their balance"
+                disabled={!depositEnabled}
+              />
+              {withdrawEnabled && !depositEnabled && (
+                <div style={{
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  fontSize: '12px',
+                  color: '#92400e',
+                  marginTop: '8px'
+                }}>
+                  ⚠️ Withdrawal requires deposit to also be enabled
+                </div>
+              )}
+              
+              <Toggle
+                enabled={referralEnabled}
+                onChange={setReferralEnabled}
+                label="👥 Referral System (/referral)"
+                description="Users earn coins for inviting friends"
+              />
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '12px' }}>
+                Enable /referral command in Commands page after enabling this
+              </div>
+              
+              {withdrawEnabled && !oxapayMerchantKey && !faucetpayApiKey && (
+                <div style={{
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  fontSize: '12px',
+                  color: '#92400e',
+                  marginTop: '8px'
+                }}>
+                  ⚠️ Add an OxaPay or FaucetPay API key above before enabling withdrawals
+                </div>
+              )}
+            </div>
+
+            {/* Channel Settings */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
+              <Toggle
+                enabled={requireChannelJoin}
+                onChange={setRequireChannelJoin}
+                label="Require channel join"
+                description="Force users to join a channel before using bot."
+              />
+
+              {requireChannelJoin && (
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                        Channel Username
+                      </label>
+                      <input
+                        value={requiredChannelUsername}
+                        onChange={(e) => setRequiredChannelUsername(e.target.value)}
+                        style={{
+                          width: '100%',
+                          borderRadius: '8px',
+                          border: '1px solid #d1d5db',
+                          background: 'white',
+                          padding: '12px',
+                          fontSize: '0.875rem',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                        placeholder="@mychannel"
+                      />
+                    </div>
+                    <Button
+                      onClick={() => fetchChannelId(requiredChannelUsername)}
+                      disabled={fetchingChannel || !requiredChannelUsername || !botToken}
+                      loading={fetchingChannel}
+                      loadingText="Fetching..."
+                      variant="secondary"
+                      size="sm"
+                    >
+                      Get ID
+                    </Button>
+                  </div>
+
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                      Channel ID (auto-filled)
+                    </label>
+                    <input
+                      value={requiredChannelId}
+                      onChange={(e) => setRequiredChannelId(e.target.value)}
+                      readOnly
+                      style={{
+                        width: '100%',
+                        borderRadius: '8px',
+                        border: '1px solid #d1d5db',
+                        background: '#f8fafc',
+                        padding: '12px',
+                        fontSize: '0.875rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                      placeholder="-1001234567890"
+                    />
+                  </div>
+
+                  {/* Step Indicators */}
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: requiredChannelUsername && requiredChannelId ? '#16a34a' : '#d1d5db',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        color: 'white'
+                      }}>
+                        {requiredChannelUsername && requiredChannelId ? '✓' : '1'}
+                      </div>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                        Enter channel details
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: '#d1d5db',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        color: 'white'
+                      }}>
+                        2
+                      </div>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                        Add @twinbot_twinbot as admin
+                      </span>
+                    </div>
+
+                    <div style={{
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      borderRadius: '10px',
+                      padding: '14px 16px',
+                      marginTop: '12px'
+                    }}>
+                      <p style={{ fontWeight: '500', color: '#92400e', fontSize: '13px', marginBottom: '10px', margin: 0 }}>
+                        Add @twinbot_twinbot as channel administrator
+                      </p>
+                      <ol style={{ color: '#78350f', fontSize: '12px', lineHeight: '2', paddingLeft: '16px', margin: 0 }}>
+                        <li>Open your Telegram channel</li>
+                        <li>Tap channel name at the top</li>
+                        <li>Tap "Administrators"</li>
+                        <li>Tap "Add Administrator"</li>
+                        <li>Search for: <strong>@twinbot_twinbot</strong></li>
+                        <li>Enable "Read Messages" permission at minimum</li>
+                        <li>Tap Save</li>
+                      </ol>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: adminVerified ? '#16a34a' : '#d1d5db',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        color: 'white'
+                      }}>
+                        {adminVerified ? '✓' : '3'}
+                      </div>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                        Verify admin status
+                      </span>
+                    </div>
+
+                    <Button
+                      onClick={verifyChannelAdmin}
+                      loading={verifyingAdmin}
+                      loadingText="Verifying..."
+                      variant="secondary"
+                      size="sm"
+                      style={{ marginBottom: '12px' }}
+                    >
+                      Verify @twinbot_twinbot is Admin
+                    </Button>
+
+                    {adminVerifyResult && (
+                      <div style={{
+                        background: adminVerified ? '#f0fdf4' : '#fef2f2',
+                        border: `1px solid ${adminVerified ? '#bbf7d0' : '#fecaca'}`,
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        fontSize: '12px',
+                        color: adminVerified ? '#166534' : '#991b1b'
+                      }}>
+                        {adminVerified ? '✓ ' : ''}{adminVerifyResult}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ paddingTop: '8px' }}>
               <Button
                 onClick={save}
-                disabled={saving}
+                disabled={saving || !canSaveChannel}
                 loading={saving}
                 loadingText="Saving..."
                 variant="primary"
               >
                 Save settings
               </Button>
+              {requireChannelJoin && !adminVerified && (
+                <div style={{
+                  fontSize: '0.75rem',
+                  color: '#dc2626',
+                  marginTop: '8px'
+                }}>
+                  ⚠️ Verify @twinbot_twinbot as admin before saving channel settings
+                </div>
+              )}
             </div>
           </>
         )}

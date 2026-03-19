@@ -83,41 +83,79 @@ export default function BotsPage() {
             <div className="p-4 text-sm text-gray-600">No bots yet.</div>
           ) : (
             bots.map((b) => (
-              <div key={b.id} className="p-4 flex items-center justify-between gap-4">
+              <div key={b.id} style={{ padding: '16px', borderBottom: '1px solid #e5e7eb' }}>
                 <div>
-                  <div className="font-medium text-gray-900">{b.bot_name || 'Unnamed bot'}</div>
-                  <div className="text-sm text-gray-600">
+                  <div style={{ fontWeight: 500, color: '#1f2937', marginBottom: '4px' }}>
+                    {b.bot_name || 'Unnamed bot'}
+                  </div>
+                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                     {b.bot_username ? '@' + String(b.bot_username).replace('@', '') : 'No username'} · Category:{' '}
                     {b.category}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={
-                      'text-xs font-medium px-2 py-1 rounded-full ' +
-                      (b.is_active ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-700 border border-gray-200')
-                    }
+                <div style={{
+                  display: 'flex',
+                  gap: '6px',
+                  flexWrap: 'wrap',
+                  marginTop: '12px'
+                }}>
+                  <a 
+                    href={`/dashboard/bots/${b.id}/settings`} 
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      background: 'white',
+                      color: '#374151',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      textDecoration: 'none',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
                   >
-                    {b.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                  <Link
-                    href={`/dashboard/bots/${b.id}/settings`}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    ⚙️ Settings
+                  </a>
+                  <a 
+                    href={`/dashboard/bots/${b.id}/commands`} 
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      background: 'white',
+                      color: '#374151',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      textDecoration: 'none',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
                   >
-                    Settings
-                  </Link>
-                  <Link
-                    href={`/dashboard/bots/${b.id}/commands`}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    🤖 Commands
+                  </a>
+                  <a 
+                    href={`/dashboard/bots/${b.id}/users`} 
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      background: 'white',
+                      color: '#374151',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      textDecoration: 'none',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
                   >
-                    Commands
-                  </Link>
-                  <Link
-                    href={`/dashboard/bots/${b.id}/users`}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    Users
-                  </Link>
+                    👥 Users
+                  </a>
                 </div>
               </div>
             ))
