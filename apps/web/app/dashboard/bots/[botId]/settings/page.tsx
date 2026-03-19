@@ -12,10 +12,13 @@ export default function BotSettingsPage() {
   const botId = params.botId
   const supabase = useMemo(() => createClient(), [])
   const { toasts, removeToast, toast } = useToast()
+  const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [fetchingChannel, setFetchingChannel] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [botToken, setBotToken] = useState<string>('')
 
   const [welcomeMessage, setWelcomeMessage] = useState('')
   const [currencyName, setCurrencyName] = useState('')
@@ -35,6 +38,13 @@ export default function BotSettingsPage() {
       setLoading(true)
       setError(null)
       try {
+        const { data: botRow, error: botTokenErr } = await supabase
+          .from('bots')
+          .select('bot_token')
+          .eq('id', botId)
+          .single()
+        if (botTokenErr) throw botTokenErr
+
         const { data, error: botErr } = await supabase
           .from('bot_settings')
           .select('*')
@@ -42,6 +52,7 @@ export default function BotSettingsPage() {
           .single()
         if (botErr) throw botErr
         if (cancelled) return
+        setBotToken(botRow?.bot_token || '')
         setWelcomeMessage(data.welcome_message)
         setCurrencyName(data.currency_name)
         setCurrencySymbol(data.currency_symbol)
@@ -67,6 +78,28 @@ export default function BotSettingsPage() {
       cancelled = true
     }
   }, [botId, supabase])
+
+  async function fetchChannelId(username: string) {
+    setFetchingChannel(true)
+    try {
+      const cleanUsername = username.startsWith('@') ? username : '@' + username
+      const response = await fetch(`${BOT_ENGINE_URL}/api/bots/channel-info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUsername, botToken })
+      })
+      const data = await response.json()
+      if (data.channelId) {
+        setRequiredChannelId(data.channelId)
+        toast.success('Channel ID found: ' + data.channelId)
+      } else {
+        toast.error('Could not find channel. Make sure the username is correct and our platform bot is admin there.')
+      }
+    } catch {
+      toast.error('Failed to fetch channel info')
+    }
+    setFetchingChannel(false)
+  }
 
   async function save() {
     setSaving(true)
@@ -223,23 +256,37 @@ export default function BotSettingsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700">Channel Username</label>
+                    <input
+                      value={requiredChannelUsername}
+                      onChange={(e) => setRequiredChannelUsername(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                      placeholder="@mychannel"
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => fetchChannelId(requiredChannelUsername)}
+                    disabled={fetchingChannel || !requiredChannelUsername || !botToken}
+                    loading={fetchingChannel}
+                    loadingText="Fetching..."
+                  >
+                    Get ID
+                  </Button>
+                </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Required channel ID</label>
+                  <label className="block text-sm font-medium text-gray-700">Channel ID (auto-filled)</label>
                   <input
                     value={requiredChannelId}
                     onChange={(e) => setRequiredChannelId(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                    readOnly
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-slate-50 px-3 py-2 text-sm outline-none"
                     placeholder="-1001234567890"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Required channel username</label>
-                  <input
-                    value={requiredChannelUsername}
-                    onChange={(e) => setRequiredChannelUsername(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                    placeholder="@yourchannel"
                   />
                 </div>
               </div>

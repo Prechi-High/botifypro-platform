@@ -55,35 +55,49 @@ export async function registerBot(body: {
   usdRate: number
   category: string
 }) {
-  await ensureUserExists(body.creatorId, body.email)
+  try {
+    const validation = await validateBotToken(body.token)
+    if (!validation.valid) throw new Error('Invalid bot token')
 
-  const validation = await validateBotToken(body.token)
-  if (!validation.valid) throw new Error('Invalid bot token')
+    await ensureUserExists(body.creatorId, body.email)
 
-  const existing = await prisma.bot.findUnique({ where: { botToken: body.token } })
-  if (existing) throw new Error('Bot already registered')
+    const existing = await prisma.bot.findUnique({ where: { botToken: body.token } })
+    if (existing) throw new Error('Bot already registered')
 
-  const createdBot = await prisma.bot.create({
-    data: {
-      creatorId: body.creatorId,
-      botToken: body.token,
-      botUsername: validation.username || null,
-      botName: validation.firstName || null,
-      category: body.category || 'general',
-      settings: {
-        create: {
-          welcomeMessage: body.welcomeMessage,
-          currencyName: body.currencyName,
-          currencySymbol: body.currencySymbol,
-          usdToCurrencyRate: body.usdRate
+    const bot = await prisma.bot.create({
+      data: {
+        creatorId: body.creatorId,
+        botToken: body.token,
+        botUsername: validation.username || null,
+        botName: validation.firstName || null,
+        category: body.category || 'general',
+        settings: {
+          create: {
+            welcomeMessage: body.welcomeMessage || 'Welcome! Use the buttons below.',
+            currencyName: body.currencyName || 'Coins',
+            currencySymbol: body.currencySymbol || '🪙',
+            usdToCurrencyRate: Number.parseFloat(String(body.usdRate)) || 1000
+          }
         }
-      }
-    },
-    include: { settings: true }
-  })
+      },
+      include: { settings: true }
+    })
 
-  await registerWebhook(createdBot.id, body.token)
-  return createdBot
+    try {
+      await registerWebhook(bot.id, body.token)
+    } catch (webhookError: any) {
+      logger.warn('Webhook registration failed but bot was created', {
+        botId: bot.id,
+        error: webhookError?.message || String(webhookError)
+      })
+    }
+
+    logger.info('Bot registered successfully', { botId: bot.id, username: validation.username })
+    return { success: true, bot: { id: bot.id, botUsername: bot.botUsername, botName: bot.botName } }
+  } catch (error: any) {
+    logger.error('Bot registration error', { error: error?.message || String(error) })
+    throw error
+  }
 }
 
 export async function validateBotTokenRoute(req: any, res: any) {
@@ -98,8 +112,8 @@ export async function validateBotTokenRoute(req: any, res: any) {
 
 export async function registerBotRoute(req: any, res: any) {
   try {
-    const bot = await registerBot(req.body)
-    res.json(bot)
+    const result = await registerBot(req.body)
+    res.status(200).json(result)
   } catch (err: any) {
     res.status(500).json({ message: err?.message || 'Server error' })
   }
