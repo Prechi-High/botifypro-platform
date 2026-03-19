@@ -24,8 +24,8 @@ export default function AddBotPage() {
     setError(null)
     setSuccess(null)
     try {
-      const engineUrl = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || process.env.BOT_ENGINE_URL
-      const base = engineUrl || 'http://localhost:3001'
+      const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
+      const base = BOT_ENGINE_URL
       const resp = await axios.post(`${base}/api/bots/validate`, { token })
       if (!resp.data?.valid) {
         setError(resp.data?.error || 'Invalid token')
@@ -48,8 +48,8 @@ export default function AddBotPage() {
       const creatorId = auth.user?.id
       if (!creatorId) throw new Error('Not authenticated')
 
-      const engineUrl = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || process.env.BOT_ENGINE_URL
-      const base = engineUrl || 'http://localhost:3001'
+      const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
+      const base = BOT_ENGINE_URL
 
       const resp = await axios.post(`${base}/api/bots/register`, {
         token,
