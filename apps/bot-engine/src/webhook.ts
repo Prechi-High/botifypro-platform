@@ -19,11 +19,37 @@ async function handleCustomCommand(bot: any, botUser: any, chatId: number, comma
 
     if (!customCommand) return false
 
-    await sendMessage(bot.botToken, chatId, customCommand.responseText)
-    logger.info('Custom command handled', { botId: bot.id, command, botUserId: botUser.id })
+    // Replace dynamic placeholders
+    let response = customCommand.responseText
+
+    // Replace currency placeholders
+    if (bot.settings) {
+      const rate = Number(bot.settings.usdToCurrencyRate) || 1000
+      response = response.replace(/\[CURRENCY_RATE\]/g, rate.toString())
+      response = response.replace(/\[CURRENCY_SYMBOL\]/g, bot.settings.currencySymbol || '🪙')
+      response = response.replace(/\[USD_RATE\]/g, (1/rate).toFixed(6))
+    }
+
+    // Replace referral link placeholder
+    if (response.includes('[REFERRAL_LINK]')) {
+      const botUsername = bot.botUsername || 'yourbot'
+      const referralLink = `https://t.me/${botUsername}?start=ref_${botUser.id}` 
+      response = response.replace(/\[REFERRAL_LINK\]/g, referralLink)
+    }
+
+    // Replace referral count placeholder
+    if (response.includes('[REFERRAL_COUNT]')) {
+      try {
+        // Will be implemented in referral system — for now show 0
+        response = response.replace(/\[REFERRAL_COUNT\]/g, '0')
+      } catch {}
+    }
+
+    await sendMessage(bot.botToken, chatId, response)
+    logger.info('Command handled', { command, botId: bot.id, isPrebuilt: customCommand.isPrebuilt })
     return true
   } catch (error: any) {
-    logger.error('Custom command error', { error: error?.message || String(error) })
+    logger.error('handleCustomCommand error', { error: error.message })
     return false
   }
 }
@@ -236,15 +262,15 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (text.startsWith('/start')) {
         await handleStart(bot, botUser, chatId)
       } else if (text.startsWith('/balance')) {
-        if (bot.settings?.currencyName) {
+        if (bot.settings?.balanceEnabled) {
           await handleBalance(bot, botUser, chatId)
         }
       } else if (text.startsWith('/deposit')) {
-        if (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey) {
+        if (bot.settings?.depositEnabled && (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey)) {
           await handleDeposit(bot, botUser, chatId)
         }
       } else if (text.startsWith('/withdraw')) {
-        if (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey) {
+        if (bot.settings?.withdrawEnabled && (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey)) {
           await handleWithdraw(bot, botUser, chatId)
         }
       } else if (text.startsWith('/help')) {
@@ -271,11 +297,17 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       } catch {}
 
       if (data === 'cmd_balance' || data === 'cmd_start') {
-        await handleBalance(bot, botUser, callbackChatId)
+        if (bot.settings?.balanceEnabled) {
+          await handleBalance(bot, botUser, callbackChatId)
+        }
       } else if (data === 'cmd_deposit') {
-        await handleDeposit(bot, botUser, callbackChatId)
+        if (bot.settings?.depositEnabled && (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey)) {
+          await handleDeposit(bot, botUser, callbackChatId)
+        }
       } else if (data === 'cmd_withdraw') {
-        await handleWithdraw(bot, botUser, callbackChatId)
+        if (bot.settings?.withdrawEnabled && (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey)) {
+          await handleWithdraw(bot, botUser, callbackChatId)
+        }
       } else if (data === 'cmd_help') {
         await handleHelp(bot, callbackChatId)
       }

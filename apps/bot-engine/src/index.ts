@@ -95,6 +95,97 @@ app.post('/api/bots/channel-info', async (req: Request, res: Response) => {
   }
 })
 
+app.post('/api/bots/register-webhook', async (req: Request, res: Response) => {
+  try {
+    const { botId } = req.body
+    if (!botId) return res.status(400).json({ error: 'botId required' })
+    
+    const bot = await prisma.bot.findUnique({ where: { id: botId } })
+    if (!bot) return res.status(404).json({ error: 'Bot not found' })
+    
+    const webhookUrl = `${process.env.WEBHOOK_BASE_URL}/webhook/${bot.botToken}` 
+    
+    const response = await axios.post(
+      `https://api.telegram.org/bot${bot.botToken}/setWebhook`,
+      { url: webhookUrl, drop_pending_updates: true }
+    )
+    
+    if (response.data.ok) {
+      await prisma.bot.update({
+        where: { id: botId },
+        data: { webhookSet: true }
+      })
+      logger.info('Webhook manually re-registered', { botId, webhookUrl })
+      return res.json({ success: true })
+    } else {
+      return res.status(400).json({ error: 'Telegram rejected webhook', detail: response.data })
+    }
+  } catch (error: any) {
+    logger.error('Webhook re-registration failed', { error: error.message })
+    return res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/bots/:botId/webhook-status', async (req: Request, res: Response) => {
+  try {
+    const bot = await prisma.bot.findUnique({ where: { id: req.params.botId } })
+    if (!bot) return res.status(404).json({ error: 'Bot not found' })
+    
+    const response = await axios.get(
+      `https://api.telegram.org/bot${bot.botToken}/getWebhookInfo` 
+    )
+    
+    return res.json({
+      webhookSet: !!response.data.result?.url,
+      url: response.data.result?.url || '',
+      pendingUpdates: response.data.result?.pending_update_count || 0
+    })
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message })
+  }
+})
+
+app.post('/api/bots/verify-channel-admin', async (req: Request, res: Response) => {
+  try {
+    const { channelId, botToken } = req.body
+    
+    const platformBotToken = process.env.PLATFORM_BOT_TOKEN
+    if (!platformBotToken) {
+      return res.status(500).json({ error: 'Platform bot not configured' })
+    }
+
+    // Get platform bot user ID first
+    const meResponse = await axios.get(
+      `https://api.telegram.org/bot${platformBotToken}/getMe` 
+    )
+    const platformBotId = meResponse.data.result.id
+
+    // Check if platform bot is admin in channel
+    const memberResponse = await axios.get(
+      `https://api.telegram.org/bot${platformBotToken}/getChatMember`,
+      { params: { chat_id: channelId, user_id: platformBotId } }
+    )
+
+    const status = memberResponse.data?.result?.status
+    const isAdmin = ['administrator', 'creator'].includes(status)
+
+    logger.info('Channel admin verification', { channelId, status, isAdmin })
+
+    return res.json({
+      isAdmin,
+      status,
+      message: isAdmin
+        ? '@twinbot_twinbot is admin in this channel ✓'
+        : '@twinbot_twinbot is NOT admin. Please add it as administrator first.'
+    })
+  } catch (error: any) {
+    logger.error('Channel admin verify failed', { error: error.message })
+    return res.status(500).json({ 
+      error: 'Could not verify. Make sure channel ID is correct and channel is public or bot is already a member.' 
+    })
+  }
+})
+
 app.post('/webhooks/oxapay', async (req: Request, res: Response) => {
   try {
     logger.info('API call', { route: req.path, method: req.method })

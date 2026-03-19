@@ -42,13 +42,16 @@ model Bot {
 }
 
 model BotCommand {
-  id           String  @id @default(uuid())
-  botId        String  @map("bot_id")
-  bot          Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
-  command      String
-  responseText String  @map("response_text")
-  isActive     Boolean @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid())
+  botId           String   @map("bot_id")
+  bot             Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  command         String
+  responseText    String   @map("response_text")
+  isActive        Boolean  @default(true) @map("is_active")
+  commandCategory String   @default("custom") @map("command_category")
+  isPrebuilt      Boolean  @default(false) @map("is_prebuilt")
+  prebuiltKey     String?  @map("prebuilt_key")
+  createdAt       DateTime @default(now()) @map("created_at")
   @@unique([botId, command])
   @@map("bot_commands")
 }
@@ -69,6 +72,10 @@ model BotSettings {
   requireChannelJoin      Boolean @default(false) @map("require_channel_join")
   requiredChannelId       String? @map("required_channel_id")
   requiredChannelUsername String? @map("required_channel_username")
+  depositEnabled          Boolean @default(false) @map("deposit_enabled")
+  withdrawEnabled         Boolean @default(false) @map("withdraw_enabled")
+  balanceEnabled          Boolean @default(false) @map("balance_enabled")
+  referralEnabled         Boolean @default(false) @map("referral_enabled")
   @@map("bot_settings")
 }
 

@@ -112,6 +112,12 @@ export default function BotsPage() {
                   >
                     Commands
                   </Link>
+                  <Link
+                    href={`/dashboard/bots/${b.id}/users`}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Users
+                  </Link>
                 </div>
               </div>
             ))

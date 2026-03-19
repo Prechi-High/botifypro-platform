@@ -39,24 +39,25 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
     return
   }
 
-  const hasPayments = !!(settings.oxapayMerchantKey || settings.faucetpayApiKey)
-  const hasCurrency = !!(settings.currencyName && settings.currencyName !== 'Coins')
-
   const keyboard: any[][] = []
+  const row1: any[] = []
+  const row2: any[] = []
 
-  if (hasPayments || hasCurrency) {
-    keyboard.push([
-      { text: '💰 Balance', callback_data: 'cmd_balance' },
-      { text: '📥 Deposit', callback_data: 'cmd_deposit' }
-    ])
-    keyboard.push([
-      { text: '📤 Withdraw', callback_data: 'cmd_withdraw' }
-    ])
+  if (settings.balanceEnabled) {
+    row1.push({ text: '💰 Balance', callback_data: 'cmd_balance' })
   }
+  if (settings.depositEnabled) {
+    row1.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
+  }
+  if (row1.length > 0) keyboard.push(row1)
 
-  keyboard.push([{ text: '❓ Help', callback_data: 'cmd_help' }])
+  if (settings.withdrawEnabled) {
+    row2.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
+  }
+  row2.push({ text: '❓ Help', callback_data: 'cmd_help' })
+  if (row2.length > 0) keyboard.push(row2)
 
-  const balanceText = (hasPayments || hasCurrency)
+  const balanceText = (settings.balanceEnabled || settings.depositEnabled || settings.withdrawEnabled)
     ? `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}` 
     : ''
 
@@ -90,15 +91,19 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
 
 export async function handleHelp(bot: any, chatId: number) {
   const settings = bot.settings
-  const hasPayments = !!(settings?.oxapayMerchantKey || settings?.faucetpayApiKey)
+  const hasPayments = !!(settings?.depositEnabled || settings?.withdrawEnabled)
 
   let helpText = 'ℹ️ <b>Available Commands</b>\n\n'
   helpText += '/start — Main menu\n'
   helpText += '/help — Show this message\n'
 
-  if (hasPayments) {
+  if (settings?.balanceEnabled) {
     helpText += '/balance — Check your balance\n'
+  }
+  if (settings?.depositEnabled) {
     helpText += '/deposit — Add funds\n'
+  }
+  if (settings?.withdrawEnabled) {
     helpText += '/withdraw — Cash out your balance\n'
   }
 
