@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, CheckCircle, Settings as SettingsIcon } from 'lucide-react'
 import Button from '@/components/ui/Button'
@@ -139,7 +140,12 @@ export default function BotSettingsPage() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Bot settings</h1>
-        <p className="text-sm text-gray-600 mt-1">Configure behavior, currency, and payments.</p>
+        <p className="text-sm text-gray-600 mt-1">
+          Configure behavior, currency, and payments.{' '}
+          <Link href={`/dashboard/bots/${botId}/commands`} className="text-blue-600 hover:text-blue-700 font-medium">
+            Custom Commands
+          </Link>
+        </p>
       </div>
 
       {error && (

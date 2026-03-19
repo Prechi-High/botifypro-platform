@@ -64,20 +64,25 @@ app.post('/api/bots/register', async (req: Request, res: Response) => {
 app.post('/api/bots/channel-info', async (req: Request, res: Response) => {
   try {
     const { username, botToken } = req.body || {}
-    const response = await axios.get(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${username}`)
+    if (!username || !botToken) {
+      return res.status(400).json({ error: 'username and botToken are required' })
+    }
+    const cleanUsername = String(username).startsWith('@') ? String(username) : '@' + String(username)
+    const response = await axios.get(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${cleanUsername}`)
     if (response.data?.ok) {
       const chat = response.data.result
-      res.json({
+      return res.json({
         channelId: chat.id.toString(),
-        title: chat.title,
-        username: chat.username
+        title: chat.title || null,
+        username: chat.username || null,
+        type: chat.type
       })
     } else {
-      res.status(400).json({ error: 'Channel not found' })
+      return res.status(400).json({ error: 'Channel not found. Make sure the username is correct.' })
     }
   } catch (error: any) {
-    logger.error('Channel info error', { error: error?.message, stack: error?.stack })
-    res.status(500).json({ error: 'Failed to fetch channel info' })
+    logger.error('Channel info fetch failed', { error: error?.message, stack: error?.stack })
+    return res.status(500).json({ error: 'Failed to fetch channel info' })
   }
 })
 

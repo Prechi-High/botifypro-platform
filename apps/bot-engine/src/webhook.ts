@@ -6,6 +6,29 @@ import { maybeServeAd } from './ads'
 import { processOxapayWithdrawal } from './payments/oxapay'
 import logger from './logger'
 
+async function handleCustomCommand(bot: any, botUser: any, chatId: number, commandText: string): Promise<boolean> {
+  try {
+    const command = commandText.split(' ')[0].toLowerCase()
+
+    const customCommand = await prisma.botCommand.findFirst({
+      where: {
+        botId: bot.id,
+        command,
+        isActive: true
+      }
+    })
+
+    if (!customCommand) return false
+
+    await sendMessage(bot.botToken, chatId, customCommand.responseText)
+    logger.info('Custom command handled', { botId: bot.id, command, botUserId: botUser.id })
+    return true
+  } catch (error: any) {
+    logger.error('Custom command error', { error: error?.message || String(error) })
+    return false
+  }
+}
+
 export async function getOrCreateBotUser(botId: string, telegramUser: any) {
   return await prisma.botUser.upsert({
     where: {
@@ -126,22 +149,28 @@ export async function handleWebhook(req: any, res: any) {
     if (text.startsWith('/start') || callback === 'cmd_start') {
       logger.info('Command handled', { command: 'start', botId: bot.id, userId: botUser.id })
       await handleStart(bot, botUser, chatId)
-    }
-    if (text.startsWith('/balance') || callback === 'cmd_balance') {
+    } else if (text.startsWith('/balance') || callback === 'cmd_balance') {
       logger.info('Command handled', { command: 'balance', botId: bot.id, userId: botUser.id })
       await handleBalance(bot, botUser, chatId)
-    }
-    if (text.startsWith('/deposit') || callback === 'cmd_deposit') {
+    } else if (text.startsWith('/deposit') || callback === 'cmd_deposit') {
       logger.info('Command handled', { command: 'deposit', botId: bot.id, userId: botUser.id })
       await handleDeposit(bot, botUser, chatId)
-    }
-    if (text.startsWith('/withdraw') || callback === 'cmd_withdraw') {
+    } else if (text.startsWith('/withdraw') || callback === 'cmd_withdraw') {
       logger.info('Command handled', { command: 'withdraw', botId: bot.id, userId: botUser.id })
       await handleWithdraw(bot, botUser, chatId)
-    }
-    if (text.startsWith('/help') || callback === 'cmd_help') {
+    } else if (text.startsWith('/help') || callback === 'cmd_help') {
       logger.info('Command handled', { command: 'help', botId: bot.id, userId: botUser.id })
       await handleHelp(bot, chatId)
+    } else if (update.message?.text) {
+      const textMsg = update.message.text
+      const chatIdMsg = update.message.chat.id
+
+      if (textMsg.startsWith('/')) {
+        const handled = await handleCustomCommand(bot, botUser, chatIdMsg, textMsg)
+        if (!handled) {
+          logger.debug('Unknown command ignored', { command: textMsg.split(' ')[0], botId: bot.id })
+        }
+      }
     }
 
     await maybeServeAd(bot, botUser, chatId)
