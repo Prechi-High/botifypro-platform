@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { BarChart2, Bot, Users, DollarSign, AlertCircle } from 'lucide-react'
+import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
   bots: number
@@ -13,6 +14,7 @@ type Stats = {
 
 export default function DashboardHome() {
   const supabase = useMemo(() => createClient(), [])
+  const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats>({ bots: 0, users: 0, deposits: 0, withdrawals: 0 })
@@ -52,7 +54,9 @@ export default function DashboardHome() {
         setStats({ bots: botsCount, users: usersCount, deposits: depositsCount, withdrawals: withdrawalsCount })
       } catch (e: any) {
         if (cancelled) return
-        setError(e?.message || 'Failed to load dashboard')
+        const message = e?.message || 'Failed to load dashboard'
+        setError(message)
+        toast.error(message)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -65,6 +69,7 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-6">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
         <p className="text-sm text-gray-600 mt-1">Your platform overview.</p>

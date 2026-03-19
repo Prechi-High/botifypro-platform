@@ -4,10 +4,13 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, CheckCircle, Megaphone, Plus } from 'lucide-react'
+import Button from '@/components/ui/Button'
+import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function NewCampaignPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { toasts, removeToast, toast } = useToast()
   const [title, setTitle] = useState('')
   const [messageText, setMessageText] = useState('')
   const [buttonText, setButtonText] = useState('')
@@ -42,9 +45,12 @@ export default function NewCampaignPage() {
       })
       if (cErr) throw cErr
       setSuccess('Campaign created.')
+      toast.success('Campaign created successfully!')
       router.push('/dashboard/advertise')
     } catch (e: any) {
-      setError(e?.message || 'Failed to create campaign')
+      const message = e?.message || 'Failed to create campaign'
+      setError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -52,6 +58,7 @@ export default function NewCampaignPage() {
 
   return (
     <div className="space-y-6">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">New campaign</h1>
         <p className="text-sm text-gray-600 mt-1">Create a sponsored message to show inside bots.</p>
@@ -140,14 +147,16 @@ export default function NewCampaignPage() {
         </div>
 
         <div className="pt-2">
-          <button
+          <Button
             onClick={create}
             disabled={loading || !title || !messageText}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            loading={loading}
+            loadingText="Creating..."
+            variant="primary"
           >
             <Plus size={18} />
-            {loading ? 'Creating...' : 'Create campaign'}
-          </button>
+            Create campaign
+          </Button>
         </div>
       </div>
     </div>

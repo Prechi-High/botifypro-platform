@@ -4,9 +4,11 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, Megaphone, Plus } from 'lucide-react'
+import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function AdvertisePage() {
   const supabase = useMemo(() => createClient(), [])
+  const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [campaigns, setCampaigns] = useState<any[]>([])
@@ -31,7 +33,9 @@ export default function AdvertisePage() {
         setCampaigns(data || [])
       } catch (e: any) {
         if (cancelled) return
-        setError(e?.message || 'Failed to load campaigns')
+        const message = e?.message || 'Failed to load campaigns'
+        setError(message)
+        toast.error(message)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -44,6 +48,7 @@ export default function AdvertisePage() {
 
   return (
     <div className="space-y-6">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Advertise</h1>

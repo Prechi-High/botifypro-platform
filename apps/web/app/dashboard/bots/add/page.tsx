@@ -5,72 +5,86 @@ import { useRouter } from 'next/navigation'
 import axios from 'axios'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, CheckCircle, Plus, Bot as BotIcon } from 'lucide-react'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import Button from '@/components/ui/Button'
+import StatusBadge from '@/components/ui/StatusBadge'
+import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function AddBotPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { toasts, removeToast, toast } = useToast()
   const [token, setToken] = useState('')
   const [welcomeMessage, setWelcomeMessage] = useState('Welcome! Use the buttons below to get started.')
   const [currencyName, setCurrencyName] = useState('Coins')
   const [currencySymbol, setCurrencySymbol] = useState('🪙')
   const [usdRate, setUsdRate] = useState(1000)
   const [category, setCategory] = useState('general')
-  const [loading, setLoading] = useState(false)
+  const [tokenStatus, setTokenStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [setupLoading, setSetupLoading] = useState(false)
+  const [setupStep, setSetupStep] = useState<0 | 1 | 2 | 3>(0)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
 
   async function validateToken() {
-    setLoading(true)
+    setTokenStatus('loading')
     setError(null)
-    setSuccess(null)
     try {
       const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
-      const base = BOT_ENGINE_URL
-      const resp = await axios.post(`${base}/api/bots/validate`, { token })
+      const resp = await axios.post(`${BOT_ENGINE_URL}/api/bots/validate`, { token })
       if (!resp.data?.valid) {
-        setError(resp.data?.error || 'Invalid token')
+        setTokenStatus('error')
+        toast.error('Invalid token')
         return
       }
-      setSuccess(`Valid bot: @${resp.data.username}`)
+      setTokenStatus('success')
+      toast.success('Bot token verified successfully!')
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Validation failed')
-    } finally {
-      setLoading(false)
+      setTokenStatus('error')
+      toast.error(e?.response?.data?.error || e?.response?.data?.message || e?.message || 'Invalid token')
     }
   }
 
-  async function register() {
-    setLoading(true)
+  async function completeSetup() {
+    setSetupLoading(true)
     setError(null)
-    setSuccess(null)
+    setSetupStep(1)
+    let stepTimer: number | undefined
+    stepTimer = window.setTimeout(() => setSetupStep(2), 700)
+
     try {
       const { data: auth } = await supabase.auth.getUser()
       const creatorId = auth.user?.id
+      const email = auth.user?.email
       if (!creatorId) throw new Error('Not authenticated')
 
       const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
-      const base = BOT_ENGINE_URL
-
-      const resp = await axios.post(`${base}/api/bots/register`, {
+      const resp = await axios.post(`${BOT_ENGINE_URL}/api/bots/register`, {
         token,
         creatorId,
+        email,
         welcomeMessage,
         currencyName,
         currencySymbol,
         usdRate,
         category
       })
-      setSuccess('Bot registered successfully.')
+      setSetupStep(3)
+      toast.success('Bot created successfully!')
       router.push(`/dashboard/bots/${resp.data.id}/settings`)
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Registration failed')
+      const message = e?.response?.data?.message || e?.message || 'Registration failed'
+      setSetupStep(0)
+      toast.error(message)
+      setError(message)
     } finally {
-      setLoading(false)
+      if (stepTimer) window.clearTimeout(stepTimer)
+      setSetupLoading(false)
     }
   }
 
   return (
     <div className="space-y-6">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Add bot</h1>
         <p className="text-sm text-gray-600 mt-1">Connect your Telegram bot token to BotifyPro.</p>
@@ -80,13 +94,6 @@ export default function AddBotPage() {
         <div className="flex gap-2 items-start text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
           <AlertCircle size={18} className="mt-0.5" />
           <div>{error}</div>
-        </div>
-      )}
-
-      {success && (
-        <div className="flex gap-2 items-start text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg p-3">
-          <CheckCircle size={18} className="mt-0.5" />
-          <div>{success}</div>
         </div>
       )}
 
@@ -105,15 +112,25 @@ export default function AddBotPage() {
             placeholder="123456:ABCDEF..."
           />
           <div className="mt-2">
-            <button
+            <Button
               type="button"
-              disabled={loading || !token}
+              variant="secondary"
+              disabled={!token || setupLoading}
+              loading={tokenStatus === 'loading'}
+              loadingText="Validating token..."
               onClick={validateToken}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <CheckCircle size={18} />
-              Validate token
-            </button>
+              Verify Token
+            </Button>
+
+            {tokenStatus !== 'idle' && (
+              <div className="mt-3">
+                {tokenStatus === 'loading' && <StatusBadge status="loading" text="Checking token..." />}
+                {tokenStatus === 'success' && <StatusBadge status="success" text="Token verified ✓" />}
+                {tokenStatus === 'error' && <StatusBadge status="error" text="Invalid token" />}
+              </div>
+            )}
           </div>
         </div>
 
@@ -164,16 +181,37 @@ export default function AddBotPage() {
         </div>
 
         <div className="pt-2">
-          <button
+          <Button
             type="button"
-            disabled={loading || !token}
-            onClick={register}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="primary"
+            disabled={setupLoading || tokenStatus !== 'success' || !token}
+            loading={setupLoading}
+            loadingText="Creating your bot..."
+            onClick={completeSetup}
           >
             <Plus size={18} />
-            {loading ? 'Registering...' : 'Register bot'}
-          </button>
+            Complete Setup
+          </Button>
         </div>
+
+        {setupStep > 0 && (
+          <div className="pt-2 space-y-2 text-sm">
+            <div className="flex items-center gap-2 text-gray-700">
+              {setupStep === 1 && <LoadingSpinner size={16} color="#2563eb" />}
+              {setupStep >= 2 && <CheckCircle size={16} color="#16a34a" />}
+              Step 1: Saving bot settings...
+            </div>
+            <div className="flex items-center gap-2 text-gray-700">
+              {setupStep === 2 && <LoadingSpinner size={16} color="#2563eb" />}
+              {setupStep >= 3 && <CheckCircle size={16} color="#16a34a" />}
+              Step 2: Registering webhook with Telegram...
+            </div>
+            <div className="flex items-center gap-2 text-gray-700">
+              {setupStep >= 3 && <CheckCircle size={16} color="#16a34a" />}
+              Step 3: Bot is ready!
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

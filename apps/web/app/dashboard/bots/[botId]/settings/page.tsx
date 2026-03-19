@@ -4,11 +4,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, CheckCircle, Settings as SettingsIcon } from 'lucide-react'
+import Button from '@/components/ui/Button'
+import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function BotSettingsPage() {
   const params = useParams<{ botId: string }>()
   const botId = params.botId
   const supabase = useMemo(() => createClient(), [])
+  const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +55,9 @@ export default function BotSettingsPage() {
         setRequiredChannelUsername(data.required_channel_username || '')
       } catch (e: any) {
         if (cancelled) return
-        setError(e?.message || 'Failed to load settings')
+        const message = e?.message || 'Failed to load settings'
+        setError(message)
+        toast.error(message)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -86,8 +91,11 @@ export default function BotSettingsPage() {
         .eq('bot_id', botId)
       if (upErr) throw upErr
       setSuccess('Settings saved.')
+      toast.success('Settings saved!')
     } catch (e: any) {
-      setError(e?.message || 'Failed to save')
+      const message = e?.message || 'Failed to save'
+      setError(message)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -95,6 +103,7 @@ export default function BotSettingsPage() {
 
   return (
     <div className="space-y-6">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Bot settings</h1>
         <p className="text-sm text-gray-600 mt-1">Configure behavior, currency, and payments.</p>
@@ -237,13 +246,15 @@ export default function BotSettingsPage() {
             </div>
 
             <div className="pt-2">
-              <button
+              <Button
                 onClick={save}
                 disabled={saving}
-                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                loading={saving}
+                loadingText="Saving..."
+                variant="primary"
               >
-                {saving ? 'Saving...' : 'Save settings'}
-              </button>
+                Save settings
+              </Button>
             </div>
           </>
         )}

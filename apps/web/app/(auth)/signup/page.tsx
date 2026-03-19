@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Button from '@/components/ui/Button'
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('')
@@ -24,16 +25,36 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { full_name: fullName } }
       })
 
-      if (error) {
-        setError(error.message)
+      if (authError) {
+        setError(authError.message)
         setLoading(false)
         return
+      }
+
+      if (authData?.user) {
+        const { error: insertError } = await supabase.from('users').upsert(
+          {
+            id: authData.user.id,
+            email: authData.user.email || email,
+            full_name: fullName,
+            password_hash: 'supabase_auth',
+            role: 'creator',
+            plan: 'free'
+          },
+          { onConflict: 'id' }
+        )
+
+        if (insertError) {
+          setError(insertError.message)
+          setLoading(false)
+          return
+        }
       }
 
       window.location.href = '/dashboard'
@@ -104,13 +125,16 @@ export default function SignupPage() {
             />
           </div>
 
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            style={{ width: '100%', padding: '0.75rem', background: loading ? '#93c5fd' : '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.875rem', fontWeight: '500', cursor: loading ? 'not-allowed' : 'pointer' }}
+            loading={loading}
+            loadingText="Creating..."
+            variant="primary"
+            fullWidth
           >
-            {loading ? 'Creating...' : 'Sign Up'}
-          </button>
+            Sign Up
+          </Button>
         </form>
 
         <p style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.875rem', color: '#64748b' }}>

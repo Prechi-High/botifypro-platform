@@ -46,6 +46,9 @@ app.post('/api/bots/validate', async (req: Request, res: Response) => {
 app.post('/api/bots/register', async (req: Request, res: Response) => {
   try {
     logger.info('API call', { route: req.path, method: req.method })
+    // Ensure the dashboard-provided email is forwarded for user auto-provisioning.
+    const body = req.body || {}
+    req.body = { ...body, email: body?.email }
     await registerBotRoute(req, res)
   } catch (err: any) {
     logger.error('Server error', { error: err?.message, stack: err?.stack })

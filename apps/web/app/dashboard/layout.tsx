@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Button from '@/components/ui/Button'
 import {
   Home,
   Bot,
@@ -25,10 +27,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const [loggingOut, setLoggingOut] = useState(false)
 
   async function logout() {
-    await supabase.auth.signOut()
-    router.push('/login')
+    setLoggingOut(true)
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   return (
@@ -78,13 +86,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          <button
+          <Button
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white py-2 text-sm"
+            fullWidth
+            variant="secondary"
+            disabled={loggingOut}
+            loading={loggingOut}
+            loadingText="Signing out..."
           >
             <LogOut size={18} />
             Logout
-          </button>
+          </Button>
         </div>
       </aside>
 

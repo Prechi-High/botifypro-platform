@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, BarChart2, CheckCircle, XCircle } from 'lucide-react'
+import Button from '@/components/ui/Button'
+import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function AdminCampaignsPage() {
   const supabase = useMemo(() => createClient(), [])
+  const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [campaigns, setCampaigns] = useState<any[]>([])
@@ -26,7 +29,9 @@ export default function AdminCampaignsPage() {
         setCampaigns(data || [])
       } catch (e: any) {
         if (cancelled) return
-        setError(e?.message || 'Failed to load admin campaigns')
+        const message = e?.message || 'Failed to load admin campaigns'
+        setError(message)
+        toast.error(message)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -44,8 +49,11 @@ export default function AdminCampaignsPage() {
       const { error: upErr } = await supabase.from('ad_campaigns').update({ is_active: next }).eq('id', id)
       if (upErr) throw upErr
       setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, is_active: next } : c)))
+      toast.success('Campaign updated!')
     } catch (e: any) {
-      setError(e?.message || 'Update failed')
+      const message = e?.message || 'Update failed'
+      setError(message)
+      toast.error(message)
     } finally {
       setSavingId(null)
     }
@@ -58,8 +66,11 @@ export default function AdminCampaignsPage() {
       const { error: upErr } = await supabase.from('ad_campaigns').update({ is_paid: next }).eq('id', id)
       if (upErr) throw upErr
       setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, is_paid: next } : c)))
+      toast.success('Campaign updated!')
     } catch (e: any) {
-      setError(e?.message || 'Update failed')
+      const message = e?.message || 'Update failed'
+      setError(message)
+      toast.error(message)
     } finally {
       setSavingId(null)
     }
@@ -67,6 +78,7 @@ export default function AdminCampaignsPage() {
 
   return (
     <div className="space-y-6">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Admin campaigns</h1>
         <p className="text-sm text-gray-600 mt-1">Review and enable paid campaigns.</p>
@@ -99,28 +111,26 @@ export default function AdminCampaignsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
+                    variant={c.is_paid ? 'success' : 'secondary'}
                     disabled={savingId === c.id}
+                    loading={savingId === c.id}
+                    loadingText="Updating..."
                     onClick={() => togglePaid(c.id, !c.is_paid)}
-                    className={
-                      'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm border ' +
-                      (c.is_paid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')
-                    }
                   >
-                    {c.is_paid ? <CheckCircle size={18} /> : <XCircle size={18} />}
+                    {c.is_paid ? <CheckCircle size={18} color="#16a34a" /> : <XCircle size={18} color="#dc2626" />}
                     {c.is_paid ? 'Paid' : 'Mark paid'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={c.is_active ? 'success' : 'secondary'}
                     disabled={savingId === c.id}
+                    loading={savingId === c.id}
+                    loadingText="Updating..."
                     onClick={() => toggleActive(c.id, !c.is_active)}
-                    className={
-                      'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm border ' +
-                      (c.is_active ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')
-                    }
                   >
-                    {c.is_active ? <CheckCircle size={18} /> : <XCircle size={18} />}
+                    {c.is_active ? <CheckCircle size={18} color="#2563eb" /> : <XCircle size={18} color="#dc2626" />}
                     {c.is_active ? 'Active' : 'Activate'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))

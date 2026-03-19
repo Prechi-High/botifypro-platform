@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Button from '@/components/ui/Button'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -38,9 +39,16 @@ export default function LoginPage() {
             <label style={{display:'block',fontSize:'0.85rem',fontWeight:'500',color:'#374151',marginBottom:'0.35rem'}}>Password</label>
             <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Your password" style={{width:'100%',padding:'0.6rem 0.75rem',border:'1px solid #e2e8f0',borderRadius:'8px',fontSize:'0.875rem',outline:'none',boxSizing:'border-box'}} />
           </div>
-          <button type="submit" disabled={loading} style={{width:'100%',padding:'0.7rem',background:loading?'#93c5fd':'#2563eb',color:'white',border:'none',borderRadius:'8px',fontSize:'0.875rem',fontWeight:'500',cursor:loading?'not-allowed':'pointer'}}>
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+          <Button
+            type="submit"
+            disabled={loading}
+            loading={loading}
+            loadingText="Signing in..."
+            variant="primary"
+            fullWidth
+          >
+            Sign In
+          </Button>
         </form>
         <p style={{textAlign:'center',marginTop:'1rem',fontSize:'0.85rem',color:'#94a3b8'}}>No account? <a href="/signup" style={{color:'#2563eb',fontWeight:'500',textDecoration:'none'}}>Sign up</a></p>
       </div>

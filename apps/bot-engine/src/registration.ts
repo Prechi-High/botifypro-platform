@@ -1,5 +1,26 @@
 import axios from 'axios'
 import { prisma } from '@botifypro/database'
+import logger from './logger'
+
+async function ensureUserExists(creatorId: string, email?: string) {
+  const existingUser = await prisma.user.findUnique({
+    where: { id: creatorId }
+  })
+
+  if (!existingUser) {
+    await prisma.user.create({
+      data: {
+        id: creatorId,
+        email: email || `user_${creatorId}@botifypro.com`,
+        passwordHash: 'supabase_auth',
+        fullName: 'Creator',
+        role: 'creator',
+        plan: 'free'
+      }
+    })
+    logger.info('Auto-created user record', { creatorId })
+  }
+}
 
 export async function validateBotToken(token: string) {
   try {
@@ -27,12 +48,15 @@ export async function registerWebhook(botId: string, botToken: string) {
 export async function registerBot(body: {
   token: string
   creatorId: string
+  email?: string
   welcomeMessage: string
   currencyName: string
   currencySymbol: string
   usdRate: number
   category: string
 }) {
+  await ensureUserExists(body.creatorId, body.email)
+
   const validation = await validateBotToken(body.token)
   if (!validation.valid) throw new Error('Invalid bot token')
 

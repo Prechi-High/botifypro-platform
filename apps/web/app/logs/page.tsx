@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Button from '@/components/ui/Button'
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<any[]>([])
@@ -43,7 +44,16 @@ export default function LogsPage() {
             <option value="ERROR">ERROR</option>
             <option value="DEBUG">DEBUG</option>
           </select>
-          <button onClick={fetchLogs} style={{padding:'0.4rem 1rem',background:'#2563eb',color:'white',border:'none',borderRadius:'6px',cursor:'pointer',fontSize:'0.8rem'}}>Refresh</button>
+          <Button
+            onClick={fetchLogs}
+            disabled={loading}
+            loading={loading}
+            loadingText="Refreshing..."
+            variant="primary"
+            size="sm"
+          >
+            Refresh
+          </Button>
         </div>
       </div>
 
