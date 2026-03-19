@@ -1,109 +1,206 @@
 'use client'
-
-import Link from 'next/link'
-import { useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import Button from '@/components/ui/Button'
 import {
-  Home,
-  Bot,
-  Megaphone,
-  Settings,
-  LogOut,
-  BarChart2,
-  Users,
-  DollarSign
+  Bot, LayoutDashboard, Plus, Megaphone,
+  Settings, LogOut, Menu, X
 } from 'lucide-react'
 
-const nav = [
-  { href: '/dashboard', label: 'Overview', icon: Home },
-  { href: '/dashboard/bots', label: 'Bots', icon: Bot },
-  { href: '/dashboard/advertise', label: 'Advertise', icon: Megaphone },
-  { href: '/dashboard/admin/campaigns', label: 'Admin', icon: Settings }
+const NAV = [
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+  { icon: Bot,             label: 'My Bots',   href: '/dashboard/bots' },
+  { icon: Plus,            label: 'Add Bot',   href: '/dashboard/bots/add' },
+  { icon: Megaphone,       label: 'Advertise', href: '/dashboard/advertise' },
+  { icon: Settings,        label: 'Settings',  href: '/dashboard/settings' },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
-  const [loggingOut, setLoggingOut] = useState(false)
+  const [open, setOpen]       = useState(false)
+  const [mobile, setMobile]   = useState(false)
+  const [email, setEmail]     = useState('')
+  const pathname              = usePathname()
+  const supabase              = createClient()
 
-  async function logout() {
-    setLoggingOut(true)
-    try {
-      await supabase.auth.signOut()
-      router.push('/login')
-    } finally {
-      setLoggingOut(false)
-    }
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) setEmail(data.user.email)
+    })
+  }, [])
+
+  function isActive(href: string) {
+    if (href === '/dashboard') return pathname === '/dashboard'
+    return pathname.startsWith(href)
   }
 
-  return (
-    <div className="min-h-screen flex">
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="px-5 py-4 border-b border-slate-800">
-          <div className="text-lg font-semibold">BotifyPro</div>
-          <div className="text-xs text-slate-300 mt-1">Creator Dashboard</div>
+  async function logout() {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
+  const Sidebar = () => (
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100%',
+      background: '#1e293b'
+    }}>
+      {/* Top — logo + close button on mobile */}
+      <div style={{
+        padding: '18px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid #334155'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Bot size={22} color="#3b82f6" />
+          <span style={{ fontSize: '16px', fontWeight: '700', color: 'white' }}>BotifyPro</span>
         </div>
+        {mobile && (
+          <button
+            onClick={() => setOpen(false)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px', display: 'flex' }}
+          >
+            <X size={20} />
+          </button>
+        )}
+      </div>
 
-        <nav className="px-3 py-4 space-y-1 flex-1">
-          {nav.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + '/')
-            const Icon = item.icon
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ' +
-                  (active ? 'bg-slate-800 text-white' : 'text-slate-200 hover:bg-slate-800')
-                }
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </Link>
-            )
-          })}
-        </nav>
+      {/* Nav links */}
+      <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+        {NAV.map(item => {
+          const Icon = item.icon
+          const active = isActive(item.href)
+          return (
+            <a
+              key={item.href}
+              href={item.href}
+              onClick={() => mobile && setOpen(false)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '10px 12px', borderRadius: '8px', textDecoration: 'none',
+                background: active ? '#3b82f6' : 'transparent',
+                color: active ? 'white' : '#94a3b8',
+                fontSize: '14px', fontWeight: active ? '500' : '400',
+                transition: 'background 0.15s'
+              }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLAnchorElement).style.background = '#334155' }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
+            >
+              <Icon size={18} />
+              {item.label}
+            </a>
+          )
+        })}
+      </nav>
 
-        <div className="px-4 py-4 border-t border-slate-800 space-y-2">
-          <div className="grid grid-cols-3 gap-2 text-slate-300">
-            <div className="bg-slate-800 rounded-lg p-2">
-              <div className="flex items-center gap-2 text-xs">
-                <BarChart2 size={14} /> Stats
-              </div>
-            </div>
-            <div className="bg-slate-800 rounded-lg p-2">
-              <div className="flex items-center gap-2 text-xs">
-                <Users size={14} /> Users
-              </div>
-            </div>
-            <div className="bg-slate-800 rounded-lg p-2">
-              <div className="flex items-center gap-2 text-xs">
-                <DollarSign size={14} /> Ads
-              </div>
+      {/* Bottom — user + logout */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid #334155' }}>
+        <div style={{
+          fontSize: '11px', color: '#64748b', marginBottom: '8px',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+        }}>
+          {email || 'Loading...'}
+        </div>
+        <button
+          onClick={logout}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+            padding: '9px 12px', background: '#334155', border: 'none',
+            borderRadius: '8px', color: '#94a3b8', fontSize: '13px', cursor: 'pointer'
+          }}
+        >
+          <LogOut size={16} />
+          Sign Out
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+
+      {/* DESKTOP sidebar — fixed left */}
+      {!mobile && (
+        <div style={{
+          width: '240px', flexShrink: 0,
+          position: 'fixed', top: 0, left: 0, height: '100vh',
+          zIndex: 100, overflowY: 'auto'
+        }}>
+          <Sidebar />
+        </div>
+      )}
+
+      {/* MOBILE overlay — dark background behind sidebar */}
+      {mobile && open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 200
+          }}
+        />
+      )}
+
+      {/* MOBILE sidebar — slides in from left */}
+      {mobile && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0,
+          height: '100vh', width: '260px',
+          zIndex: 300, overflowY: 'auto',
+          transform: open ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.25s ease'
+        }}>
+          <Sidebar />
+        </div>
+      )}
+
+      {/* MAIN content */}
+      <div style={{
+        flex: 1,
+        marginLeft: mobile ? 0 : '240px',
+        display: 'flex', flexDirection: 'column',
+        minHeight: '100vh'
+      }}>
+
+        {/* MOBILE top bar with hamburger */}
+        {mobile && (
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 100,
+            background: 'white', borderBottom: '1px solid #e2e8f0',
+            padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: '12px'
+          }}>
+            <button
+              onClick={() => setOpen(true)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: '4px', color: '#374151', display: 'flex', alignItems: 'center'
+              }}
+            >
+              <Menu size={24} />
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Bot size={18} color="#3b82f6" />
+              <span style={{ fontSize: '15px', fontWeight: '600', color: '#1e293b' }}>BotifyPro</span>
             </div>
           </div>
+        )}
 
-          <Button
-            onClick={logout}
-            fullWidth
-            variant="secondary"
-            disabled={loggingOut}
-            loading={loggingOut}
-            loadingText="Signing out..."
-          >
-            <LogOut size={18} />
-            Logout
-          </Button>
-        </div>
-      </aside>
-
-      <main className="flex-1 bg-gray-50">
-        <div className="max-w-6xl mx-auto p-6">{children}</div>
-      </main>
+        {/* Page content */}
+        <main style={{
+          flex: 1,
+          padding: mobile ? '16px' : '28px',
+          overflowX: 'hidden'
+        }}>
+          {children}
+        </main>
+      </div>
     </div>
   )
 }
-
