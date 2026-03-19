@@ -89,7 +89,9 @@ export default function BotCommandsPage() {
     setError(null)
     try {
       const cmd = normalizeCommand(newCommand)
+      const newId = crypto.randomUUID()
       const { error: insErr } = await supabase.from('bot_commands').insert({
+        id: newId,
         bot_id: botId,
         command: cmd,
         response_text: newResponse.trim(),

@@ -24,13 +24,22 @@ app.get('/health', async (_req: Request, res: Response) => {
 })
 
 app.post('/webhook/:botToken', async (req: Request, res: Response) => {
+  res.status(200).json({ ok: true })
+  
+  const { botToken } = req.params
+  const update = req.body
+  
+  logger.info('Webhook received', { 
+    tokenPreview: botToken.substring(0, 8) + '****',
+    updateId: update?.update_id,
+    hasMessage: !!update?.message,
+    hasCallback: !!update?.callback_query
+  })
+  
   try {
-    const botToken = String(req.params.botToken || '')
-    logger.info('Webhook received', { botToken: botToken.substring(0, 8) + '****' })
-    await handleWebhook(req, res)
-  } catch (err: any) {
-    logger.error('Server error', { error: err?.message, stack: err?.stack })
-    res.status(500).json({ message: err?.message || 'Server error' })
+    await handleWebhook(req, res, botToken, update)
+  } catch (error: any) {
+    logger.error('Webhook top-level error', { error: error.message, stack: error.stack })
   }
 })
 

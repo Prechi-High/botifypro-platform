@@ -1,10 +1,9 @@
-import axios from 'axios'
 import { prisma } from '@botifypro/database'
-import { handleBalance, handleDeposit, handleHelp, handleStart, handleWithdraw, sendMessage } from './commands'
-import { redisDel, redisGet, redisIncr, redisSet } from './redis'
+import axios from 'axios'
+import { logger } from './logger'
+import { redisGet, redisSet, redisDel } from './redis'
+import { sendMessage, handleStart, handleBalance, handleDeposit, handleWithdraw, handleHelp } from './commands'
 import { maybeServeAd } from './ads'
-import { processOxapayWithdrawal } from './payments/oxapay'
-import logger from './logger'
 
 async function handleCustomCommand(bot: any, botUser: any, chatId: number, commandText: string): Promise<boolean> {
   try {
@@ -30,32 +29,87 @@ async function handleCustomCommand(bot: any, botUser: any, chatId: number, comma
 }
 
 export async function getOrCreateBotUser(botId: string, telegramUser: any) {
-  return await prisma.botUser.upsert({
-    where: {
-      botId_telegramUserId: { botId, telegramUserId: BigInt(telegramUser.id) }
-    },
-    create: {
-      botId,
-      telegramUserId: BigInt(telegramUser.id),
-      telegramUsername: telegramUser.username || null,
-      firstName: telegramUser.first_name || 'User'
-    },
-    update: {
-      lastActive: new Date(),
-      telegramUsername: telegramUser.username || null
+  try {
+    const telegramUserId = BigInt(telegramUser.id)
+    
+    const existing = await prisma.botUser.findUnique({
+      where: {
+        botId_telegramUserId: {
+          botId,
+          telegramUserId
+        }
+      }
+    })
+
+    if (existing) {
+      await prisma.botUser.update({
+        where: { id: existing.id },
+        data: { 
+          lastActive: new Date(),
+          telegramUsername: telegramUser.username || existing.telegramUsername
+        }
+      })
+      return existing
     }
-  })
+
+    const newUser = await prisma.botUser.create({
+      data: {
+        botId,
+        telegramUserId,
+        telegramUsername: telegramUser.username || null,
+        firstName: telegramUser.first_name || 'User',
+        balance: 0,
+        channelVerified: false,
+        isBanned: false
+      }
+    })
+
+    logger.info('New bot user created', { 
+      botId, 
+      telegramUserId: telegramUser.id,
+      firstName: telegramUser.first_name 
+    })
+
+    return newUser
+
+  } catch (error: any) {
+    logger.error('getOrCreateBotUser failed', { 
+      error: error.message, 
+      botId, 
+      telegramUserId: telegramUser?.id 
+    })
+    throw error
+  }
 }
 
-export async function checkChannelMembership(channelId: string, telegramUserId: number) {
+export async function checkChannelMembership(channelId: string, telegramUserId: number): Promise<boolean> {
   try {
-    const resp = await axios.get(
-      `https://api.telegram.org/bot${process.env.PLATFORM_BOT_TOKEN}/getChatMember?chat_id=${channelId}&user_id=${telegramUserId}`
-    )
-    const status = resp.data?.result?.status
-    return status === 'member' || status === 'administrator' || status === 'creator'
-  } catch {
-    return false
+    const platformBotToken = process.env.PLATFORM_BOT_TOKEN
+    if (!platformBotToken) {
+      logger.error('PLATFORM_BOT_TOKEN not set in environment')
+      return true // fail open — dont block users if env var missing
+    }
+
+    const url = `https://api.telegram.org/bot${platformBotToken}/getChatMember` 
+    const response = await axios.get(url, {
+      params: {
+        chat_id: channelId,
+        user_id: telegramUserId
+      }
+    })
+
+    const status = response.data?.result?.status
+    logger.info('Channel membership status', { status, userId: telegramUserId, channelId })
+
+    return ['member', 'administrator', 'creator', 'restricted'].includes(status)
+  } catch (error: any) {
+    logger.error('checkChannelMembership failed', { 
+      error: error.message, 
+      channelId, 
+      userId: telegramUserId,
+      response: error.response?.data 
+    })
+    return true // fail open on error — dont block users
   }
 }
 
@@ -70,113 +124,168 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
     return
   }
   await sendMessage(bot.botToken, chatId, '⏳ Processing withdrawal... Please wait.')
+  // Import the actual withdrawal processing function
+  const { processOxapayWithdrawal } = await import('./payments/oxapay')
   await processOxapayWithdrawal(bot, botUser, address, chatId)
 }
 
-export async function handleWebhook(req: any, res: any) {
-  res.status(200).json({ ok: true })
+export async function handleWebhook(req: any, res: any, botToken: string, update: any) {
   try {
-    const botToken = req.params.botToken
-    const update = req.body
+    logger.info('Processing update', { updateId: update?.update_id })
+
+    if (!botToken || !update) {
+      logger.warn('Missing botToken or update')
+      return
+    }
 
     const bot = await prisma.bot.findUnique({
       where: { botToken },
       include: { settings: true }
     })
-    if (!bot || !bot.isActive) {
-      logger.warn('Bot not found for token', { token: String(botToken).substring(0, 8) + '****' })
+
+    if (!bot) {
+      logger.warn('Bot not found for token', { tokenPreview: botToken.substring(0, 8) + '****' })
       return
     }
 
-    const telegramUser = update?.message?.from || update?.callback_query?.from
-    const chatId = update?.message?.chat?.id || update?.callback_query?.message?.chat?.id
-    if (!telegramUser || !chatId) return
+    if (!bot.isActive) {
+      logger.warn('Bot is inactive', { botId: bot.id })
+      return
+    }
+
+    let telegramUser: any = null
+    let chatId: number = 0
+
+    if (update.message) {
+      telegramUser = update.message.from
+      chatId = update.message.chat.id
+    } else if (update.callback_query) {
+      telegramUser = update.callback_query.from
+      chatId = update.callback_query.message?.chat?.id
+    }
+
+    if (!telegramUser || !chatId) {
+      logger.warn('Could not extract user or chatId from update', { update: JSON.stringify(update).substring(0, 200) })
+      return
+    }
+
+    logger.info('User identified', { telegramUserId: telegramUser.id, chatId })
 
     const botUser = await getOrCreateBotUser(bot.id, telegramUser)
-    if (botUser.isBanned) return
 
+    if (botUser.isBanned) {
+      logger.info('Banned user ignored', { telegramUserId: telegramUser.id })
+      return
+    }
+
+    // Channel membership check
     if (bot.settings?.requireChannelJoin && bot.settings?.requiredChannelId) {
       if (!botUser.channelVerified) {
-        const member = await checkChannelMembership(bot.settings.requiredChannelId, telegramUser.id)
-        logger.info('Channel check', { botId: bot.id, userId: botUser.id, result: member })
-        if (member) {
-          await prisma.botUser.update({ where: { id: botUser.id }, data: { channelVerified: true } })
+        logger.info('Checking channel membership', { 
+          userId: telegramUser.id, 
+          channelId: bot.settings.requiredChannelId 
+        })
+        
+        const isMember = await checkChannelMembership(
+          bot.settings.requiredChannelId, 
+          telegramUser.id
+        )
+        
+        if (isMember) {
+          await prisma.botUser.update({
+            where: { id: botUser.id },
+            data: { channelVerified: true }
+          })
+          logger.info('Channel membership verified', { userId: telegramUser.id })
         } else {
-          const usernameOrId = bot.settings.requiredChannelUsername || bot.settings.requiredChannelId
-          const username = bot.settings.requiredChannelUsername?.replace('@', '')
+          const channelLink = bot.settings.requiredChannelUsername
+            ? `https://t.me/${bot.settings.requiredChannelUsername.replace('@', '')}` 
+            : `https://t.me/${bot.settings.requiredChannelId.replace('-100', '')}` 
+
           await sendMessage(
             bot.botToken,
             chatId,
-            '⚠️ Please join our channel first!\n\n' + usernameOrId,
+            `⚠️ <b>Channel Membership Required</b>\n\nTo use this bot, you must join our channel first.\n\nClick the button below to join, then send /start again.`,
             {
-              inline_keyboard: [
-                [
-                  {
-                    text: 'Join Channel',
-                    url: 'https://t.me/' + (username || '')
-                  }
-                ]
-              ]
+              inline_keyboard: [[
+                { text: '📢 Join Channel', url: channelLink }
+              ]]
             }
           )
+          logger.info('Channel join message sent', { userId: telegramUser.id })
           return
         }
       }
     }
 
-    const withdrawState = await redisGet('withdraw_state:' + botUser.id)
-    if (
-      withdrawState === 'awaiting_address' &&
-      update.message?.text &&
-      !update.message.text.startsWith('/')
-    ) {
-      await redisDel('withdraw_state:' + botUser.id)
-      await processWithdrawal(bot, botUser, update.message.text, chatId)
-      return
+    // Check for pending withdrawal state
+    if (update.message?.text && !update.message.text.startsWith('/')) {
+      const withdrawState = await redisGet('withdraw_state:' + botUser.id)
+      if (withdrawState === 'awaiting_address') {
+        await redisDel('withdraw_state:' + botUser.id)
+        await processWithdrawal(bot, botUser, update.message.text.trim(), chatId)
+        return
+      }
     }
 
-    const text = update.message?.text || ''
-    const callback = update.callback_query?.data
+    // Route commands
+    if (update.message?.text) {
+      const text = update.message.text.trim()
+      logger.info('Routing command', { command: text.split(' ')[0], botId: bot.id })
 
-    if (update.callback_query) {
-      try {
-        await axios.post(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
-          callback_query_id: update.callback_query.id
-        })
-      } catch {}
-    }
-
-    if (text.startsWith('/start') || callback === 'cmd_start') {
-      logger.info('Command handled', { command: 'start', botId: bot.id, userId: botUser.id })
-      await handleStart(bot, botUser, chatId)
-    } else if (text.startsWith('/balance') || callback === 'cmd_balance') {
-      logger.info('Command handled', { command: 'balance', botId: bot.id, userId: botUser.id })
-      await handleBalance(bot, botUser, chatId)
-    } else if (text.startsWith('/deposit') || callback === 'cmd_deposit') {
-      logger.info('Command handled', { command: 'deposit', botId: bot.id, userId: botUser.id })
-      await handleDeposit(bot, botUser, chatId)
-    } else if (text.startsWith('/withdraw') || callback === 'cmd_withdraw') {
-      logger.info('Command handled', { command: 'withdraw', botId: bot.id, userId: botUser.id })
-      await handleWithdraw(bot, botUser, chatId)
-    } else if (text.startsWith('/help') || callback === 'cmd_help') {
-      logger.info('Command handled', { command: 'help', botId: bot.id, userId: botUser.id })
-      await handleHelp(bot, chatId)
-    } else if (update.message?.text) {
-      const textMsg = update.message.text
-      const chatIdMsg = update.message.chat.id
-
-      if (textMsg.startsWith('/')) {
-        const handled = await handleCustomCommand(bot, botUser, chatIdMsg, textMsg)
+      if (text.startsWith('/start')) {
+        await handleStart(bot, botUser, chatId)
+      } else if (text.startsWith('/balance')) {
+        if (bot.settings?.currencyName) {
+          await handleBalance(bot, botUser, chatId)
+        }
+      } else if (text.startsWith('/deposit')) {
+        if (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey) {
+          await handleDeposit(bot, botUser, chatId)
+        }
+      } else if (text.startsWith('/withdraw')) {
+        if (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey) {
+          await handleWithdraw(bot, botUser, chatId)
+        }
+      } else if (text.startsWith('/help')) {
+        await handleHelp(bot, chatId)
+      } else if (text.startsWith('/')) {
+        const handled = await handleCustomCommand(bot, botUser, chatId, text)
         if (!handled) {
-          logger.debug('Unknown command ignored', { command: textMsg.split(' ')[0], botId: bot.id })
+          logger.debug('Unrecognised command', { text: text.split(' ')[0] })
         }
       }
     }
 
+    // Handle callback queries (button clicks)
+    if (update.callback_query) {
+      const data = update.callback_query.data
+      const callbackChatId = update.callback_query.message?.chat?.id
+
+      // Answer callback to remove loading spinner
+      try {
+        await axios.post(
+          `https://api.telegram.org/bot${bot.botToken}/answerCallbackQuery`,
+          { callback_query_id: update.callback_query.id }
+        )
+      } catch {}
+
+      if (data === 'cmd_balance' || data === 'cmd_start') {
+        await handleBalance(bot, botUser, callbackChatId)
+      } else if (data === 'cmd_deposit') {
+        await handleDeposit(bot, botUser, callbackChatId)
+      } else if (data === 'cmd_withdraw') {
+        await handleWithdraw(bot, botUser, callbackChatId)
+      } else if (data === 'cmd_help') {
+        await handleHelp(bot, callbackChatId)
+      }
+    }
+
+    // After handling — maybe show an ad
     await maybeServeAd(bot, botUser, chatId)
-  } catch (err: any) {
-    logger.error('Webhook processing error', { error: err?.message })
-    return
+
+  } catch (error: any) {
+    logger.error('handleWebhook error', { error: error.message, stack: error.stack })
   }
 }
 
