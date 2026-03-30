@@ -37,6 +37,7 @@ model Bot {
   customCommands         BotCommand[]
   botUsers               BotUser[]
   transactions           Transaction[]
+  depositTransactions    DepositTransaction[]
   adImpressions          AdImpression[]
   @@map("bots")
 }
@@ -64,7 +65,8 @@ model BotSettings {
   currencyName            String  @default("Coins") @map("currency_name")
   currencySymbol          String  @default("🪙") @map("currency_symbol")
   usdToCurrencyRate       Decimal @default(1000) @map("usd_to_currency_rate")
-  minDepositUsd           Decimal @default(1.00) @map("min_deposit_usd")
+  depositWalletAddress    String? @map("deposit_wallet_address")
+  minDepositUsd           Float?  @default(1.0) @map("min_deposit_usd")
   minWithdrawUsd          Decimal @default(0.50) @map("min_withdraw_usd")
   withdrawFeePercent      Decimal @default(0) @map("withdraw_fee_percent")
   oxapayMerchantKey       String? @map("oxapay_merchant_key")
@@ -92,6 +94,7 @@ model BotUser {
   isBanned         Boolean       @default(false) @map("is_banned")
   channelVerified  Boolean       @default(false) @map("channel_verified")
   transactions     Transaction[]
+  depositTransactions DepositTransaction[]
   adImpressions    AdImpression[]
   @@unique([botId, telegramUserId])
   @@map("bot_users")
@@ -115,6 +118,24 @@ model Transaction {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
   @@map("transactions")
+}
+
+model DepositTransaction {
+  id               String   @id @default(cuid())
+  txHash           String   @unique @map("tx_hash")
+  botId            String   @map("bot_id")
+  botUserId        String   @map("bot_user_id")
+  amountUsd        Float    @map("amount_usd")
+  amountCrypto     Float    @map("amount_crypto")
+  coin             String
+  network          String
+  recipientAddress String   @map("recipient_address")
+  status           String   @default("completed")
+  createdAt        DateTime @default(now()) @map("created_at")
+  bot              Bot      @relation(fields: [botId], references: [id])
+  botUser          BotUser  @relation(fields: [botUserId], references: [id])
+
+  @@map("deposit_transactions")
 }
 
 model AdCampaign {

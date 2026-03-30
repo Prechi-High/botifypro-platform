@@ -39,34 +39,28 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
     return
   }
 
-  const keyboard: any[][] = []
-  const row1: any[] = []
-  const row2: any[] = []
+  const row1: { text: string }[] = []
+  if (settings.balanceEnabled) row1.push({ text: '💰 Balance' })
+  if (settings.depositEnabled) row1.push({ text: '📥 Deposit' })
 
-  if (settings.balanceEnabled) {
-    row1.push({ text: '💰 Balance', callback_data: 'cmd_balance' })
-  }
-  if (settings.depositEnabled) {
-    row1.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
-  }
+  const row2: { text: string }[] = []
+  if (settings.withdrawEnabled) row2.push({ text: '📤 Withdraw' })
+  row2.push({ text: '❓ Help' })
+
+  const keyboard: { text: string }[][] = []
   if (row1.length > 0) keyboard.push(row1)
+  keyboard.push(row2)
 
-  if (settings.withdrawEnabled) {
-    row2.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
-  }
-  row2.push({ text: '❓ Help', callback_data: 'cmd_help' })
-  if (row2.length > 0) keyboard.push(row2)
+  const balanceText =
+    settings.balanceEnabled || settings.depositEnabled || settings.withdrawEnabled
+      ? `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}`
+      : ''
 
-  const balanceText = (settings.balanceEnabled || settings.depositEnabled || settings.withdrawEnabled)
-    ? `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}` 
-    : ''
-
-  await sendMessage(
-    bot.botToken,
-    chatId,
-    settings.welcomeMessage + balanceText,
-    keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined
-  )
+  await sendMessage(bot.botToken, chatId, settings.welcomeMessage + balanceText, {
+    keyboard,
+    resize_keyboard: true,
+    is_persistent: true
+  })
 }
 
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
@@ -126,11 +120,34 @@ export async function handleHelp(bot: any, chatId: number) {
 }
 
 export async function handleDeposit(bot: any, botUser: any, chatId: number) {
-  if (!bot.settings.oxapayMerchantKey && !bot.settings.faucetpayApiKey) {
-    await sendMessage(bot.botToken, chatId, '💳 Deposits not configured yet. Contact bot owner.')
+  const address = String(bot?.settings?.depositWalletAddress || '').trim()
+  if (!address) {
+    await sendMessage(bot.botToken, chatId, '💳 Deposit not configured. Contact bot owner.')
     return
   }
-  await createOxapayInvoice(bot, botUser, chatId)
+
+  if (!bot?.settings?.depositEnabled) {
+    await sendMessage(bot.botToken, chatId, '💳 Deposits are currently disabled.')
+    return
+  }
+
+  await redisSet(`deposit_state:${botUser.id}`, 'awaiting_txhash', 600)
+
+  await sendMessage(
+    bot.botToken,
+    chatId,
+    '📥 <b>Deposit USDT (TRC20)</b>\n\n' +
+      'Send USDT to this address:\n' +
+      `<code>${address}</code>\n\n` +
+      '⚠️ Only send USDT on the TRC20 network.\n' +
+      'Other tokens or networks will not be credited.\n\n' +
+      'After sending, reply here with your transaction hash.\n' +
+      'You have 10 minutes.\n\n' +
+      \"💡 Get your TX hash from your wallet's transaction history.\",
+    {
+      inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_deposit' }]]
+    }
+  )
 }
 
 export async function handleWithdraw(bot: any, botUser: any, chatId: number) {

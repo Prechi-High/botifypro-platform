@@ -252,6 +252,14 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await processWithdrawal(bot, botUser, update.message.text.trim(), chatId)
         return
       }
+
+      const depositState = await redisGet('deposit_state:' + botUser.id)
+      if (depositState === 'awaiting_txhash') {
+        await redisDel('deposit_state:' + botUser.id)
+        const { verifyAndCreditDeposit } = await import('./payments/trongrid')
+        await verifyAndCreditDeposit(bot, botUser, update.message.text.trim(), chatId)
+        return
+      }
     }
 
     // Route commands
@@ -274,6 +282,20 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           await handleWithdraw(bot, botUser, chatId)
         }
       } else if (text.startsWith('/help')) {
+        await handleHelp(bot, chatId)
+      } else if (text === '💰 Balance') {
+        if (bot.settings?.balanceEnabled) {
+          await handleBalance(bot, botUser, chatId)
+        }
+      } else if (text === '📥 Deposit') {
+        if (bot.settings?.depositEnabled) {
+          await handleDeposit(bot, botUser, chatId)
+        }
+      } else if (text === '📤 Withdraw') {
+        if (bot.settings?.withdrawEnabled) {
+          await handleWithdraw(bot, botUser, chatId)
+        }
+      } else if (text === '❓ Help') {
         await handleHelp(bot, chatId)
       } else if (text.startsWith('/')) {
         const handled = await handleCustomCommand(bot, botUser, chatId, text)
@@ -310,6 +332,9 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         }
       } else if (data === 'cmd_help') {
         await handleHelp(bot, callbackChatId)
+      } else if (data === 'cmd_cancel_deposit') {
+        await redisDel('deposit_state:' + botUser.id)
+        await sendMessage(bot.botToken, callbackChatId, '✅ Deposit cancelled.')
       }
     }
 

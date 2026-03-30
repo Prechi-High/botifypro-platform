@@ -119,3 +119,16 @@ export async function registerBotRoute(req: any, res: any) {
   }
 }
 
+export async function registerWebhook(botId: string, botToken: string) {
+  const base = process.env.WEBHOOK_BASE_URL
+  if (!base) {
+    throw new Error('WEBHOOK_BASE_URL environment variable is not set')
+  }
+  const webhookUrl = `${base}/webhook/${botToken}`
+  const result = await axios.post(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+    url: webhookUrl,
+    drop_pending_updates: true
+  })
+  await prisma.bot.update({ where: { id: botId }, data: { webhookSet: true } })
+  return result.data
+}
