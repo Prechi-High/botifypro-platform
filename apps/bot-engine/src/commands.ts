@@ -4,16 +4,30 @@ import { logger } from './logger'
 import { createOxapayInvoice } from './payments/oxapay'
 import { redisSet } from './redis'
 
-export async function sendMessage(botToken: string, chatId: number, text: string, replyMarkup?: object) {
+export async function sendMessage(
+  botToken: string, 
+  chatId: number, 
+  text: string, 
+  replyMarkup?: object
+) {
   try {
-    await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const payload: any = {
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
-      reply_markup: replyMarkup
+    }
+    if (replyMarkup) {
+      payload.reply_markup = JSON.stringify(replyMarkup)
+    }
+    await axios.post(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      payload
+    )
+  } catch (err: any) {
+    logger.error('Telegram sendMessage error', {
+      message: err?.message,
+      response: err?.response?.data
     })
-  } catch (err) {
-    logger.error('Telegram sendMessage error:', err)
   }
 }
 
@@ -32,35 +46,52 @@ export function getMainMenuKeyboard() {
   }
 }
 
-export async function handleStart(bot: any, botUser: any, chatId: number) {
+export async function handleStart(
+  bot: any, 
+  botUser: any, 
+  chatId: number
+) {
   const settings = bot.settings
   if (!settings) {
     await sendMessage(bot.botToken, chatId, 'Welcome!')
     return
   }
 
-  const row1: { text: string }[] = []
-  if (settings.balanceEnabled) row1.push({ text: '💰 Balance' })
-  if (settings.depositEnabled) row1.push({ text: '📥 Deposit' })
+  const keyboard: any[][] = []
+  const row1: any[] = []
+  const row2: any[] = []
 
-  const row2: { text: string }[] = []
-  if (settings.withdrawEnabled) row2.push({ text: '📤 Withdraw' })
-  row2.push({ text: '❓ Help' })
-
-  const keyboard: { text: string }[][] = []
+  if (settings.balanceEnabled) {
+    row1.push({ text: '💰 Balance' })
+  }
+  if (settings.depositEnabled) {
+    row1.push({ text: '📥 Deposit' })
+  }
   if (row1.length > 0) keyboard.push(row1)
+
+  if (settings.withdrawEnabled) {
+    row2.push({ text: '📤 Withdraw' })
+  }
+  row2.push({ text: '❓ Help' })
   keyboard.push(row2)
 
-  const balanceText =
-    settings.balanceEnabled || settings.depositEnabled || settings.withdrawEnabled
-      ? `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}`
-      : ''
+  const balanceText = settings.balanceEnabled
+    ? `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}`
+    : ''
 
-  await sendMessage(bot.botToken, chatId, settings.welcomeMessage + balanceText, {
+  const replyMarkup = {
     keyboard,
     resize_keyboard: true,
-    is_persistent: true
-  })
+    persistent: true,
+    one_time_keyboard: false
+  }
+
+  await sendMessage(
+    bot.botToken,
+    chatId,
+    settings.welcomeMessage + balanceText,
+    replyMarkup
+  )
 }
 
 export async function handleBalance(bot: any, botUser: any, chatId: number) {

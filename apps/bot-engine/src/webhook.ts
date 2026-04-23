@@ -267,6 +267,30 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       const text = update.message.text.trim()
       logger.info('Routing command', { command: text.split(' ')[0], botId: bot.id })
 
+      // Reply keyboard button routing
+      if (text === '💰 Balance') {
+        if (bot.settings?.balanceEnabled) {
+          await handleBalance(bot, botUser, chatId)
+        }
+        return
+      }
+      if (text === '📥 Deposit') {
+        if (bot.settings?.depositEnabled) {
+          await handleDeposit(bot, botUser, chatId)
+        }
+        return
+      }
+      if (text === '📤 Withdraw') {
+        if (bot.settings?.withdrawEnabled) {
+          await handleWithdraw(bot, botUser, chatId)
+        }
+        return
+      }
+      if (text === '❓ Help') {
+        await handleHelp(bot, chatId)
+        return
+      }
+
       if (text.startsWith('/start')) {
         await handleStart(bot, botUser, chatId)
       } else if (text.startsWith('/balance')) {
@@ -333,8 +357,27 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       } else if (data === 'cmd_help') {
         await handleHelp(bot, callbackChatId)
       } else if (data === 'cmd_cancel_deposit') {
-        await redisDel('deposit_state:' + botUser.id)
-        await sendMessage(bot.botToken, callbackChatId, '✅ Deposit cancelled.')
+        await redisDel('oxapay_invoice:' + bot.id + ':' + botUser.id)
+        await sendMessage(
+          bot.botToken,
+          callbackChatId,
+          '✅ Deposit cancelled.',
+          {
+            keyboard: [
+              [{ text: '💰 Balance' }, { text: '📥 Deposit' }],
+              [{ text: '📤 Withdraw' }, { text: '❓ Help' }]
+            ],
+            resize_keyboard: true,
+            persistent: true,
+            one_time_keyboard: false
+          }
+        )
+      } else if (data === 'cmd_check_deposit') {
+        await sendMessage(
+          bot.botToken,
+          callbackChatId,
+          '⏳ Your deposit is being monitored automatically.\n\nYou will receive a notification as soon as it is confirmed.\n\nThis usually takes 1-3 minutes after sending.'
+        )
       }
     }
 

@@ -36,7 +36,14 @@ export async function validateBotToken(token: string) {
 }
 
 export async function registerWebhook(botId: string, botToken: string) {
-  const webhookUrl = `${process.env.WEBHOOK_BASE_URL}/webhook/${botToken}`
+  const base = process.env.WEBHOOK_BASE_URL
+  if (!base) {
+    throw new Error(
+      'WEBHOOK_BASE_URL environment variable is not set. ' +
+      'Cannot register webhook without a valid HTTPS base URL.'
+    )
+  }
+  const webhookUrl = `${base}/webhook/${botToken}`
   const result = await axios.post(`https://api.telegram.org/bot${botToken}/setWebhook`, {
     url: webhookUrl,
     drop_pending_updates: true
@@ -122,7 +129,10 @@ export async function registerBotRoute(req: any, res: any) {
 export async function registerWebhook(botId: string, botToken: string) {
   const base = process.env.WEBHOOK_BASE_URL
   if (!base) {
-    throw new Error('WEBHOOK_BASE_URL environment variable is not set')
+    throw new Error(
+      'WEBHOOK_BASE_URL environment variable is not set. ' +
+      'Cannot register webhook without a valid HTTPS base URL.'
+    )
   }
   const webhookUrl = `${base}/webhook/${botToken}`
   const result = await axios.post(`https://api.telegram.org/bot${botToken}/setWebhook`, {
