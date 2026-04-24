@@ -51,7 +51,7 @@ export async function handleStart(
   botUser: any, 
   chatId: number
 ) {
-  if (botUser.adConsent === null || typeof botUser.adConsent === 'undefined') {
+  if (!botUser.adConsent) {
     await sendMessage(
       bot.botToken,
       chatId,

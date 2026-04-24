@@ -290,6 +290,10 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await handleHelp(bot, chatId)
         return
       }
+      if (text === '📋 Menu') {
+        await handleHelp(bot, chatId)
+        return
+      }
 
       if (text.startsWith('/start')) {
         await handleStart(bot, botUser, chatId)
@@ -342,10 +346,12 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         )
       } catch {}
 
-      if (data === 'cmd_balance' || data === 'cmd_start') {
+      if (data === 'cmd_balance') {
         if (bot.settings?.balanceEnabled) {
           await handleBalance(bot, botUser, callbackChatId)
         }
+      } else if (data === 'cmd_start') {
+        await handleStart(bot, botUser, callbackChatId)
       } else if (data === 'cmd_deposit') {
         if (bot.settings?.depositEnabled && (bot.settings?.oxapayMerchantKey || bot.settings?.faucetpayApiKey)) {
           await handleDeposit(bot, botUser, callbackChatId)
@@ -361,7 +367,15 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           where: { id: botUser.id },
           data: { adConsent: true }
         })
-        await handleStart(bot, botUser, callbackChatId)
+        const updatedBotUser = await prisma.botUser.findUnique({
+          where: { id: botUser.id }
+        })
+        await handleStart(bot, updatedBotUser, callbackChatId)
+      } else if (data === 'cmd_menu') {
+        await handleHelp(bot, callbackChatId)
+      } else if (data?.startsWith('custom_')) {
+        const customCmd = data.replace('custom_', '')
+        await handleCustomCommand(bot, botUser, callbackChatId, customCmd)
       } else if (data === 'cmd_cancel_deposit') {
         await redisDel('oxapay_invoice:' + bot.id + ':' + botUser.id)
         await sendMessage(
