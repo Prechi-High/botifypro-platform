@@ -1,0 +1,29 @@
+name: Deploy Bot Engine
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/bot-engine/**'
+      - 'packages/database/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Hetzner
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_KEY }}
+          script: |
+            cd /var/www/botifypro
+            git pull origin main
+            npm install
+            cd packages/database
+            npx tsc
+            cd /var/www/botifypro/apps/bot-engine
+            npm run build
+            pm2 restart botifypro-engine --update-env
+            echo "Deploy complete"
