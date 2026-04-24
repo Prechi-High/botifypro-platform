@@ -356,6 +356,12 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         }
       } else if (data === 'cmd_help') {
         await handleHelp(bot, callbackChatId)
+      } else if (data === 'cmd_consent_agree') {
+        await prisma.botUser.update({
+          where: { id: botUser.id },
+          data: { adConsent: true }
+        })
+        await handleStart(bot, botUser, callbackChatId)
       } else if (data === 'cmd_cancel_deposit') {
         await redisDel('oxapay_invoice:' + bot.id + ':' + botUser.id)
         await sendMessage(

@@ -51,6 +51,27 @@ export async function handleStart(
   botUser: any, 
   chatId: number
 ) {
+  if (botUser.adConsent === null || typeof botUser.adConsent === 'undefined') {
+    await sendMessage(
+      bot.botToken,
+      chatId,
+      `👋 Welcome!
+
+This bot is powered by <b>BotifyPro</b>.
+
+📢 Occasionally you may receive sponsored messages from advertisers.
+
+By tapping <b>✅ I Agree</b> below you consent to receiving
+occasional sponsored messages and agree to our terms of use.
+
+You must agree to continue using this bot.`,
+      {
+        inline_keyboard: [[{ text: '✅ I Agree & Continue', callback_data: 'cmd_consent_agree' }]]
+      }
+    )
+    return
+  }
+
   const settings = bot.settings
   if (!settings) {
     await sendMessage(bot.botToken, chatId, 'Welcome!')
@@ -61,19 +82,15 @@ export async function handleStart(
   const row1: any[] = []
   const row2: any[] = []
 
-  if (settings.balanceEnabled) {
-    row1.push({ text: '💰 Balance' })
-  }
-  if (settings.depositEnabled) {
-    row1.push({ text: '📥 Deposit' })
-  }
+  if (settings.balanceEnabled) row1.push({ text: '💰 Balance' })
+  if (settings.depositEnabled) row1.push({ text: '📥 Deposit' })
   if (row1.length > 0) keyboard.push(row1)
 
-  if (settings.withdrawEnabled) {
-    row2.push({ text: '📤 Withdraw' })
-  }
+  if (settings.withdrawEnabled) row2.push({ text: '📤 Withdraw' })
   row2.push({ text: '❓ Help' })
   keyboard.push(row2)
+
+  keyboard.push([{ text: '📋 Menu' }])
 
   const balanceText = settings.balanceEnabled
     ? `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}`
@@ -116,38 +133,40 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
 
 export async function handleHelp(bot: any, chatId: number) {
   const settings = bot.settings
-  const hasPayments = !!(settings?.depositEnabled || settings?.withdrawEnabled)
-
-  let helpText = 'ℹ️ <b>Available Commands</b>\n\n'
-  helpText += '/start — Main menu\n'
-  helpText += '/help — Show this message\n'
-
+  const buttons: Array<{ text: string; callback_data: string }> = []
+  buttons.push({ text: '🏠 Start', callback_data: 'cmd_start' })
+  buttons.push({ text: '❓ Help', callback_data: 'cmd_help' })
   if (settings?.balanceEnabled) {
-    helpText += '/balance — Check your balance\n'
+    buttons.push({ text: '💰 Balance', callback_data: 'cmd_balance' })
   }
   if (settings?.depositEnabled) {
-    helpText += '/deposit — Add funds\n'
+    buttons.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
   }
   if (settings?.withdrawEnabled) {
-    helpText += '/withdraw — Cash out your balance\n'
+    buttons.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
   }
 
-  // Get custom commands for this bot
   try {
     const customCommands = await prisma.botCommand.findMany({
       where: { botId: bot.id, isActive: true },
       orderBy: { createdAt: 'asc' }
     })
-
-    if (customCommands.length > 0) {
-      helpText += '\n<b>Other Commands:</b>\n'
-      customCommands.forEach((cmd: any) => {
-        helpText += `${cmd.command} — ${cmd.responseText.substring(0, 40)}...\n` 
-      })
-    }
+    customCommands.forEach((cmd: any) => {
+      buttons.push({ text: cmd.command, callback_data: 'custom_' + cmd.command })
+    })
   } catch {}
 
-  await sendMessage(bot.botToken, chatId, helpText)
+  const inline_keyboard: Array<Array<{ text: string; callback_data: string }>> = []
+  for (let i = 0; i < buttons.length; i += 2) {
+    inline_keyboard.push(buttons.slice(i, i + 2))
+  }
+
+  await sendMessage(
+    bot.botToken,
+    chatId,
+    '📋 <b>Menu</b>\n\nChoose an option below:',
+    { inline_keyboard }
+  )
 }
 
 export async function handleDeposit(bot: any, botUser: any, chatId: number) {
