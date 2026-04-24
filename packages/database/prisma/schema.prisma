@@ -39,6 +39,7 @@ model Bot {
   transactions           Transaction[]
   depositTransactions    DepositTransaction[]
   adImpressions          AdImpression[]
+  referrals              Referral[]
   @@map("bots")
 }
 
@@ -79,6 +80,7 @@ model BotSettings {
   withdrawEnabled         Boolean @default(false) @map("withdraw_enabled")
   balanceEnabled          Boolean @default(false) @map("balance_enabled")
   referralEnabled         Boolean @default(false) @map("referral_enabled")
+  referralRewardAmount    Float?  @default(100) @map("referral_reward_amount")
   @@map("bot_settings")
 }
 
@@ -95,11 +97,31 @@ model BotUser {
   isBanned         Boolean       @default(false) @map("is_banned")
   channelVerified  Boolean       @default(false) @map("channel_verified")
   adConsent        Boolean?      @default(false) @map("ad_consent")
+  referredBy       String?       @map("referred_by")
   transactions     Transaction[]
   depositTransactions DepositTransaction[]
   adImpressions    AdImpression[]
+  referralsMade    Referral[]    @relation("ReferrerRelation")
+  referralsReceived Referral[]   @relation("ReferredRelation")
   @@unique([botId, telegramUserId])
   @@map("bot_users")
+}
+
+model Referral {
+  id           String   @id @default(cuid())
+  botId        String   @map("bot_id")
+  referrerId   String   @map("referrer_id")
+  referredId   String   @map("referred_id")
+  rewardPaid   Boolean  @default(false) @map("reward_paid")
+  rewardAmount Float    @default(0) @map("reward_amount")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  bot          Bot      @relation(fields: [botId], references: [id])
+  referrer     BotUser  @relation("ReferrerRelation", fields: [referrerId], references: [id])
+  referred     BotUser  @relation("ReferredRelation", fields: [referredId], references: [id])
+
+  @@unique([botId, referredId])
+  @@map("referrals")
 }
 
 model Transaction {

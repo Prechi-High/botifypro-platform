@@ -54,6 +54,7 @@ export default function BotSettingsPage() {
   const [depositEnabled, setDepositEnabled] = useState(false)
   const [withdrawEnabled, setWithdrawEnabled] = useState(false)
   const [referralEnabled, setReferralEnabled] = useState(false)
+  const [referralRewardAmount, setReferralRewardAmount] = useState<number>(100)
 
   useEffect(() => {
     let cancelled = false
@@ -99,6 +100,7 @@ export default function BotSettingsPage() {
         setDepositEnabled(Boolean(data.deposit_enabled))
         setWithdrawEnabled(Boolean(data.withdraw_enabled))
         setReferralEnabled(Boolean(data.referral_enabled))
+        setReferralRewardAmount(Number(data.referral_reward_amount) || 100)
       } catch (e: any) {
         if (cancelled) return
         const message = e?.message || 'Failed to load settings'
@@ -223,7 +225,8 @@ export default function BotSettingsPage() {
           balance_enabled: balanceEnabled,
           deposit_enabled: depositEnabled,
           withdraw_enabled: withdrawEnabled,
-          referral_enabled: referralEnabled
+          referral_enabled: referralEnabled,
+          referral_reward_amount: referralRewardAmount
         })
         .eq('bot_id', botId)
       if (upErr) throw upErr
@@ -540,6 +543,13 @@ export default function BotSettingsPage() {
                   enabled: withdrawEnabled,
                   set: setWithdrawEnabled,
                   disabled: !depositEnabled
+                },
+                {
+                  label: 'Referral System (/referral)',
+                  desc: 'Users can earn coins for inviting others',
+                  enabled: referralEnabled,
+                  set: setReferralEnabled,
+                  disabled: false
                 }
               ].map((item) => (
                 <div
@@ -566,6 +576,38 @@ export default function BotSettingsPage() {
                   </div>
                 </div>
               ))}
+              {referralEnabled && (
+                <div style={{
+                  marginTop: '12px',
+                  marginLeft: '56px',
+                  padding: '14px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px'
+                }}>
+                  <label style={{
+                    display: 'block', fontSize: '13px',
+                    fontWeight: '500', color: 'var(--text-secondary)',
+                    marginBottom: '6px'
+                  }}>
+                    Reward per referral
+                  </label>
+                  <input
+                    type="number"
+                    value={referralRewardAmount}
+                    onChange={e => setReferralRewardAmount(Number(e.target.value))}
+                    className="input-field"
+                    style={{ maxWidth: '200px' }}
+                  />
+                  <p style={{
+                    fontSize: '12px',
+                    color: 'var(--text-muted)',
+                    marginTop: '6px'
+                  }}>
+                    Coins credited to referrer when someone joins via their link
+                  </p>
+                </div>
+              )}
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '10px' }}>
                 Only works if OxaPay or FaucetPay key is configured above
               </div>

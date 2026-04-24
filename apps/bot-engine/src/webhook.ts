@@ -4,6 +4,7 @@ import { logger } from './logger'
 import { redisGet, redisSet, redisDel } from './redis'
 import { sendMessage, handleStart, handleBalance, handleDeposit, handleWithdraw, handleHelp } from './commands'
 import { maybeServeAd } from './ads'
+import { handleReferral } from './referral'
 
 async function handleCustomCommand(bot: any, botUser: any, chatId: number, commandText: string): Promise<boolean> {
   try {
@@ -40,9 +41,29 @@ async function handleCustomCommand(bot: any, botUser: any, chatId: number, comma
     // Replace referral count placeholder
     if (response.includes('[REFERRAL_COUNT]')) {
       try {
-        // Will be implemented in referral system — for now show 0
+        const { getReferralStats } = await import('./referral')
+        const stats = await getReferralStats(bot.id, botUser.id)
+        response = response.replace(
+          /\[REFERRAL_COUNT\]/g, 
+          stats.count.toString()
+        )
+      } catch {
         response = response.replace(/\[REFERRAL_COUNT\]/g, '0')
-      } catch {}
+      }
+    }
+
+    if (response.includes('[REFERRAL_EARNED]')) {
+      try {
+        const { getReferralStats } = await import('./referral')
+        const stats = await getReferralStats(bot.id, botUser.id)
+        const sym = bot.settings?.currencySymbol || '🪙'
+        response = response.replace(
+          /\[REFERRAL_EARNED\]/g,
+          stats.totalEarned + ' ' + sym
+        )
+      } catch {
+        response = response.replace(/\[REFERRAL_EARNED\]/g, '0')
+      }
     }
 
     await sendMessage(bot.botToken, chatId, response)
@@ -296,6 +317,12 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       }
 
       if (text.startsWith('/start')) {
+        const parts = text.split(' ')
+        const startParam = parts[1] || ''
+        if (startParam.startsWith('ref_') && !botUser.referredBy) {
+          const referrerId = startParam.replace('ref_', '')
+          await handleReferral(bot, botUser, referrerId, chatId)
+        }
         await handleStart(bot, botUser, chatId)
       } else if (text.startsWith('/balance')) {
         if (bot.settings?.balanceEnabled) {
