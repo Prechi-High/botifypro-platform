@@ -93,6 +93,7 @@ model BotUser {
   lastActive       DateTime      @default(now()) @map("last_active")
   isBanned         Boolean       @default(false) @map("is_banned")
   channelVerified  Boolean       @default(false) @map("channel_verified")
+  adConsent        Boolean?      @default(false) @map("ad_consent")
   transactions     Transaction[]
   depositTransactions DepositTransaction[]
   adImpressions    AdImpression[]
