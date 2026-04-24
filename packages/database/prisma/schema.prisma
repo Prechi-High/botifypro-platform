@@ -70,6 +70,7 @@ model BotSettings {
   minWithdrawUsd          Decimal @default(0.50) @map("min_withdraw_usd")
   withdrawFeePercent      Decimal @default(0) @map("withdraw_fee_percent")
   oxapayMerchantKey       String? @map("oxapay_merchant_key")
+  oxapaySecretKey         String? @map("oxapay_secret_key")
   faucetpayApiKey         String? @map("faucetpay_api_key")
   requireChannelJoin      Boolean @default(false) @map("require_channel_join")
   requiredChannelId       String? @map("required_channel_id")

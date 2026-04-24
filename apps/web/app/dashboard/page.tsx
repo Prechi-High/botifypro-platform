@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BarChart2, Bot, Users, DollarSign, AlertCircle } from 'lucide-react'
+import { Bot, Users, DollarSign, TrendingUp, ArrowUpRight, Zap } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -67,49 +67,156 @@ export default function DashboardHome() {
     }
   }, [supabase])
 
+  const cards = [
+    {
+      title: 'Bots',
+      value: stats.bots,
+      icon: Bot,
+      iconColor: '#3B82F6',
+      iconBg: 'rgba(59,130,246,0.15)'
+    },
+    {
+      title: 'Bot users',
+      value: stats.users,
+      icon: Users,
+      iconColor: '#6366F1',
+      iconBg: 'rgba(99,102,241,0.15)'
+    },
+    {
+      title: 'Deposits',
+      value: stats.deposits,
+      icon: DollarSign,
+      iconColor: '#10B981',
+      iconBg: 'rgba(16,185,129,0.15)'
+    },
+    {
+      title: 'Withdrawals',
+      value: stats.withdrawals,
+      icon: TrendingUp,
+      iconColor: '#8B5CF6',
+      iconBg: 'rgba(139,92,246,0.15)'
+    }
+  ]
+
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-600 mt-1">Your platform overview.</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>Dashboard</h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>Your platform overview</p>
+        </div>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          color: 'var(--text-secondary)',
+          fontSize: '12px',
+          border: '1px solid var(--border)',
+          borderRadius: '999px',
+          padding: '6px 10px',
+          background: 'rgba(255,255,255,0.02)'
+        }}>
+          <Zap size={14} />
+          Live
+        </div>
       </div>
 
       {error && (
-        <div className="flex gap-2 items-start text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
-          <AlertCircle size={18} className="mt-0.5" />
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'flex-start',
+          fontSize: '13px',
+          background: 'rgba(239,68,68,0.1)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          color: '#FCA5A5',
+          borderRadius: '10px',
+          padding: '12px'
+        }}>
+          <Zap size={16} style={{ marginTop: '1px' }} />
           <div>{error}</div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Bots" value={stats.bots} icon={<Bot size={18} />} loading={loading} />
-        <StatCard title="Bot users" value={stats.users} icon={<Users size={18} />} loading={loading} />
-        <StatCard title="Deposits" value={stats.deposits} icon={<DollarSign size={18} />} loading={loading} />
-        <StatCard title="Withdrawals" value={stats.withdrawals} icon={<BarChart2 size={18} />} loading={loading} />
-      </div>
-    </div>
-  )
-}
+      <div
+        className="dashboard-grid"
+        style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '14px'
+      }}
+      >
+        {cards.map((card, index) => {
+          const Icon = card.icon
+          return (
+            <div
+              key={card.title}
+              className="fade-up"
+              style={{
+                animationDelay: `${index * 60}ms`,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '20px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
+                  background: card.iconBg,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Icon size={18} color={card.iconColor} />
+                </div>
+              </div>
 
-function StatCard({
-  title,
-  value,
-  icon,
-  loading
-}: {
-  title: string
-  value: number
-  icon: React.ReactNode
-  loading: boolean
-}) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium text-gray-700">{title}</div>
-        <div className="text-gray-500">{icon}</div>
+              {loading ? (
+                <div className="skeleton" style={{ height: '80px', width: '100%' }} />
+              ) : (
+                <>
+                  <div style={{
+                    fontSize: '32px',
+                    fontWeight: 700,
+                    lineHeight: 1.1,
+                    color: 'var(--text-primary)',
+                    fontVariantNumeric: 'tabular-nums'
+                  }}>
+                    {card.value}
+                  </div>
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>{card.title}</div>
+                  <div style={{
+                    marginTop: '12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '11px',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '999px',
+                    padding: '4px 8px'
+                  }}>
+                    <ArrowUpRight size={12} />
+                    —
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })}
       </div>
-      <div className="mt-3 text-2xl font-semibold text-gray-900">{loading ? '—' : value}</div>
+
+      <style>{`
+        @media (min-width: 1024px) {
+          .dashboard-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+        }
+      `}</style>
     </div>
   )
 }

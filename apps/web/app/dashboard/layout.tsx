@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Bot, LayoutDashboard, Plus, Megaphone,
-  Settings, LogOut, Menu, X
+  Settings, LogOut, Menu, X, ChevronRight
 } from 'lucide-react'
 
 const NAV = [
@@ -48,61 +48,79 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const Sidebar = () => (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: '#1e293b'
+      background: 'var(--bg-surface)',
+      borderRight: '1px solid var(--border)'
     }}>
-      {/* Top — logo + close button on mobile */}
       <div style={{
         padding: '18px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid #334155'
+        borderBottom: '1px solid var(--border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bot size={22} color="#3b82f6" />
-          <span style={{ fontSize: '16px', fontWeight: '700', color: 'white' }}>BotifyPro</span>
+          <div style={{
+            width: '34px',
+            height: '34px',
+            borderRadius: '10px',
+            background: 'var(--blue-gradient)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 20px rgba(59,130,246,0.35)'
+          }}>
+            <Bot size={18} color="#fff" />
+          </div>
+          <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>BotifyPro</span>
         </div>
         {mobile && (
           <button
             onClick={() => setOpen(false)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px', display: 'flex' }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              padding: '4px',
+              display: 'flex',
+              transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)'
+            }}
           >
             <X size={20} />
           </button>
         )}
       </div>
 
-      {/* Nav links */}
-      <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+      <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
         {NAV.map(item => {
           const Icon = item.icon
           const active = isActive(item.href)
           return (
-            
-              <a
+            <a
               key={item.href}
               href={item.href}
               onClick={() => mobile && setOpen(false)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '10px 12px', borderRadius: '8px', textDecoration: 'none',
-                background: active ? '#3b82f6' : 'transparent',
-                color: active ? 'white' : '#94a3b8',
+                padding: '10px 14px', borderRadius: '10px', textDecoration: 'none',
+                background: active ? 'rgba(59,130,246,0.12)' : 'transparent',
+                color: active ? '#fff' : 'var(--text-secondary)',
                 fontSize: '14px', fontWeight: active ? '500' : '400',
-                transition: 'background 0.15s'
+                borderLeft: active ? '2px solid #3B82F6' : '2px solid transparent',
+                transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)'
               }}
-              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLAnchorElement).style.background = '#334155' }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.04)' }}
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
             >
-              <Icon size={18} />
-              {item.label}
+              <Icon size={18} color={active ? '#3B82F6' : 'var(--text-secondary)'} />
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {active && <ChevronRight size={16} color="#3B82F6" />}
             </a>
           )
         })}
       </nav>
 
-      {/* Bottom — user + logout */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid #334155' }}>
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
         <div style={{
-          fontSize: '11px', color: '#64748b', marginBottom: '8px',
+          fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
         }}>
           {email || 'Loading...'}
@@ -111,8 +129,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           onClick={logout}
           style={{
             display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
-            padding: '9px 12px', background: '#334155', border: 'none',
-            borderRadius: '8px', color: '#94a3b8', fontSize: '13px', cursor: 'pointer'
+            padding: '9px 12px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            color: 'var(--text-secondary)',
+            fontSize: '13px',
+            cursor: 'pointer',
+            transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)'
+          }}
+          onMouseEnter={e => {
+            const btn = e.currentTarget as HTMLButtonElement
+            btn.style.background = 'var(--blue-glow)'
+            btn.style.borderColor = 'var(--border-active)'
+            btn.style.color = 'var(--text-primary)'
+          }}
+          onMouseLeave={e => {
+            const btn = e.currentTarget as HTMLButtonElement
+            btn.style.background = 'transparent'
+            btn.style.borderColor = 'var(--border)'
+            btn.style.color = 'var(--text-secondary)'
           }}
         >
           <LogOut size={16} />
@@ -123,9 +159,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   )
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-base)' }}>
+      <div style={{
+        position: 'fixed',
+        top: '-20%',
+        right: '-10%',
+        width: '600px',
+        height: '600px',
+        background: 'radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%)',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
+      <div style={{
+        position: 'fixed',
+        bottom: '-20%',
+        left: '-10%',
+        width: '500px',
+        height: '500px',
+        background: 'radial-gradient(circle, rgba(99,102,241,0.04) 0%, transparent 70%)',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
 
-      {/* DESKTOP sidebar — fixed left */}
       {!mobile && (
         <div style={{
           width: '240px', flexShrink: 0,
@@ -136,64 +191,74 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* MOBILE overlay — dark background behind sidebar */}
       {mobile && open && (
         <div
           onClick={() => setOpen(false)}
           style={{
             position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'rgba(0,0,0,0.55)',
             zIndex: 200
           }}
         />
       )}
 
-      {/* MOBILE sidebar — slides in from left */}
       {mobile && (
         <div style={{
           position: 'fixed', top: 0, left: 0,
-          height: '100vh', width: '260px',
+          height: '100vh', width: '240px',
           zIndex: 300, overflowY: 'auto',
           transform: open ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.25s ease'
+          transition: 'transform 0.2s cubic-bezier(0.4,0,0.2,1)'
         }}>
           <Sidebar />
         </div>
       )}
 
-      {/* MAIN content */}
       <div style={{
         flex: 1,
         marginLeft: mobile ? 0 : '240px',
         display: 'flex', flexDirection: 'column',
-        minHeight: '100vh'
+        minHeight: '100vh',
+        position: 'relative',
+        zIndex: 1
       }}>
 
-        {/* MOBILE top bar with hamburger */}
         {mobile && (
           <div style={{
             position: 'sticky', top: 0, zIndex: 100,
-            background: 'white', borderBottom: '1px solid #e2e8f0',
+            background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)',
             padding: '12px 16px',
-            display: 'flex', alignItems: 'center', gap: '12px'
+            display: 'grid',
+            gridTemplateColumns: '32px 1fr 32px',
+            alignItems: 'center'
           }}>
             <button
               onClick={() => setOpen(true)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                padding: '4px', color: '#374151', display: 'flex', alignItems: 'center'
+                padding: '4px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center'
               }}
             >
-              <Menu size={24} />
+              <Menu size={22} />
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Bot size={18} color="#3b82f6" />
-              <span style={{ fontSize: '15px', fontWeight: '600', color: '#1e293b' }}>BotifyPro</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <div style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '8px',
+                background: 'var(--blue-gradient)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Bot size={14} color="#fff" />
+              </div>
+              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>BotifyPro</span>
             </div>
+            <div />
           </div>
         )}
 
-        {/* Page content */}
         <main style={{
           flex: 1,
           padding: mobile ? '16px' : '28px',
