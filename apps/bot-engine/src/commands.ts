@@ -109,6 +109,8 @@ You must agree to continue using this bot.`,
     settings.welcomeMessage + balanceText,
     replyMarkup
   )
+
+  await handleHelp(bot, chatId)
 }
 
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
