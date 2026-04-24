@@ -8,6 +8,10 @@ import {
   Plus, AlertCircle, CheckCircle, Loader2, Terminal, ChevronDown
 } from 'lucide-react'
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '')
+}
+
 export default function CommandsPage() {
   const params = useParams()
   const botId = params.botId as string
@@ -107,7 +111,7 @@ export default function CommandsPage() {
   const activeCount = saved.filter((c:any) => c.is_active).length
 
   return (
-    <div style={{maxWidth:'960px',margin:'0 auto'}}>
+    <div style={{maxWidth:'960px',margin:'0 auto',background:'var(--bg-base)',minHeight:'100vh',color:'var(--text-primary)'}}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {toast && (
@@ -219,9 +223,9 @@ export default function CommandsPage() {
               const busy = savingKey===cmd.key
               return (
                 <div key={cmd.key} style={{
-                  background:on?'#f0fdf4':'white',
-                  border:`1px solid ${on?'#bbf7d0':'#e2e8f0'}`,
-                  borderRadius:'10px',padding:'12px 14px',transition:'all 0.2s'
+                  background:'rgba(255,255,255,0.03)',
+                  border:'1px solid rgba(255,255,255,0.08)',
+                  borderRadius:'12px',padding:'12px 14px',transition:'all 0.2s'
                 }}>
                   <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'12px'}}>
                     <div style={{flex:1,minWidth:0}}>
@@ -258,7 +262,7 @@ export default function CommandsPage() {
                       </label>
                       <textarea
                         key={ex.id}
-                        defaultValue={ex.response_text}
+                        defaultValue={stripHtml(ex.response_text || '')}
                         onBlur={e=>saveResp(ex.id, e.target.value)}
                         rows={3}
                         style={{width:'100%',padding:'8px',border:'1px solid #bbf7d0',borderRadius:'6px',fontSize:'12px',fontFamily:'monospace',background:'white',resize:'vertical',boxSizing:'border-box'}}
@@ -314,8 +318,9 @@ export default function CommandsPage() {
             <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
               {customs.map((cmd:any)=>(
                 <div key={cmd.id} style={{
-                  background:'white',border:`1px solid ${cmd.is_active?'#e2e8f0':'#f1f5f9'}`,
-                  borderRadius:'10px',padding:'12px 14px',opacity:cmd.is_active?1:0.7,
+                  background:'rgba(255,255,255,0.03)',
+                  border:'1px solid rgba(255,255,255,0.08)',
+                  borderRadius:'12px',padding:'12px 14px',opacity:cmd.is_active?1:0.7,
                   display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',
                   flexWrap:mobile?'wrap':'nowrap'
                 }}>

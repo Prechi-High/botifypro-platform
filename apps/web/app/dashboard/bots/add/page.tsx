@@ -6,7 +6,6 @@ import axios from 'axios'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, CheckCircle, Plus, Bot as BotIcon } from 'lucide-react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import Button from '@/components/ui/Button'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
@@ -83,49 +82,42 @@ export default function AddBotPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Add bot</h1>
-        <p className="text-sm text-gray-600 mt-1">Connect your Telegram bot token to BotifyPro.</p>
+        <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)' }}>Add bot</h1>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Connect your Telegram bot token to BotifyPro.</p>
       </div>
 
       {error && (
-        <div className="flex gap-2 items-start text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
-          <AlertCircle size={18} className="mt-0.5" />
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '13px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5', borderRadius: '10px', padding: '12px' }}>
+          <AlertCircle size={18} style={{ marginTop: '2px' }} />
           <div>{error}</div>
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
           <BotIcon size={18} />
           Bot details
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Bot token</label>
+          <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Bot token</label>
           <input
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+            className="input-field"
             placeholder="123456:ABCDEF..."
           />
-          <div className="mt-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!token || setupLoading}
-              loading={tokenStatus === 'loading'}
-              loadingText="Validating token..."
-              onClick={validateToken}
-            >
+          <div style={{ marginTop: '8px' }}>
+            <button type="button" className="btn-ghost" disabled={!token || setupLoading || tokenStatus === 'loading'} onClick={validateToken} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle size={18} />
-              Verify Token
-            </Button>
+              {tokenStatus === 'loading' ? 'Validating token...' : 'Verify Token'}
+            </button>
 
             {tokenStatus !== 'idle' && (
-              <div className="mt-3">
+              <div style={{ marginTop: '12px' }}>
                 {tokenStatus === 'loading' && <StatusBadge status="loading" text="Checking token..." />}
                 {tokenStatus === 'success' && <StatusBadge status="success" text="Token verified ✓" />}
                 {tokenStatus === 'error' && <StatusBadge status="error" text="Invalid token" />}
@@ -134,79 +126,79 @@ export default function AddBotPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Currency name</label>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Currency name</label>
             <input
               value={currencyName}
               onChange={(e) => setCurrencyName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+              className="input-field"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Currency symbol</label>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Currency symbol</label>
             <input
               value={currencySymbol}
               onChange={(e) => setCurrencySymbol(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+              className="input-field"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">USD to currency rate</label>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>USD to currency rate</label>
             <input
               value={usdRate}
               onChange={(e) => setUsdRate(Number(e.target.value))}
               type="number"
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+              className="input-field"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Category</label>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Category</label>
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+              className="input-field"
               placeholder="general"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Welcome message</label>
+          <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Welcome message</label>
           <textarea
             value={welcomeMessage}
             onChange={(e) => setWelcomeMessage(e.target.value)}
-            className="mt-1 w-full min-h-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+            className="input-field"
+            style={{ minHeight: '96px' }}
           />
         </div>
 
-        <div className="pt-2">
-          <Button
+        <div style={{ paddingTop: '8px' }}>
+          <button
             type="button"
-            variant="primary"
+            className="btn-primary"
             disabled={setupLoading || tokenStatus !== 'success' || !token}
-            loading={setupLoading}
-            loadingText="Creating your bot..."
             onClick={completeSetup}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             <Plus size={18} />
-            Complete Setup
-          </Button>
+            {setupLoading ? 'Creating your bot...' : 'Complete Setup'}
+          </button>
         </div>
 
         {setupStep > 0 && (
-          <div className="pt-2 space-y-2 text-sm">
-            <div className="flex items-center gap-2 text-gray-700">
+          <div style={{ paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
               {setupStep === 1 && <LoadingSpinner size={16} color="#2563eb" />}
               {setupStep >= 2 && <CheckCircle size={16} color="#16a34a" />}
               Step 1: Saving bot settings...
             </div>
-            <div className="flex items-center gap-2 text-gray-700">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
               {setupStep === 2 && <LoadingSpinner size={16} color="#2563eb" />}
               {setupStep >= 3 && <CheckCircle size={16} color="#16a34a" />}
               Step 2: Registering webhook with Telegram...
             </div>
-            <div className="flex items-center gap-2 text-gray-700">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
               {setupStep >= 3 && <CheckCircle size={16} color="#16a34a" />}
               Step 3: Bot is ready!
             </div>
