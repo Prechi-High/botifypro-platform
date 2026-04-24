@@ -164,17 +164,23 @@ export async function handleDeposit(bot: any, botUser: any, chatId: number) {
 
   await redisSet(`deposit_state:${botUser.id}`, 'awaiting_txhash', 600)
 
+  const depositMessage = `📥 <b>Deposit USDT (TRC20)</b>
+
+Send USDT to this address:
+<code>${bot.settings.depositWalletAddress}</code>
+
+⚠️ Only send USDT on the TRC20 network.
+Other tokens or networks will not be credited.
+
+After sending, reply here with your transaction hash.
+You have 10 minutes.
+
+💡 Get your TX hash from your wallet transaction history.`
+
   await sendMessage(
     bot.botToken,
     chatId,
-    '📥 <b>Deposit USDT (TRC20)</b>\n\n' +
-      'Send USDT to this address:\n' +
-      `<code>${address}</code>\n\n` +
-      '⚠️ Only send USDT on the TRC20 network.\n' +
-      'Other tokens or networks will not be credited.\n\n' +
-      'After sending, reply here with your transaction hash.\n' +
-      'You have 10 minutes.\n\n' +
-      \"💡 Get your TX hash from your wallet's transaction history.\",
+    depositMessage,
     {
       inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_deposit' }]]
     }
