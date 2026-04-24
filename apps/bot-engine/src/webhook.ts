@@ -367,9 +367,8 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           where: { id: botUser.id },
           data: { adConsent: true }
         })
-        const updatedBotUser = await prisma.botUser.findUnique({
-          where: { id: botUser.id }
-        })
+        
+        const updatedBotUser = { ...botUser, adConsent: true }
         await handleStart(bot, updatedBotUser, callbackChatId)
       } else if (data === 'cmd_menu') {
         await handleHelp(bot, callbackChatId)
