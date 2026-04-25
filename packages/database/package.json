@@ -1,7 +1,7 @@
 {
   "name": "@1-touchbot/database",
   "version": "0.0.1",
-  "main": "./index.ts",
+  "main": "./dist/index.js",
   "scripts": {
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
