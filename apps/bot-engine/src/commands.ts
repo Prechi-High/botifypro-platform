@@ -1,13 +1,13 @@
-import { prisma } from '@botifypro/database'
+import { prisma } from '@1-touchbot/database'
 import axios from 'axios'
 import { logger } from './logger'
 import { createOxapayInvoice } from './payments/oxapay'
 import { redisSet } from './redis'
 
 export async function sendMessage(
-  botToken: string, 
-  chatId: number, 
-  text: string, 
+  botToken: string,
+  chatId: number,
+  text: string,
   replyMarkup?: object
 ) {
   try {
@@ -19,14 +19,23 @@ export async function sendMessage(
     if (replyMarkup) {
       payload.reply_markup = JSON.stringify(replyMarkup)
     }
-    await axios.post(
+    const response = await axios.post(
       `https://api.telegram.org/bot${botToken}/sendMessage`,
       payload
     )
+    if (!response.data?.ok) {
+      logger.error('Telegram sendMessage failed', {
+        error: response.data,
+        chatId,
+        textPreview: text.substring(0, 100)
+      })
+    }
   } catch (err: any) {
     logger.error('Telegram sendMessage error', {
       message: err?.message,
-      response: err?.response?.data
+      response: err?.response?.data,
+      chatId,
+      textPreview: text?.substring(0, 100)
     })
   }
 }
@@ -57,7 +66,7 @@ export async function handleStart(
       chatId,
       `👋 Welcome!
 
-This bot is powered by <b>BotifyPro</b>.
+This bot is powered by <b>1-TouchBot</b>.
 
 📢 Occasionally you may receive sponsored messages from advertisers.
 

@@ -1,5 +1,5 @@
 export const PREBUILT_COMMANDS = [
-  { key:'about', category:'Universal', command:'/about', defaultResponse:'This bot is powered by BotifyPro. 🤖\n\nType /help to see available commands.', description:'Tell users about your bot', needsSetup:false, setupInstructions:null },
+  { key:'about', category:'Universal', command:'/about', defaultResponse:'This bot is powered by 1-TouchBot. 🤖\n\nType /help to see available commands.', description:'Tell users about your bot', needsSetup:false, setupInstructions:null },
   { key:'rules', category:'Universal', command:'/rules', defaultResponse:'📋 <b>Rules</b>\n\n1. Be respectful\n2. No spam\n3. Follow guidelines', description:'Show community rules', needsSetup:false, setupInstructions:null },
   { key:'links', category:'Universal', command:'/links', defaultResponse:'🔗 <b>Links</b>\n\nChannel: @yourchannel\nWebsite: https://yoursite.com\nSupport: @yoursupport', description:'Show important links', needsSetup:false, setupInstructions:null },
   { key:'contact', category:'Universal', command:'/contact', defaultResponse:'📬 <b>Contact Us</b>\n\nSupport: @yoursupport\nEmail: support@yoursite.com', description:'Show contact information', needsSetup:false, setupInstructions:null },

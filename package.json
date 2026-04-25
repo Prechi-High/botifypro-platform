@@ -1,5 +1,5 @@
 {
-  "name": "botifypro-platform",
+  "name": "1-touchbot-platform",
   "private": true,
   "workspaces": [
     "apps/*",

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { prisma } from '@botifypro/database'
+import { prisma } from '@1-touchbot/database'
 import logger from './logger'
 
 async function ensureUserExists(creatorId: string, email?: string) {
@@ -11,7 +11,7 @@ async function ensureUserExists(creatorId: string, email?: string) {
     await prisma.user.create({
       data: {
         id: creatorId,
-        email: email || `user_${creatorId}@botifypro.com`,
+        email: email || `user_${creatorId}@1-touchbot.com`,
         passwordHash: 'supabase_auth',
         fullName: 'Creator',
         role: 'creator',

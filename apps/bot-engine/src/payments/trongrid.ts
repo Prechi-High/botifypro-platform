@@ -1,6 +1,6 @@
 import axios from 'axios'
 import crypto from 'crypto'
-import { prisma } from '@botifypro/database'
+import { prisma } from '@1-touchbot/database'
 import { sendMessage } from '../commands'
 import logger from '../logger'
 import { redisDel, redisGet, redisSet } from '../redis'

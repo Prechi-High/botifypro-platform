@@ -28,7 +28,7 @@ export default function AddBotPage() {
     setTokenStatus('loading')
     setError(null)
     try {
-      const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
+      const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://1-touchbot-engine.onrender.com'
       const resp = await axios.post(`${BOT_ENGINE_URL}/api/bots/validate`, { token })
       if (!resp.data?.valid) {
         setTokenStatus('error')
@@ -56,7 +56,7 @@ export default function AddBotPage() {
       const email = auth.user?.email
       if (!creatorId) throw new Error('Not authenticated')
 
-      const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
+      const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://1-touchbot-engine.onrender.com'
       const resp = await axios.post(`${BOT_ENGINE_URL}/api/bots/register`, {
         token,
         creatorId,
@@ -86,7 +86,7 @@ export default function AddBotPage() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div>
         <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)' }}>Add bot</h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Connect your Telegram bot token to BotifyPro.</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Connect your Telegram bot token to 1-TouchBot.</p>
       </div>
 
       {error && (

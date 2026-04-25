@@ -1,5 +1,5 @@
 {
-  "name": "@botifypro/bot-engine",
+  "name": "@1-touchbot/bot-engine",
   "version": "0.0.1",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -25,7 +25,7 @@
     "jsonwebtoken": "^9.0.0",
     "oxapay": "^1.0.0",
     "dotenv": "^16.0.0",
-    "@botifypro/database": "*"
+    "@1-touchbot/database": "*"
   },
   "devDependencies": {}
 }

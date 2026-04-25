@@ -14,7 +14,7 @@ export default function BotSettingsPage() {
   const botId = params.botId
   const supabase = useMemo(() => createClient(), [])
   const { toasts, removeToast, toast } = useToast()
-  const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://botifypro-engine.onrender.com'
+  const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://1-touchbot-engine.onrender.com'
   
   // Loading states
   const [loading, setLoading] = useState(true)

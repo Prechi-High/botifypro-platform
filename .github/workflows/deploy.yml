@@ -18,12 +18,12 @@ jobs:
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_KEY }}
           script: |
-            cd /var/www/botifypro
+            cd /var/www/1-touchbot
             git pull origin main
             npm install
             cd packages/database
             npx tsc
-            cd /var/www/botifypro/apps/bot-engine
+            cd /var/www/1-touchbot/apps/bot-engine
             npm run build
-            pm2 restart botifypro-engine --update-env
+            pm2 restart 1-touchbot-engine --update-env
             echo "Deploy complete"

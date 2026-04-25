@@ -35,7 +35,7 @@ export default function LogsPage() {
   return (
     <div style={{padding:'2rem',fontFamily:'monospace',background:'#0f172a',minHeight:'100vh',color:'#e2e8f0'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
-        <h1 style={{fontSize:'1.25rem',fontWeight:'600',color:'#f8fafc',margin:0}}>BotifyPro — System Logs</h1>
+        <h1 style={{fontSize:'1.25rem',fontWeight:'600',color:'#f8fafc',margin:0}}>1-TouchBot — System Logs</h1>
         <div style={{display:'flex',gap:'0.75rem',alignItems:'center'}}>
           <select value={filter} onChange={e=>setFilter(e.target.value)} style={{padding:'0.4rem 0.75rem',borderRadius:'6px',border:'1px solid #334155',background:'#1e293b',color:'#e2e8f0',fontSize:'0.8rem'}}>
             <option value="ALL">All Levels</option>

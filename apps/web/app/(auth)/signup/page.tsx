@@ -108,7 +108,7 @@ export default function SignupPage() {
           }}>
             <Bot size={22} color="white" />
           </div>
-          <span style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)' }}>BotifyPro</span>
+          <span style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)' }}>1-TouchBot</span>
         </div>
         <h1 style={{
           fontSize: '48px', fontWeight: '700', lineHeight: 1.1,
@@ -143,7 +143,7 @@ export default function SignupPage() {
             }}>
               <Bot size={18} color="white" />
             </div>
-            <span style={{ fontSize: '18px', fontWeight: '700' }}>BotifyPro</span>
+            <span style={{ fontSize: '18px', fontWeight: '700' }}>1-TouchBot</span>
           </div>
 
           <div style={{
@@ -157,7 +157,7 @@ export default function SignupPage() {
               Create account
             </h2>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '28px' }}>
-              Start building with BotifyPro
+              Start building with 1-TouchBot
             </p>
 
             {error && (

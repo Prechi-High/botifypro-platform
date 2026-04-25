@@ -1,4 +1,4 @@
-import { prisma } from '@botifypro/database'
+import { prisma } from '@1-touchbot/database'
 import { redisIncr, redisSet } from './redis'
 import logger from './logger'
 

@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           }}>
             <Bot size={18} color="#fff" />
           </div>
-          <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>BotifyPro</span>
+          <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>1-TouchBot</span>
         </div>
         {mobile && (
           <button
@@ -253,7 +253,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               }}>
                 <Bot size={14} color="#fff" />
               </div>
-              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>BotifyPro</span>
+              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>1-TouchBot</span>
             </div>
             <div />
           </div>

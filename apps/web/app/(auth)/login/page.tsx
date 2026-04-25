@@ -68,7 +68,7 @@ export default function LoginPage() {
             <Bot size={22} color="white" />
           </div>
           <span style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)' }}>
-            BotifyPro
+            1-TouchBot
           </span>
         </div>
         <h1 style={{
@@ -109,7 +109,7 @@ export default function LoginPage() {
             }}>
               <Bot size={18} color="white" />
             </div>
-            <span style={{ fontSize: '18px', fontWeight: '700' }}>BotifyPro</span>
+            <span style={{ fontSize: '18px', fontWeight: '700' }}>1-TouchBot</span>
           </div>
 
           <div style={{
