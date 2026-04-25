@@ -17,7 +17,7 @@ model User {
   plan         String       @default("free")
   createdAt    DateTime     @default(now()) @map("created_at")
   bots         Bot[]
-  campaigns    AdCampaign[]
+  adCampaigns  AdCampaign[]
   @@map("users")
 }
 
@@ -98,6 +98,7 @@ model BotUser {
   channelVerified  Boolean       @default(false) @map("channel_verified")
   adConsent        Boolean?      @default(false) @map("ad_consent")
   referredBy       String?       @map("referred_by")
+  lastAdReceivedAt DateTime?     @map("last_ad_received_at")
   transactions     Transaction[]
   depositTransactions DepositTransaction[]
   adImpressions    AdImpression[]
@@ -163,35 +164,51 @@ model DepositTransaction {
 }
 
 model AdCampaign {
-  id                   String         @id @default(uuid())
-  advertiserId         String         @map("advertiser_id")
-  advertiser           User           @relation(fields: [advertiserId], references: [id])
-  title                String
-  messageText          String         @map("message_text")
-  buttonText           String?        @map("button_text")
-  buttonUrl            String?        @map("button_url")
-  targetCategory       String         @default("all") @map("target_category")
-  budgetUsd            Decimal        @map("budget_usd")
-  spentUsd             Decimal        @default(0) @map("spent_usd")
-  costPerImpressionUsd Decimal        @default(0.001) @map("cost_per_impression_usd")
-  isActive             Boolean        @default(false) @map("is_active")
-  isPaid               Boolean        @default(false) @map("is_paid")
-  createdAt            DateTime       @default(now()) @map("created_at")
-  impressions          AdImpression[]
+  id              String   @id @default(cuid())
+  advertiserId    String   @map("advertiser_id")
+  title           String
+  messageText     String?  @map("message_text")
+  imageUrl        String?  @map("image_url")
+  buttonText      String?  @map("button_text")
+  buttonUrl       String?  @map("button_url")
+  targetCategory  String?  @map("target_category")
+  activityWindow  String   @map("activity_window")
+  cpmRate         Float    @map("cpm_rate")
+  budgetUsd       Float    @map("budget_usd")
+  spentUsd        Float    @default(0) @map("spent_usd")
+  status          String   @default("pending")
+  usersReached    Int      @default(0) @map("users_reached")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  advertiser      User     @relation(fields: [advertiserId], references: [id])
+  impressions     AdImpression[]
   @@map("ad_campaigns")
 }
 
 model AdImpression {
-  id         String     @id @default(uuid())
-  campaignId String     @map("campaign_id")
-  campaign   AdCampaign @relation(fields: [campaignId], references: [id])
-  botId      String     @map("bot_id")
-  bot        Bot        @relation(fields: [botId], references: [id])
-  botUserId  String     @map("bot_user_id")
-  botUser    BotUser    @relation(fields: [botUserId], references: [id])
-  shownAt    DateTime   @default(now()) @map("shown_at")
-  wasClicked Boolean    @default(false) @map("was_clicked")
+  id          String   @id @default(cuid())
+  campaignId  String   @map("campaign_id")
+  botId       String   @map("bot_id")
+  botUserId   String   @map("bot_user_id")
+  sentAt      DateTime @default(now()) @map("sent_at")
+  campaign    AdCampaign @relation(fields: [campaignId], references: [id])
+  bot         Bot      @relation(fields: [botId], references: [id])
+  botUser     BotUser  @relation(fields: [botUserId], references: [id])
+  @@unique([campaignId, botUserId])
   @@map("ad_impressions")
+}
+
+model PlatformSettings {
+  id                    String  @id @default(cuid())
+  minCampaignBudgetUsd  Float   @default(20) @map("min_campaign_budget_usd")
+  adIntervalHours       Int     @default(5) @map("ad_interval_hours")
+  cpmStandard           Float   @default(0.6) @map("cpm_standard")
+  cpm24hr               Float   @default(1.0) @map("cpm_24hr")
+  cpm48hr               Float   @default(1.0) @map("cpm_48hr")
+  cpm72hr               Float   @default(0.9) @map("cpm_72hr")
+  cpm7day               Float   @default(0.8) @map("cpm_7day")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  @@map("platform_settings")
 }
 
 model Log {

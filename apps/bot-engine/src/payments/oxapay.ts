@@ -43,7 +43,7 @@ export async function createOxapayDeposit(
         lifetime: 30,
         fee_paid_by_payer: 0,
         under_paid_coverage: 2,
-        callback_url: process.env.WEBHOOK_BASE_URL + '/webhooks/oxapay',
+        callback_url: process.env.WEBHOOK_BASE_URL + '/webhooks/oxapay/' + bot.id,
         description: `botId:${bot.id} userId:${botUser.id} chatId:${chatId}`
       },
       {
@@ -126,7 +126,8 @@ export async function createOxapayDeposit(
   }
 }
 
-export async function handleOxapayWebhook(req: any, res: any) {
+export async function handleOxapayWebhook(req: any, res: any, botId: string) {
+
   res.status(200).json({ ok: true })
 
   try {
@@ -136,20 +137,17 @@ export async function handleOxapayWebhook(req: any, res: any) {
     const amount = body?.data?.amount || body?.amount
     const currency = body?.data?.currency || body?.currency
 
-    logger.info('OxaPay webhook received', { trackId, status, amount })
+    logger.info('OxaPay webhook received', { trackId, status, amount, botId })
 
-    if (status !== 'Paid' && status !== 'paid') {
-      logger.info('OxaPay webhook ignored - not paid', { status, trackId })
-      return
-    }
+    if (status !== 'Paid' && status !== 'paid') return
 
     const stored = await redisGet(`oxapay_track:${trackId}`)
     if (!stored) {
-      logger.warn('OxaPay webhook - unknown trackId', { trackId })
+      logger.warn('OxaPay webhook - unknown trackId', { trackId, botId })
       return
     }
 
-    const { botId, botUserId, chatId, botToken } = JSON.parse(stored)
+    const { botUserId, chatId, botToken } = JSON.parse(stored)
 
     const bot = await prisma.bot.findUnique({
       where: { id: botId },
@@ -166,9 +164,8 @@ export async function handleOxapayWebhook(req: any, res: any) {
         .createHmac('sha512', bot.settings.oxapaySecretKey)
         .update(JSON.stringify(body))
         .digest('hex')
-
       if (hmac !== req.headers['hmac']) {
-        logger.error('OxaPay webhook HMAC mismatch', { trackId, botId })
+        logger.error('OxaPay HMAC mismatch', { trackId, botId })
         return
       }
     }
@@ -176,10 +173,7 @@ export async function handleOxapayWebhook(req: any, res: any) {
     const existing = await prisma.depositTransaction.findUnique({
       where: { txHash: String(trackId) }
     })
-    if (existing) {
-      logger.warn('OxaPay duplicate webhook ignored', { trackId })
-      return
-    }
+    if (existing) return
 
     const usdAmount = Number(amount)
     const currencyAmount = usdAmount * Number(bot.settings?.usdToCurrencyRate || 1000)
@@ -205,7 +199,6 @@ export async function handleOxapayWebhook(req: any, res: any) {
     ])
 
     await redisDel(`oxapay_track:${trackId}`)
-    await redisDel(`oxapay_invoice:${botId}:${botUserId}`)
 
     const updatedUser = await prisma.botUser.findUnique({
       where: { id: botUserId }
@@ -214,16 +207,14 @@ export async function handleOxapayWebhook(req: any, res: any) {
     const { sendMessage } = await import('../commands')
     await sendMessage(
       botToken,
-      chatId,
-      `✅ <b>Deposit Confirmed!</b>\n\n+${currencyAmount} ${bot.settings?.currencySymbol || '🪙'}\n≈ $${usdAmount} USD\n\n💰 New balance: ${updatedUser?.balance} ${bot.settings?.currencySymbol || '🪙'}`
+      Number(chatId),
+      `✅ <b>Deposit Confirmed!</b>\n\n` +
+      `+${currencyAmount} ${bot.settings?.currencySymbol || '🪙'}\n` +
+      `≈ $${usdAmount} USD\n\n` +
+      `💰 New balance: ${updatedUser?.balance} ${bot.settings?.currencySymbol || '🪙'}`
     )
 
-    logger.info('OxaPay deposit credited', {
-      botId,
-      botUserId,
-      usdAmount,
-      currencyAmount
-    })
+    logger.info('OxaPay deposit credited', { botId, botUserId, usdAmount })
 
   } catch (error: any) {
     logger.error('handleOxapayWebhook error', { error: error.message })

@@ -204,35 +204,43 @@ export default function BotSettingsPage() {
   async function save() {
     setSaving(true)
     setError(null)
-    setSuccess(null)
     try {
-      const { error: upErr } = await supabase
+      const updateData: any = {
+        welcome_message: welcomeMessage,
+        currency_name: currencyName,
+        currency_symbol: currencySymbol,
+        usd_to_currency_rate: usdToCurrencyRate,
+        min_deposit_usd: minDepositUsd,
+        min_withdraw_usd: minWithdrawUsd,
+        withdraw_fee_percent: withdrawFeePercent,
+        oxapay_merchant_key: oxapayMerchantKey || null,
+        oxapay_secret_key: oxapaySecretKey || null,
+        faucetpay_api_key: faucetpayApiKey || null,
+        require_channel_join: requireChannelJoin,
+        required_channel_id: requiredChannelId || null,
+        required_channel_username: requiredChannelUsername || null,
+        balance_enabled: balanceEnabled,
+        deposit_enabled: depositEnabled,
+        withdraw_enabled: withdrawEnabled,
+        referral_enabled: referralEnabled,
+        referral_reward_amount: referralRewardAmount
+      }
+
+      console.log('Saving settings:', updateData)
+
+      const { error: upErr, data } = await supabase
         .from('bot_settings')
-        .update({
-          welcome_message: welcomeMessage,
-          currency_name: currencyName,
-          currency_symbol: currencySymbol,
-          usd_to_currency_rate: usdToCurrencyRate,
-          min_deposit_usd: minDepositUsd,
-          min_withdraw_usd: minWithdrawUsd,
-          withdraw_fee_percent: withdrawFeePercent,
-          oxapay_merchant_key: oxapayMerchantKey || null,
-          oxapay_secret_key: oxapaySecretKey || null,
-          faucetpay_api_key: faucetpayApiKey || null,
-          require_channel_join: requireChannelJoin,
-          required_channel_id: requiredChannelId || null,
-          required_channel_username: requiredChannelUsername || null,
-          balance_enabled: balanceEnabled,
-          deposit_enabled: depositEnabled,
-          withdraw_enabled: withdrawEnabled,
-          referral_enabled: referralEnabled,
-          referral_reward_amount: referralRewardAmount
-        })
+        .update(updateData)
         .eq('bot_id', botId)
+        .select()
+
+      console.log('Save result:', data, upErr)
+
       if (upErr) throw upErr
-      setSuccess('Settings saved.')
       toast.success('Settings saved!')
+      setSuccess('Settings saved.')
     } catch (e: any) {
+      console.error('Save error:', e)
       const message = e?.message || 'Failed to save'
       setError(message)
       toast.error(message)
@@ -242,7 +250,7 @@ export default function BotSettingsPage() {
   }
 
   const canSaveChannel = !requireChannelJoin || (requireChannelJoin && adminVerified)
-  const callbackUrl = `${BOT_ENGINE_URL}/webhooks/oxapay`
+  const callbackUrl = `${BOT_ENGINE_URL}/webhooks/oxapay/${botId}`
   const labelStyle: React.CSSProperties = {
     display: 'block',
     fontSize: '13px',
@@ -470,8 +478,21 @@ export default function BotSettingsPage() {
               <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, marginBottom: '12px' }}>💳 Payments</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
                 <div>
-                  <label style={labelStyle}>OxaPay Merchant Key</label>
-                  <input value={oxapayMerchantKey} onChange={(e) => setOxapayMerchantKey(e.target.value)} className="input-field" placeholder="Optional" />
+                  <label style={labelStyle}>
+                    OxaPay Merchant Key
+                    {depositEnabled && <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>}
+                  </label>
+                  <input
+                    value={oxapayMerchantKey}
+                    onChange={(e) => setOxapayMerchantKey(e.target.value)}
+                    className="input-field"
+                    placeholder="Enter merchant key"
+                  />
+                  {depositEnabled && !oxapayMerchantKey && (
+                    <div style={{ fontSize: '12px', color: '#FBBF24', marginTop: '6px' }}>
+                      ⚠️ Merchant key required to accept deposits
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={labelStyle}>OxaPay Secret Key</label>
@@ -482,7 +503,7 @@ export default function BotSettingsPage() {
                       type={showSecretKey ? 'text' : 'password'}
                       className="input-field"
                       style={{ paddingRight: '42px' }}
-                      placeholder="For webhook verification"
+                      placeholder="Enter secret key"
                     />
                     <button
                       type="button"
@@ -502,16 +523,45 @@ export default function BotSettingsPage() {
                       {showSecretKey ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                    Used to verify payment webhooks. Get from OxaPay dashboard.
+                  </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Callback URL — set this in your OxaPay dashboard</label>
+                  <label style={labelStyle}>Your OxaPay Callback URL</label>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <input value={callbackUrl} readOnly className="input-field" />
-                    <button type="button" onClick={copyCallbackUrl} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      value={callbackUrl}
+                      readOnly
+                      className="input-field"
+                      style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                    />
+                    <button type="button" onClick={copyCallbackUrl} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
                       <Copy size={14} />
                       Copy
                     </button>
                   </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                    Copy this URL and paste it in your OxaPay merchant settings
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(99,102,241,0.08)',
+                  border: '1px solid rgba(99,102,241,0.2)',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                  lineHeight: '1.7'
+                }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>📋 Setup Instructions</div>
+                  <ol style={{ margin: 0, paddingLeft: '18px' }}>
+                    <li>Log into OxaPay dashboard</li>
+                    <li>Go to Merchant Settings</li>
+                    <li>Paste the callback URL above</li>
+                    <li>Copy your Merchant Key and Secret Key here</li>
+                    <li>Enable Deposit toggle below</li>
+                  </ol>
                 </div>
                 <div>
                   <label style={labelStyle}>FaucetPay API key</label>
