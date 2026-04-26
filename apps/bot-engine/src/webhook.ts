@@ -352,7 +352,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           await handleStart(bot, updatedUser, chatId)
           return
         } else {
-          const joinButtons = unverified.map((ch, i) => {
+          const joinButtons: any[] = unverified.map((ch, i) => {
             const link = ch.username
               ? `https://t.me/${ch.username.replace('@', '')}`
               : `https://t.me/${ch.id.replace('-100', '')}`
