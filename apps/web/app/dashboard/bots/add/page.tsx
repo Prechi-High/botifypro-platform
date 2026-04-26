@@ -1,12 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import axios from 'axios'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, CheckCircle, Plus, Bot as BotIcon } from 'lucide-react'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import StatusBadge from '@/components/ui/StatusBadge'
+import { AlertCircle, CheckCircle, Loader2, Plus, Bot as BotIcon } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function AddBotPage() {
@@ -14,42 +12,33 @@ export default function AddBotPage() {
   const supabase = useMemo(() => createClient(), [])
   const { toasts, removeToast, toast } = useToast()
   const [token, setToken] = useState('')
-  const [welcomeMessage, setWelcomeMessage] = useState('Welcome! Use the buttons below to get started.')
-  const [currencyName, setCurrencyName] = useState('Coins')
-  const [currencySymbol, setCurrencySymbol] = useState('🪙')
-  const [usdRate, setUsdRate] = useState(1000)
-  const [category, setCategory] = useState('general')
   const [tokenStatus, setTokenStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [setupLoading, setSetupLoading] = useState(false)
-  const [setupStep, setSetupStep] = useState<0 | 1 | 2 | 3>(0)
   const [error, setError] = useState<string | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  async function validateToken() {
-    setTokenStatus('loading')
-    setError(null)
-    try {
-      const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://1-touchbot-engine.onrender.com'
-      const resp = await axios.post(`${BOT_ENGINE_URL}/api/bots/validate`, { token })
-      if (!resp.data?.valid) {
-        setTokenStatus('error')
-        toast.error('Invalid token')
-        return
-      }
-      setTokenStatus('success')
-      toast.success('Bot token verified successfully!')
-    } catch (e: any) {
-      setTokenStatus('error')
-      toast.error(e?.response?.data?.error || e?.response?.data?.message || e?.message || 'Invalid token')
+  useEffect(() => {
+    if (!token.trim()) {
+      setTokenStatus('idle')
+      return
     }
-  }
+    setTokenStatus('loading')
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://1-touchbot-engine.onrender.com'
+        const resp = await axios.post(`${BOT_ENGINE_URL}/api/bots/validate`, { token })
+        setTokenStatus(resp.data?.valid ? 'success' : 'error')
+      } catch {
+        setTokenStatus('error')
+      }
+    }, 500)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [token])
 
   async function completeSetup() {
     setSetupLoading(true)
     setError(null)
-    setSetupStep(1)
-    let stepTimer: number | undefined
-    stepTimer = window.setTimeout(() => setSetupStep(2), 700)
-
     try {
       const { data: auth } = await supabase.auth.getUser()
       const creatorId = auth.user?.id
@@ -61,22 +50,19 @@ export default function AddBotPage() {
         token,
         creatorId,
         email,
-        welcomeMessage,
-        currencyName,
-        currencySymbol,
-        usdRate,
-        category
+        welcomeMessage: 'Welcome! Use the buttons below to get started.',
+        currencyName: 'Coins',
+        currencySymbol: '🪙',
+        usdRate: 1000,
+        category: 'general'
       })
-      setSetupStep(3)
       toast.success('Bot created successfully!')
       router.push(`/dashboard/bots/${resp.data.id}/settings`)
     } catch (e: any) {
       const message = e?.response?.data?.message || e?.message || 'Registration failed'
-      setSetupStep(0)
       toast.error(message)
       setError(message)
     } finally {
-      if (stepTimer) window.clearTimeout(stepTimer)
       setSetupLoading(false)
     }
   }
@@ -96,84 +82,38 @@ export default function AddBotPage() {
         </div>
       )}
 
-      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
           <BotIcon size={18} />
-          Bot details
+          Bot token
         </div>
 
         <div>
-          <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Bot token</label>
-          <input
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            className="input-field"
-            placeholder="123456:ABCDEF..."
-          />
-          <div style={{ marginTop: '8px' }}>
-            <button type="button" className="btn-ghost" disabled={!token || setupLoading || tokenStatus === 'loading'} onClick={validateToken} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CheckCircle size={18} />
-              {tokenStatus === 'loading' ? 'Validating token...' : 'Verify Token'}
-            </button>
-
+          <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Paste your BotFather token</label>
+          <div style={{ position: 'relative' }}>
+            <input
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              className="input-field"
+              placeholder="123456:ABCDEF..."
+              style={{ paddingRight: '36px' }}
+            />
             {tokenStatus !== 'idle' && (
-              <div style={{ marginTop: '12px' }}>
-                {tokenStatus === 'loading' && <StatusBadge status="loading" text="Checking token..." />}
-                {tokenStatus === 'success' && <StatusBadge status="success" text="Token verified ✓" />}
-                {tokenStatus === 'error' && <StatusBadge status="error" text="Invalid token" />}
-              </div>
+              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+                {tokenStatus === 'loading' && <Loader2 size={16} style={{ color: 'var(--text-secondary)', animation: 'spin 1s linear infinite' }} />}
+                {tokenStatus === 'success' && <CheckCircle size={16} style={{ color: '#22c55e' }} />}
+                {tokenStatus === 'error' && <AlertCircle size={16} style={{ color: '#ef4444' }} />}
+              </span>
             )}
           </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
-          <div>
-            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Currency name</label>
-            <input
-              value={currencyName}
-              onChange={(e) => setCurrencyName(e.target.value)}
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Currency symbol</label>
-            <input
-              value={currencySymbol}
-              onChange={(e) => setCurrencySymbol(e.target.value)}
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>USD to currency rate</label>
-            <input
-              value={usdRate}
-              onChange={(e) => setUsdRate(Number(e.target.value))}
-              type="number"
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Category</label>
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="input-field"
-              placeholder="general"
-            />
+          <div style={{ marginTop: '6px', fontSize: '12px', minHeight: '18px' }}>
+            {tokenStatus === 'loading' && <span style={{ color: 'var(--text-secondary)' }}>Verifying...</span>}
+            {tokenStatus === 'success' && <span style={{ color: '#22c55e' }}>Token verified ✓</span>}
+            {tokenStatus === 'error' && <span style={{ color: '#ef4444' }}>Invalid token</span>}
           </div>
         </div>
 
-        <div>
-          <label style={{ color: 'var(--text-secondary)', fontSize: '13px', display: 'block', marginBottom: '6px' }}>Welcome message</label>
-          <textarea
-            value={welcomeMessage}
-            onChange={(e) => setWelcomeMessage(e.target.value)}
-            className="input-field"
-            style={{ minHeight: '96px' }}
-          />
-        </div>
-
-        <div style={{ paddingTop: '8px' }}>
+        <div style={{ paddingTop: '4px' }}>
           <button
             type="button"
             className="btn-primary"
@@ -185,27 +125,9 @@ export default function AddBotPage() {
             {setupLoading ? 'Creating your bot...' : 'Complete Setup'}
           </button>
         </div>
-
-        {setupStep > 0 && (
-          <div style={{ paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-              {setupStep === 1 && <LoadingSpinner size={16} color="#2563eb" />}
-              {setupStep >= 2 && <CheckCircle size={16} color="#16a34a" />}
-              Step 1: Saving bot settings...
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-              {setupStep === 2 && <LoadingSpinner size={16} color="#2563eb" />}
-              {setupStep >= 3 && <CheckCircle size={16} color="#16a34a" />}
-              Step 2: Registering webhook with Telegram...
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-              {setupStep >= 3 && <CheckCircle size={16} color="#16a34a" />}
-              Step 3: Bot is ready!
-            </div>
-          </div>
-        )}
       </div>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
-
