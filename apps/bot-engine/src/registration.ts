@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { prisma } from '@1-touchbot/database'
+import { prisma } from '@botifypro/database'
 import logger from './logger'
 
 async function ensureUserExists(creatorId: string, email?: string) {

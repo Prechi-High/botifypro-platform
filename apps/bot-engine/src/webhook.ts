@@ -1,4 +1,4 @@
-import { prisma } from '@1-touchbot/database'
+import { prisma } from '@botifypro/database'
 import axios from 'axios'
 import { logger } from './logger'
 import { redisGet, redisSet, redisDel } from './redis'
@@ -194,23 +194,43 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
     return
   }
 
-  await sendMessage(bot.botToken, chatId, '⏳ Processing withdrawal... Please wait.')
+  // Automated withdrawal — queue as pending, gateway processes it
+  const feePercent = Number(bot.settings.withdrawFeePercent || 0)
+  const feeUsd = usdAmount * (feePercent / 100)
+  const netUsd = usdAmount - feeUsd
+  const currencyAmount = Number(botUser.balance)
+  const sym = bot.settings.currencySymbol || '🪙'
+  const gateway = bot.settings.faucetpayWithdrawalKey ? 'faucetpay' : 'oxapay'
 
-  // FaucetPay withdrawal key takes precedence over OxaPay
-  if (bot.settings.faucetpayWithdrawalKey) {
-    try {
-      const { processFaucetpayWithdrawal } = await import('./payments/faucetpay')
-      await processFaucetpayWithdrawal(bot, botUser, address, chatId)
-    } catch {
-      // Fallback to OxaPay if faucetpay module unavailable
-      const { processOxapayWithdrawal } = await import('./payments/oxapay')
-      await processOxapayWithdrawal(bot, botUser, address, chatId)
-    }
-    return
-  }
+  await prisma.$transaction([
+    prisma.transaction.create({
+      data: {
+        botId: bot.id,
+        botUserId: botUser.id,
+        type: 'withdrawal',
+        amountCurrency: currencyAmount,
+        amountUsd: usdAmount,
+        status: 'pending',
+        gateway,
+        withdrawAddress: address,
+        platformFeeAmount: feeUsd
+      }
+    }),
+    prisma.botUser.update({
+      where: { id: botUser.id },
+      data: { balance: { decrement: currencyAmount } }
+    })
+  ])
 
-  const { processOxapayWithdrawal } = await import('./payments/oxapay')
-  await processOxapayWithdrawal(bot, botUser, address, chatId)
+  logger.info('Withdrawal queued', { botId: bot.id, botUserId: botUser.id, usdAmount, gateway, address })
+
+  await sendMessage(
+    bot.botToken, chatId,
+    `✅ <b>Withdrawal Submitted</b>\n\n` +
+    `Amount: ${currencyAmount} ${sym} (≈$${netUsd.toFixed(4)} USD)\n` +
+    `Address: <code>${address}</code>\n\n` +
+    `⏳ Processing via ${gateway}. You will be notified once complete.`
+  )
 }
 
 // ─── Main webhook handler ─────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { prisma } from '@1-touchbot/database'
+import { prisma } from '@botifypro/database'
 import { logger } from './logger'
 import { sendMessage } from './commands'
 

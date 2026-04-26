@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { prisma } from '@1-touchbot/database'
+import { prisma } from '@botifypro/database'
 
 const logsDir = path.join(process.cwd(), 'logs')
 

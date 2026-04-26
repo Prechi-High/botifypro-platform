@@ -1,4 +1,4 @@
-import { prisma } from '@1-touchbot/database'
+import { prisma } from '@botifypro/database'
 import { redisIncr, redisSet } from './redis'
 import logger from './logger'
 
@@ -12,7 +12,7 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
     await redisSet('msg_count:' + botUser.id, '0')
 
     const campaigns = await prisma.adCampaign.findMany({
-      where: { isActive: true, isPaid: true },
+      where: { status: 'approved' },
       take: 20
     })
 
@@ -43,7 +43,7 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
 
     await prisma.adCampaign.update({
       where: { id: campaign.id },
-      data: { spentUsd: { increment: campaign.costPerImpressionUsd } }
+      data: { spentUsd: { increment: campaign.cpmRate / 1000 } }
     })
 
     logger.info('Ad served', { campaignId: campaign.id, botId: bot.id, botUserId: botUser.id })
