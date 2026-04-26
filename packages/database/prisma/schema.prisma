@@ -81,6 +81,10 @@ model BotSettings {
   balanceEnabled          Boolean @default(false) @map("balance_enabled")
   referralEnabled         Boolean @default(false) @map("referral_enabled")
   referralRewardAmount    Float?  @default(100) @map("referral_reward_amount")
+  welcomeMessageEnabled   Boolean @default(true) @map("welcome_message_enabled")
+  manualWithdrawal        Boolean @default(false) @map("manual_withdrawal")
+  requiredChannels        Json?   @map("required_channels")
+  faucetpayWithdrawalKey  String? @map("faucetpay_withdrawal_key")
   @@map("bot_settings")
 }
 
