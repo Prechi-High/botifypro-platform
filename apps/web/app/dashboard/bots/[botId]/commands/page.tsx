@@ -3,9 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import {
-  Loader2, Lock, MessageSquareReply, Plus, ThumbsUp, Trash2, Zap
-} from 'lucide-react'
+import { Loader2, Lock, Plus, ThumbsUp, Zap } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 const sectionCard: React.CSSProperties = {
@@ -36,12 +34,12 @@ export default function CommandsPage() {
   const [withdrawEnabled, setWithdrawEnabled] = useState(false)
   const [referralRewardAmount, setReferralRewardAmount] = useState(100)
 
-  // Auto replies
-  const [replies, setReplies] = useState<any[]>([])
-  const [loadingReplies, setLoadingReplies] = useState(true)
-  const [newCmd, setNewCmd] = useState('')
-  const [newResp, setNewResp] = useState('')
-  const [adding, setAdding] = useState(false)
+  // Command settings
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState<'7days' | '30days'>('7days')
+  const [leaderboardBonus1, setLeaderboardBonus1] = useState(1000)
+  const [leaderboardBonus2, setLeaderboardBonus2] = useState(500)
+  const [leaderboardBonus3, setLeaderboardBonus3] = useState(250)
+  const [dailyBonusAmount, setDailyBonusAmount] = useState(10)
 
   // Wishlist
   const [wishes, setWishes] = useState<any[]>([])
@@ -79,13 +77,12 @@ export default function CommandsPage() {
           setDailyBonusEnabled(Boolean(settings.bonus_enabled))
           setWithdrawEnabled(Boolean(settings.withdraw_enabled))
           setReferralRewardAmount(Number(settings.referral_reward_amount) || 100)
+          setLeaderboardPeriod(settings.leaderboard_period || '7days')
+          setLeaderboardBonus1(Number(settings.leaderboard_bonus_1) || 1000)
+          setLeaderboardBonus2(Number(settings.leaderboard_bonus_2) || 500)
+          setLeaderboardBonus3(Number(settings.leaderboard_bonus_3) || 250)
+          setDailyBonusAmount(Number(settings.daily_bonus_amount) || 10)
         }
-
-        const { data: cmds } = await supabase
-          .from('bot_commands').select('*')
-          .eq('bot_id', botId).eq('is_prebuilt', false)
-          .order('created_at', { ascending: false })
-        if (!cancelled) setReplies(cmds ?? [])
 
         const { data: wishData } = await supabase
           .from('command_wishlist').select('*').order('upvotes', { ascending: false })
@@ -95,7 +92,6 @@ export default function CommandsPage() {
       } finally {
         if (!cancelled) {
           setLoading(false)
-          setLoadingReplies(false)
           setLoadingWishes(false)
         }
       }
@@ -126,7 +122,13 @@ export default function CommandsPage() {
         leaderboard_enabled: leaderboardEnabled,
         bonus_enabled: dailyBonusEnabled,
         withdraw_enabled: withdrawEnabled,
-        referral_reward_amount: referralRewardAmount
+        referral_reward_amount: referralRewardAmount,
+        leaderboard_period: leaderboardPeriod,
+        leaderboard_bonus_1: leaderboardBonus1,
+        leaderboard_bonus_2: leaderboardBonus2,
+        leaderboard_bonus_3: leaderboardBonus3,
+        daily_bonus_amount: dailyBonusAmount,
+        daily_bonus_enabled: dailyBonusEnabled,
       }).eq('bot_id', botId)
       if (error) throw error
       toast.success('Commands saved!')
@@ -134,46 +136,6 @@ export default function CommandsPage() {
       toast.error(e.message || 'Failed to save')
     }
     setSavingFeatures(false)
-  }
-
-  async function addReply() {
-    if (!newCmd.trim() || !newResp.trim()) { toast.error('Both fields required'); return }
-    setAdding(true)
-    const { error } = await supabase.from('bot_commands').insert({
-      id: crypto.randomUUID(),
-      bot_id: botId,
-      command: newCmd.trim(),
-      response_text: newResp.trim(),
-      is_active: true,
-      command_category: 'custom',
-      is_prebuilt: false,
-      prebuilt_key: null
-    })
-    if (error) {
-      toast.error(error.code === '23505' ? 'That trigger already exists' : error.message)
-    } else {
-      toast.success('Auto reply added ✓')
-      setNewCmd('')
-      setNewResp('')
-      const { data } = await supabase
-        .from('bot_commands').select('*')
-        .eq('bot_id', botId).eq('is_prebuilt', false)
-        .order('created_at', { ascending: false })
-      setReplies(data ?? [])
-    }
-    setAdding(false)
-  }
-
-  async function deleteReply(id: string, command: string) {
-    if (!confirm(`Delete auto reply for "${command}"?`)) return
-    const { error } = await supabase.from('bot_commands').delete().eq('id', id)
-    if (!error) { toast.success('Deleted ✓'); setReplies(prev => prev.filter(c => c.id !== id)) }
-    else toast.error(error.message)
-  }
-
-  async function toggleReply(id: string, current: boolean) {
-    await supabase.from('bot_commands').update({ is_active: !current }).eq('id', id)
-    setReplies(prev => prev.map(c => c.id === id ? { ...c, is_active: !current } : c))
   }
 
   async function submitWish() {
@@ -205,12 +167,6 @@ export default function CommandsPage() {
     else toast.error(error.message)
   }
 
-  const optionals: { key: 'leaderboard' | 'bonus' | 'withdraw'; label: string; desc: string; enabled: boolean }[] = [
-    { key: 'bonus', label: '/bonus', desc: 'Claim daily free coin reward', enabled: dailyBonusEnabled },
-    { key: 'leaderboard', label: '/leaderboard', desc: 'Show top 10 users by balance', enabled: leaderboardEnabled },
-    { key: 'withdraw', label: '/withdraw', desc: 'Submit a withdrawal request', enabled: withdrawEnabled },
-  ]
-
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh', color: 'var(--text-primary)' }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -219,7 +175,7 @@ export default function CommandsPage() {
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Commands</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>
-          Manage built-in commands, auto replies, and suggest new features.
+          Manage built-in commands and suggest new features.
         </p>
       </div>
 
@@ -235,17 +191,9 @@ export default function CommandsPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Built-in commands</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {totalActive} / {limit} buttons
-                </span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{totalActive} / {limit} buttons</span>
                 <div style={{ width: '72px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{
-                    width: `${Math.min(100, (totalActive / limit) * 100)}%`,
-                    height: '100%',
-                    background: totalActive >= limit ? '#ef4444' : 'var(--blue-primary, #2563eb)',
-                    borderRadius: '3px',
-                    transition: 'width 0.2s'
-                  }} />
+                  <div style={{ width: `${Math.min(100, (totalActive / limit) * 100)}%`, height: '100%', background: totalActive >= limit ? '#ef4444' : 'var(--blue-primary, #2563eb)', borderRadius: '3px', transition: 'width 0.2s' }} />
                 </div>
               </div>
             </div>
@@ -255,26 +203,20 @@ export default function CommandsPage() {
                 <Lock size={15} style={{ marginTop: '1px', flexShrink: 0 }} />
                 <div>
                   {limit}-button limit reached on the {userPlan} plan.
-                  {userPlan === 'free' && (
-                    <> <a href="/dashboard/upgrade" style={{ color: '#818cf8', textDecoration: 'none', fontWeight: 500 }}>Upgrade to Pro for up to 14 buttons →</a></>
-                  )}
+                  {userPlan === 'free' && <> <a href="/dashboard/upgrade" style={{ color: '#818cf8', textDecoration: 'none', fontWeight: 500 }}>Upgrade to Pro for up to 14 buttons →</a></>}
                 </div>
               </div>
             )}
 
-            {/* Fixed: Balance */}
+            {/* Fixed: Balance & Referral */}
             {(['balance', 'referral'] as const).map(key => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', flexShrink: 0 }}>
-                    /{key}
-                  </code>
+                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', flexShrink: 0 }}>/{key}</code>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                     {key === 'balance' ? "Show user's coin balance" : 'Generate referral link, earn coins for invites'}
                   </span>
-                  <span style={{ fontSize: '10px', color: '#818cf8', background: 'rgba(99,102,241,0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, flexShrink: 0 }}>
-                    always on
-                  </span>
+                  <span style={{ fontSize: '10px', color: '#818cf8', background: 'rgba(99,102,241,0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, flexShrink: 0 }}>always on</span>
                 </div>
                 <div className="toggle-track on" style={{ opacity: 0.5, pointerEvents: 'none', flexShrink: 0 }}>
                   <div className="toggle-thumb" />
@@ -282,130 +224,110 @@ export default function CommandsPage() {
               </div>
             ))}
 
-            {/* Optional toggles */}
-            {optionals.map(cmd => {
-              const blocked = !cmd.enabled && !canAddMore
-              return (
-                <div key={cmd.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                    <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', flexShrink: 0 }}>
-                      {cmd.label}
-                    </code>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{cmd.desc}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                    {blocked && <Lock size={13} color='#6b7280' />}
-                    <div
-                      className={`toggle-track ${cmd.enabled ? 'on' : 'off'}`}
-                      onClick={() => handleOptionalToggle(cmd.key, cmd.enabled)}
-                      style={{ cursor: blocked ? 'not-allowed' : 'pointer' }}
-                    >
-                      <div className="toggle-thumb" />
-                    </div>
+            {/* Referral reward — always visible since referral is always on */}
+            <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', marginTop: '8px' }}>
+              <label style={labelStyle}>Referral reward amount (coins)</label>
+              <input type="number" value={referralRewardAmount} onChange={e => setReferralRewardAmount(Number(e.target.value))} className="input-field" style={{ maxWidth: '200px' }} />
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Coins credited to referrer when someone joins via their link</div>
+            </div>
+
+            {/* Leaderboard command */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)' }}>🏆 Leaderboard</code>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Top referrers board with period rewards</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  {!leaderboardEnabled && !canAddMore && <Lock size={13} color='#6b7280' />}
+                  <div className={`toggle-track ${leaderboardEnabled ? 'on' : 'off'}`} onClick={() => handleOptionalToggle('leaderboard', leaderboardEnabled)} style={{ cursor: !leaderboardEnabled && !canAddMore ? 'not-allowed' : 'pointer' }}>
+                    <div className="toggle-thumb" />
                   </div>
                 </div>
-              )
-            })}
+              </div>
+              {leaderboardEnabled && (
+                <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>Reward release period</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {(['7days', '30days'] as const).map(p => (
+                        <button key={p} onClick={() => setLeaderboardPeriod(p)} style={{ flex: 1, padding: '8px', borderRadius: '8px', cursor: 'pointer', border: `1px solid ${leaderboardPeriod === p ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.08)'}`, background: leaderboardPeriod === p ? 'rgba(59,130,246,0.1)' : 'transparent', color: 'var(--text-primary)', fontSize: '13px', fontWeight: leaderboardPeriod === p ? 600 : 400 }}>
+                          {p === '7days' ? '7 Days' : '30 Days'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={labelStyle}>🥇 1st place bonus</label>
+                      <input type="number" value={leaderboardBonus1} onChange={e => setLeaderboardBonus1(Number(e.target.value))} className="input-field" />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>🥈 2nd place bonus</label>
+                      <input type="number" value={leaderboardBonus2} onChange={e => setLeaderboardBonus2(Number(e.target.value))} className="input-field" />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>🥉 3rd place bonus</label>
+                      <input type="number" value={leaderboardBonus3} onChange={e => setLeaderboardBonus3(Number(e.target.value))} className="input-field" />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Leaderboard ranks users by most referrals. Bonuses are credited automatically at period end and the board resets.
+                  </div>
+                </div>
+              )}
+            </div>
 
-            {/* Referral reward */}
-            <div style={{ marginTop: '14px', padding: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
-              <label style={labelStyle}>Referral reward (coins per invite)</label>
-              <input
-                type="number"
-                value={referralRewardAmount}
-                onChange={e => setReferralRewardAmount(Number(e.target.value))}
-                className="input-field"
-                style={{ maxWidth: '200px' }}
-              />
+            {/* Daily Bonus command */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)' }}>🎁 Daily Bonus</code>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Users claim free coins once every 24 hours</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  {!dailyBonusEnabled && !canAddMore && <Lock size={13} color='#6b7280' />}
+                  <div className={`toggle-track ${dailyBonusEnabled ? 'on' : 'off'}`} onClick={() => handleOptionalToggle('bonus', dailyBonusEnabled)} style={{ cursor: !dailyBonusEnabled && !canAddMore ? 'not-allowed' : 'pointer' }}>
+                    <div className="toggle-thumb" />
+                  </div>
+                </div>
+              </div>
+              {dailyBonusEnabled && (
+                <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
+                  <label style={labelStyle}>Daily bonus amount (coins)</label>
+                  <input type="number" value={dailyBonusAmount} onChange={e => setDailyBonusAmount(Number(e.target.value))} className="input-field" style={{ maxWidth: '200px' }} />
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Amount credited to user balance when they claim the daily bonus</div>
+                </div>
+              )}
+            </div>
+
+            {/* Withdraw command */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)' }}>📤 Withdraw</code>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Users submit withdrawal requests</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  {!withdrawEnabled && !canAddMore && <Lock size={13} color='#6b7280' />}
+                  <div className={`toggle-track ${withdrawEnabled ? 'on' : 'off'}`} onClick={() => handleOptionalToggle('withdraw', withdrawEnabled)} style={{ cursor: !withdrawEnabled && !canAddMore ? 'not-allowed' : 'pointer' }}>
+                    <div className="toggle-thumb" />
+                  </div>
+                </div>
+              </div>
+              {withdrawEnabled && (
+                <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,170,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px', fontSize: '12px', color: '#FBBF24' }}>
+                  ℹ️ Configure payout API keys in Bot Settings → Withdrawal Settings first.<br />
+                  OxaPay: USDT/TRX payouts · Invalid TRX addresses are automatically rejected.
+                </div>
+              )}
             </div>
 
             <div style={{ marginTop: '16px' }}>
               <button onClick={saveFeatures} disabled={savingFeatures} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {savingFeatures
-                  ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</>
-                  : 'Save commands'}
+                {savingFeatures ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : 'Save commands'}
               </button>
             </div>
-          </div>
-
-          {/* ── Auto replies ── */}
-          <div style={sectionCard}>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <MessageSquareReply size={16} />
-              Auto replies
-            </h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
-              When a user sends an exact trigger, the bot replies automatically.
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', marginBottom: '10px' }}>
-              <div>
-                <label style={labelStyle}>Trigger text</label>
-                <input
-                  value={newCmd}
-                  onChange={e => setNewCmd(e.target.value)}
-                  placeholder="/mycommand or hello"
-                  className="input-field"
-                  style={{ fontFamily: 'monospace' }}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Bot reply</label>
-                <input
-                  value={newResp}
-                  onChange={e => setNewResp(e.target.value)}
-                  placeholder="What the bot sends when triggered"
-                  onKeyDown={e => e.key === 'Enter' && addReply()}
-                  className="input-field"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={addReply}
-              disabled={adding || !newCmd.trim() || !newResp.trim()}
-              className="btn-ghost"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px' }}
-            >
-              {adding ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
-              {adding ? 'Adding...' : 'Add auto reply'}
-            </button>
-
-            {loadingReplies ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />Loading...
-              </div>
-            ) : replies.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                No auto replies yet.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {replies.map((cmd: any) => (
-                  <div key={cmd.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', opacity: cmd.is_active ? 1 : 0.55 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                      <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', flexShrink: 0 }}>
-                        {cmd.command}
-                      </code>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {cmd.response_text.substring(0, 80)}{cmd.response_text.length > 80 ? '…' : ''}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                      <button onClick={() => toggleReply(cmd.id, cmd.is_active)} className="btn-ghost" style={{ fontSize: '12px', padding: '4px 10px' }}>
-                        {cmd.is_active ? 'Disable' : 'Enable'}
-                      </button>
-                      <button
-                        onClick={() => deleteReply(cmd.id, cmd.command)}
-                        style={{ fontSize: '12px', padding: '4px 10px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '6px', color: '#FCA5A5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* ── Feature wishlist ── */}
@@ -423,30 +345,14 @@ export default function CommandsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', marginBottom: '10px' }}>
                   <div>
                     <label style={labelStyle}>Feature title</label>
-                    <input
-                      value={wishTitle}
-                      onChange={e => setWishTitle(e.target.value)}
-                      className="input-field"
-                      placeholder="e.g. Daily quiz game"
-                    />
+                    <input value={wishTitle} onChange={e => setWishTitle(e.target.value)} className="input-field" placeholder="e.g. Daily quiz game" />
                   </div>
                   <div>
                     <label style={labelStyle}>Description (optional)</label>
-                    <input
-                      value={wishDesc}
-                      onChange={e => setWishDesc(e.target.value)}
-                      className="input-field"
-                      placeholder="Describe how it would work..."
-                      onKeyDown={e => e.key === 'Enter' && submitWish()}
-                    />
+                    <input value={wishDesc} onChange={e => setWishDesc(e.target.value)} className="input-field" placeholder="Describe how it would work..." onKeyDown={e => e.key === 'Enter' && submitWish()} />
                   </div>
                 </div>
-                <button
-                  onClick={submitWish}
-                  disabled={addingWish || !wishTitle.trim()}
-                  className="btn-ghost"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
+                <button onClick={submitWish} disabled={addingWish || !wishTitle.trim()} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {addingWish ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
                   {addingWish ? 'Submitting...' : 'Submit wish'}
                 </button>
@@ -479,9 +385,7 @@ export default function CommandsPage() {
                     </button>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{w.title}</div>
-                      {w.description && (
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{w.description}</div>
-                      )}
+                      {w.description && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{w.description}</div>}
                     </div>
                   </div>
                 ))}

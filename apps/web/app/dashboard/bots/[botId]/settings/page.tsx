@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, Info } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 function ToggleRow({ label, desc, enabled, onToggle }: {
@@ -40,11 +40,6 @@ export default function BotSettingsPage() {
   const [checkingWebhook, setCheckingWebhook] = useState(false)
   const [fixingWebhook, setFixingWebhook] = useState(false)
 
-  const [fetchingChannel, setFetchingChannel] = useState(false)
-  const [verifyingAdmin, setVerifyingAdmin] = useState(false)
-  const [adminVerified, setAdminVerified] = useState(false)
-  const [adminVerifyResult, setAdminVerifyResult] = useState('')
-
   // Welcome
   const [welcomeEnabled, setWelcomeEnabled] = useState(false)
   const [welcomeMessage, setWelcomeMessage] = useState('')
@@ -52,13 +47,23 @@ export default function BotSettingsPage() {
   // Security
   const [captchaEnabled, setCaptchaEnabled] = useState(true)
 
-  // Channel
-  const [requireChannelJoin, setRequireChannelJoin] = useState(false)
-  const [requiredChannelId, setRequiredChannelId] = useState('')
-  const [requiredChannelUsername, setRequiredChannelUsername] = useState('')
+  // Currency
+  const [currencyName, setCurrencyName] = useState('Coins')
+  const [currencySymbol, setCurrencySymbol] = useState('🪙')
+  const [usdToCurrencyRate, setUsdToCurrencyRate] = useState(1000)
 
-  // Withdraw
-  const [manualWithdraw, setManualWithdraw] = useState(false)
+  // Channels
+  const [requireChannelJoin, setRequireChannelJoin] = useState(false)
+  const [requiredChannels, setRequiredChannels] = useState<any[]>([])
+  const [newChannelUsername, setNewChannelUsername] = useState('')
+  const [addingChannel, setAddingChannel] = useState(false)
+
+  // Withdrawal
+  const [withdrawMode, setWithdrawMode] = useState<'manual' | 'automatic' | null>(null)
+  const [oxapayPayoutKey, setOxapayPayoutKey] = useState('')
+  const [faucetpayKey, setFaucetpayKey] = useState('')
+  const [minWithdrawUsd, setMinWithdrawUsd] = useState(0.5)
+  const [withdrawFeePercent, setWithdrawFeePercent] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -67,17 +72,11 @@ export default function BotSettingsPage() {
       setError(null)
       try {
         const { data: botRow, error: botErr } = await supabase
-          .from('bots')
-          .select('bot_token, webhook_set')
-          .eq('id', botId)
-          .single()
+          .from('bots').select('bot_token, webhook_set').eq('id', botId).single()
         if (botErr) throw botErr
 
         const { data, error: settingsErr } = await supabase
-          .from('bot_settings')
-          .select('*')
-          .eq('bot_id', botId)
-          .single()
+          .from('bot_settings').select('*').eq('bot_id', botId).single()
         if (settingsErr) throw settingsErr
         if (cancelled) return
 
@@ -89,10 +88,20 @@ export default function BotSettingsPage() {
         setWelcomeEnabled(!!msg)
 
         setCaptchaEnabled(data.captcha_enabled ?? true)
+
+        setCurrencyName(data.currency_name || 'Coins')
+        setCurrencySymbol(data.currency_symbol || '🪙')
+        setUsdToCurrencyRate(Number(data.usd_to_currency_rate) || 1000)
+
+        const channels = data.required_channels
+        setRequiredChannels(Array.isArray(channels) ? channels : [])
         setRequireChannelJoin(Boolean(data.require_channel_join))
-        setRequiredChannelId(data.required_channel_id || '')
-        setRequiredChannelUsername(data.required_channel_username || '')
-        setManualWithdraw(Boolean(data.withdraw_enabled))
+
+        setOxapayPayoutKey(data.faucetpay_withdrawal_key || '')
+        setFaucetpayKey(data.faucetpay_api_key || '')
+        setMinWithdrawUsd(Number(data.min_withdraw_usd) || 0.5)
+        setWithdrawFeePercent(Number(data.withdraw_fee_percent) || 0)
+        setWithdrawMode(data.manual_withdrawal ? 'manual' : data.withdraw_enabled ? 'automatic' : null)
       } catch (e: any) {
         if (cancelled) return
         const message = e?.message || 'Failed to load settings'
@@ -145,50 +154,57 @@ export default function BotSettingsPage() {
     setFixingWebhook(false)
   }
 
-  async function fetchChannelId(username: string) {
-    setFetchingChannel(true)
+  async function addChannel() {
+    if (!newChannelUsername.trim()) return
+    setAddingChannel(true)
     try {
-      const clean = username.startsWith('@') ? username : '@' + username
-      const res = await fetch(`${BOT_ENGINE_URL}/api/bots/channel-info`, {
+      const clean = newChannelUsername.trim().startsWith('@')
+        ? newChannelUsername.trim()
+        : '@' + newChannelUsername.trim()
+
+      const infoRes = await fetch(`${BOT_ENGINE_URL}/api/bots/channel-info`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: clean, botToken })
       })
-      const data = await res.json()
-      if (data.channelId) {
-        setRequiredChannelId(data.channelId)
-        toast.success('Channel ID found: ' + data.channelId)
-      } else {
-        toast.error('Could not find channel. Make sure username is correct and the bot is admin.')
+      const infoData = await infoRes.json()
+      if (!infoData.channelId) {
+        toast.error('Channel not found. Make sure username is correct.')
+        setAddingChannel(false)
+        return
       }
-    } catch {
-      toast.error('Failed to fetch channel info')
-    }
-    setFetchingChannel(false)
-  }
 
-  async function verifyChannelAdmin() {
-    setVerifyingAdmin(true)
-    try {
-      const res = await fetch(`${BOT_ENGINE_URL}/api/bots/verify-channel-admin`, {
+      const adminRes = await fetch(`${BOT_ENGINE_URL}/api/bots/verify-channel-admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelId: requiredChannelId, botToken })
+        body: JSON.stringify({ channelId: infoData.channelId, botToken })
       })
-      const data = await res.json()
-      if (data.isAdmin) {
-        setAdminVerified(true)
-        setAdminVerifyResult('@twinbot_twinbot is admin ✓')
-        toast.success('Verified! Channel requirement can now be saved.')
-      } else {
-        setAdminVerified(false)
-        setAdminVerifyResult(data.message || '@twinbot_twinbot is not admin yet')
-        toast.error('Please add @twinbot_twinbot as admin first')
+      const adminData = await adminRes.json()
+      if (!adminData.isAdmin) {
+        toast.error('@twinbot_twinbot must be admin in this channel first')
+        setAddingChannel(false)
+        return
       }
-    } catch (err: any) {
-      toast.error('Verification failed: ' + err.message)
+
+      const already = requiredChannels.some(c => c.id === infoData.channelId)
+      if (already) {
+        toast.error('Channel already added')
+        setAddingChannel(false)
+        return
+      }
+
+      const updated = [...requiredChannels, {
+        id: infoData.channelId,
+        username: infoData.username || clean,
+        title: infoData.title || clean
+      }]
+      setRequiredChannels(updated)
+      setNewChannelUsername('')
+      toast.success('Channel added and verified ✓')
+    } catch {
+      toast.error('Failed to add channel')
     }
-    setVerifyingAdmin(false)
+    setAddingChannel(false)
   }
 
   async function save() {
@@ -200,10 +216,17 @@ export default function BotSettingsPage() {
         .update({
           welcome_message: welcomeEnabled ? welcomeMessage : '',
           captcha_enabled: captchaEnabled,
+          currency_name: currencyName,
+          currency_symbol: currencySymbol,
+          usd_to_currency_rate: usdToCurrencyRate,
           require_channel_join: requireChannelJoin,
-          required_channel_id: requireChannelJoin ? requiredChannelId || null : null,
-          required_channel_username: requireChannelJoin ? requiredChannelUsername || null : null,
-          withdraw_enabled: manualWithdraw
+          required_channels: requiredChannels,
+          faucetpay_withdrawal_key: oxapayPayoutKey || null,
+          faucetpay_api_key: faucetpayKey || null,
+          min_withdraw_usd: minWithdrawUsd,
+          withdraw_fee_percent: withdrawFeePercent,
+          manual_withdrawal: withdrawMode === 'manual',
+          withdraw_enabled: withdrawMode !== null
         })
         .eq('bot_id', botId)
       if (upErr) throw upErr
@@ -216,8 +239,6 @@ export default function BotSettingsPage() {
       setSaving(false)
     }
   }
-
-  const canSave = !requireChannelJoin || adminVerified
 
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: '13px',
@@ -299,7 +320,7 @@ export default function BotSettingsPage() {
                 <label style={labelStyle}>Message</label>
                 <textarea
                   value={welcomeMessage}
-                  onChange={(e) => setWelcomeMessage(e.target.value)}
+                  onChange={e => setWelcomeMessage(e.target.value)}
                   className="input-field"
                   style={{ minHeight: '88px' }}
                   placeholder="Welcome! Use the buttons below to get started."
@@ -319,113 +340,168 @@ export default function BotSettingsPage() {
             />
           </div>
 
+          {/* Currency */}
+          <div style={sectionCardStyle}>
+            <h3 style={sectionTitle}>💱 Currency</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Currency name</label>
+                <input value={currencyName} onChange={e => setCurrencyName(e.target.value)} className="input-field" placeholder="Coins" />
+              </div>
+              <div>
+                <label style={labelStyle}>Currency symbol</label>
+                <input value={currencySymbol} onChange={e => setCurrencySymbol(e.target.value)} className="input-field" placeholder="🪙" />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>USD to currency rate</label>
+                <input type="number" value={usdToCurrencyRate} onChange={e => setUsdToCurrencyRate(Number(e.target.value))} className="input-field" />
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                  1 USD = {usdToCurrencyRate} {currencySymbol}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Channels */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}>Channels</h3>
+            <h3 style={sectionTitle}>📢 Channels</h3>
             <ToggleRow
               label="Require channel join"
-              desc="Force users to join a channel before using the bot"
+              desc="Users must join all listed channels before using the bot"
               enabled={requireChannelJoin}
-              onToggle={() => { setRequireChannelJoin(!requireChannelJoin); setAdminVerified(false); setAdminVerifyResult('') }}
+              onToggle={() => setRequireChannelJoin(!requireChannelJoin)}
             />
+
             {requireChannelJoin && (
               <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+                {requiredChannels.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {requiredChannels.map((ch, i) => (
+                      <div key={ch.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '10px' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{ch.title || ch.username}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{ch.username} · {ch.id}</div>
+                        </div>
+                        <button
+                          onClick={() => setRequiredChannels(prev => prev.filter((_, idx) => idx !== i))}
+                          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '6px', color: '#FCA5A5', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
                   <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>Channel username</label>
+                    <label style={labelStyle}>Add channel username</label>
                     <input
-                      value={requiredChannelUsername}
-                      onChange={(e) => setRequiredChannelUsername(e.target.value)}
+                      value={newChannelUsername}
+                      onChange={e => setNewChannelUsername(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addChannel()}
                       className="input-field"
                       placeholder="@mychannel"
                     />
                   </div>
                   <button
-                    onClick={() => fetchChannelId(requiredChannelUsername)}
-                    disabled={fetchingChannel || !requiredChannelUsername || !botToken}
-                    className="btn-ghost"
+                    onClick={addChannel}
+                    disabled={addingChannel || !newChannelUsername.trim() || !botToken}
+                    className="btn-primary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
                   >
-                    {fetchingChannel ? 'Fetching...' : 'Get ID'}
+                    {addingChannel ? 'Adding...' : '+ Add Channel'}
                   </button>
                 </div>
 
-                <div>
-                  <label style={labelStyle}>Channel ID (auto-filled)</label>
-                  <input
-                    value={requiredChannelId}
-                    readOnly
-                    className="input-field"
-                    style={{ opacity: 0.8 }}
-                    placeholder="-1001234567890"
-                  />
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px' }}>
+                  ⚠️ @twinbot_twinbot must be an admin in each channel. Channel ID is auto-filled and admin status verified automatically.
                 </div>
-
-                <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '10px', padding: '14px 16px' }}>
-                  <p style={{ fontWeight: 500, color: '#FBBF24', fontSize: '13px', margin: '0 0 8px 0' }}>
-                    Add @twinbot_twinbot as channel administrator
-                  </p>
-                  <ol style={{ color: '#FDE68A', fontSize: '12px', lineHeight: '2', paddingLeft: '16px', margin: 0 }}>
-                    <li>Open your Telegram channel → Administrators</li>
-                    <li>Add Administrator → search @twinbot_twinbot</li>
-                    <li>Enable "Read Messages" permission → Save</li>
-                  </ol>
-                </div>
-
-                <button
-                  onClick={verifyChannelAdmin}
-                  disabled={verifyingAdmin || !requiredChannelId}
-                  className="btn-primary"
-                  style={{ width: '100%' }}
-                >
-                  {verifyingAdmin ? 'Verifying...' : adminVerified ? '✓ Verified — Save to activate' : 'Verify @twinbot_twinbot is admin'}
-                </button>
-
-                {adminVerifyResult && (
-                  <div style={{
-                    background: adminVerified ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
-                    border: `1px solid ${adminVerified ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
-                    borderRadius: '8px', padding: '10px 12px',
-                    fontSize: '12px', color: adminVerified ? '#10B981' : '#FCA5A5'
-                  }}>
-                    {adminVerifyResult}
-                  </div>
-                )}
               </div>
             )}
           </div>
 
-          {/* Withdrawals */}
+          {/* Withdrawal Settings */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}>Withdrawals</h3>
-            <ToggleRow
-              label="Manual withdrawal approval"
-              desc="You approve each withdrawal request manually from the dashboard"
-              enabled={manualWithdraw}
-              onToggle={() => setManualWithdraw(!manualWithdraw)}
-            />
-            {manualWithdraw && (
-              <div style={{ marginTop: '12px', display: 'flex', gap: '10px', alignItems: 'flex-start', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px', padding: '12px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                <Info size={16} style={{ marginTop: '1px', flexShrink: 0, color: '#818cf8' }} />
-                <span>Users will submit withdrawal requests which you approve manually</span>
+            <h3 style={sectionTitle}>📤 Withdrawal Settings</h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={labelStyle}>OxaPay Payout API Key</label>
+                <input value={oxapayPayoutKey} onChange={e => setOxapayPayoutKey(e.target.value)} className="input-field" placeholder="For USDT/TRX automatic payouts" />
               </div>
-            )}
+              <div>
+                <label style={labelStyle}>FaucetPay API Key</label>
+                <input value={faucetpayKey} onChange={e => setFaucetpayKey(e.target.value)} className="input-field" placeholder="For FaucetPay withdrawals" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle}>Min withdrawal (USD)</label>
+                  <input type="number" step="0.01" value={minWithdrawUsd} onChange={e => setMinWithdrawUsd(Number(e.target.value))} className="input-field" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Withdrawal fee (%)</label>
+                  <input type="number" step="0.01" value={withdrawFeePercent} onChange={e => setWithdrawFeePercent(Number(e.target.value))} className="input-field" />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
+              <label style={labelStyle}>Withdrawal mode</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setWithdrawMode('automatic')}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: '10px', cursor: 'pointer',
+                    border: `1px solid ${withdrawMode === 'automatic' ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                    background: withdrawMode === 'automatic' ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
+                    color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, textAlign: 'center' as const
+                  }}
+                >
+                  ⚡ Automatic
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 400 }}>
+                    Paid instantly via API key
+                  </div>
+                </button>
+                <button
+                  onClick={() => setWithdrawMode('manual')}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: '10px', cursor: 'pointer',
+                    border: `1px solid ${withdrawMode === 'manual' ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                    background: withdrawMode === 'manual' ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
+                    color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, textAlign: 'center' as const
+                  }}
+                >
+                  ✋ Manual
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 400 }}>
+                    You approve each request
+                  </div>
+                </button>
+              </div>
+              {withdrawMode === 'automatic' && (
+                <div style={{ marginTop: '10px', fontSize: '12px', color: '#60A5FA', padding: '10px 14px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '8px' }}>
+                  ⚡ Withdrawals will be processed automatically using your API key. Make sure your key is valid.
+                </div>
+              )}
+              {withdrawMode === 'manual' && (
+                <div style={{ marginTop: '10px', fontSize: '12px', color: '#FBBF24', padding: '10px 14px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '8px' }}>
+                  ✋ Users submit withdrawal requests. You approve them manually from the dashboard.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Save */}
           <div>
             <button
               onClick={save}
-              disabled={saving || !canSave}
+              disabled={saving}
               className="btn-primary"
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
             >
               {saving ? 'Saving...' : 'Save settings'}
             </button>
-            {requireChannelJoin && !adminVerified && (
-              <div style={{ fontSize: '12px', color: '#FCA5A5', marginTop: '8px' }}>
-                Verify @twinbot_twinbot as admin before saving channel settings
-              </div>
-            )}
           </div>
 
         </div>
