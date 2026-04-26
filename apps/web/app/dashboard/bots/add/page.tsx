@@ -56,8 +56,10 @@ export default function AddBotPage() {
         usdRate: 1000,
         category: 'general'
       })
+      console.log('Register response:', resp.data)
+      const botId = resp.data?.bot?.id ?? resp.data?.id
       toast.success('Bot created successfully!')
-      router.push(`/dashboard/bots/${resp.data.id}/settings`)
+      router.push(`/dashboard/bots/${botId}/settings`)
     } catch (e: any) {
       const message = e?.response?.data?.message || e?.message || 'Registration failed'
       toast.error(message)
