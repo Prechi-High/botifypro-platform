@@ -140,9 +140,22 @@ export async function checkChannelMembership(channelId: string, telegramUserId: 
 // ─── Withdrawal processor ─────────────────────────────────────────────────────
 
 export async function processWithdrawal(bot: any, botUser: any, address: string, chatId: number) {
-  if (!address || address.length < 20) {
-    await sendMessage(bot.botToken, chatId, '❌ Invalid address. Please try again.')
+  if (address.length > 100) {
+    await sendMessage(bot.botToken, chatId, '❌ Address is too long. Please try again.')
     return
+  }
+
+  if (!bot.settings?.manualWithdrawal) {
+    // TRX (TRC20) addresses: start with T, exactly 34 alphanumeric chars
+    if (!address || !address.startsWith('T') || address.length !== 34 || !/^[A-Za-z0-9]{34}$/.test(address)) {
+      await sendMessage(bot.botToken, chatId, '❌ Invalid TRC20 address. Must start with T and be exactly 34 characters. Please try again.')
+      return
+    }
+  } else {
+    if (!address || address.length < 10) {
+      await sendMessage(bot.botToken, chatId, '❌ Invalid address. Please try again.')
+      return
+    }
   }
 
   const usdAmount = Number(botUser.balance) / Number(bot.settings.usdToCurrencyRate)

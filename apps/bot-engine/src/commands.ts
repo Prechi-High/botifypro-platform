@@ -68,8 +68,8 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 
   const row2: any[] = []
   if (settings.withdrawEnabled) row2.push({ text: '📤 Withdraw' })
-  row2.push({ text: '🎁 Bonus' })
-  keyboard.push(row2)
+  if (settings.dailyBonusEnabled || settings.bonusEnabled) row2.push({ text: '🎁 Bonus' })
+  if (row2.length > 0) keyboard.push(row2)
 
   const row3: any[] = []
   if (settings.referralEnabled) row3.push({ text: '👥 Referral' })
@@ -116,14 +116,13 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
     '💰 <b>Your Balance</b>\n\n' +
     botUser.balance + ' ' + bot.settings.currencySymbol +
     '\n≈ $' + usdValue + ' USD'
-  await sendMessage(bot.botToken, chatId, text, {
-    inline_keyboard: [
-      [
-        { text: '📥 Deposit', callback_data: 'cmd_deposit' },
-        { text: '📤 Withdraw', callback_data: 'cmd_withdraw' }
-      ]
-    ]
-  })
+  const balanceButtons: any[] = []
+  if (bot.settings?.depositEnabled) balanceButtons.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
+  if (bot.settings?.withdrawEnabled) balanceButtons.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
+  await sendMessage(
+    bot.botToken, chatId, text,
+    balanceButtons.length > 0 ? { inline_keyboard: [balanceButtons] } : undefined
+  )
 }
 
 export async function handleHelp(bot: any, chatId: number) {
@@ -135,7 +134,7 @@ export async function handleHelp(bot: any, chatId: number) {
   if (settings?.balanceEnabled)  buttons.push({ text: '💰 Balance',  callback_data: 'cmd_balance' })
   if (settings?.depositEnabled)  buttons.push({ text: '📥 Deposit',  callback_data: 'cmd_deposit' })
   if (settings?.withdrawEnabled) buttons.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
-  buttons.push({ text: '🎁 Bonus', callback_data: 'cmd_bonus' })
+  if (settings?.dailyBonusEnabled || settings?.bonusEnabled) buttons.push({ text: '🎁 Bonus', callback_data: 'cmd_bonus' })
   if (settings?.referralEnabled)    buttons.push({ text: '👥 Referral',    callback_data: 'cmd_referral' })
   if (settings?.leaderboardEnabled) buttons.push({ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' })
 
@@ -164,10 +163,17 @@ export async function handleHelp(bot: any, chatId: number) {
 
 export async function handleBonus(bot: any, botUser: any, chatId: number) {
   const settings = bot.settings
+  if (!settings?.dailyBonusEnabled && !settings?.bonusEnabled) {
+    await sendMessage(bot.botToken, chatId, '🎁 Daily bonus is not enabled on this bot.')
+    return
+  }
   const sym = settings?.currencySymbol || '🪙'
   const rate = Math.max(1, Number(settings?.usdToCurrencyRate || 1000))
-  // Daily bonus ≈ $0.01 worth of the bot's currency, minimum 1
-  const bonusAmount = Math.max(1, Math.floor(rate * 0.01))
+  const bonusAmount = settings?.dailyBonusAmount
+    ? Number(settings.dailyBonusAmount)
+    : settings?.bonusAmount
+      ? Number(settings.bonusAmount)
+      : Math.max(1, Math.floor(rate * 0.01))
 
   const bonusKey = `daily_bonus:${bot.id}:${botUser.id}`
   const claimed = await redisGet(bonusKey)

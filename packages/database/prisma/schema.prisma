@@ -89,7 +89,13 @@ model BotSettings {
   captchaEnabled          Boolean @default(true) @map("captcha_enabled")
   bonusEnabled            Boolean @default(true) @map("bonus_enabled")
   bonusAmount             Float?  @map("bonus_amount")
+  dailyBonusEnabled       Boolean @default(false) @map("daily_bonus_enabled")
+  dailyBonusAmount        Float   @default(10) @map("daily_bonus_amount")
   leaderboardEnabled      Boolean @default(false) @map("leaderboard_enabled")
+  leaderboardPeriod       String  @default("7days") @map("leaderboard_period")
+  leaderboardBonus1       Float   @default(1000) @map("leaderboard_bonus_1")
+  leaderboardBonus2       Float   @default(500) @map("leaderboard_bonus_2")
+  leaderboardBonus3       Float   @default(250) @map("leaderboard_bonus_3")
   @@map("bot_settings")
 }
 
