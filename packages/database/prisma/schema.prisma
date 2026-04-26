@@ -232,3 +232,13 @@ model Log {
   @@map("logs")
 }
 
+model CommandWishlist {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  createdBy   String   @map("created_by")
+  upvotes     Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@map("command_wishlist")
+}
+
