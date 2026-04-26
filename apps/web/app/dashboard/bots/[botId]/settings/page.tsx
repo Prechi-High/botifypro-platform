@@ -35,6 +35,7 @@ export default function BotSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [botToken, setBotToken] = useState('')
+  const [botUsername, setBotUsername] = useState('')
 
   const [webhookStatus, setWebhookStatus] = useState(false)
   const [checkingWebhook, setCheckingWebhook] = useState(false)
@@ -72,7 +73,7 @@ export default function BotSettingsPage() {
       setError(null)
       try {
         const { data: botRow, error: botErr } = await supabase
-          .from('bots').select('bot_token, webhook_set').eq('id', botId).single()
+          .from('bots').select('bot_token, webhook_set, bot_username').eq('id', botId).single()
         if (botErr) throw botErr
 
         const { data, error: settingsErr } = await supabase
@@ -81,6 +82,7 @@ export default function BotSettingsPage() {
         if (cancelled) return
 
         setBotToken(botRow?.bot_token || '')
+        setBotUsername(botRow?.bot_username || 'your bot')
         setWebhookStatus(botRow?.webhook_set || false)
 
         const msg = data.welcome_message || ''
@@ -170,18 +172,6 @@ export default function BotSettingsPage() {
       const infoData = await infoRes.json()
       if (!infoData.channelId) {
         toast.error('Channel not found. Make sure username is correct.')
-        setAddingChannel(false)
-        return
-      }
-
-      const adminRes = await fetch(`${BOT_ENGINE_URL}/api/bots/verify-channel-admin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelId: infoData.channelId, botToken })
-      })
-      const adminData = await adminRes.json()
-      if (!adminData.isAdmin) {
-        toast.error('@twinbot_twinbot must be admin in this channel first')
         setAddingChannel(false)
         return
       }
@@ -416,7 +406,7 @@ export default function BotSettingsPage() {
                 </div>
 
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px' }}>
-                  ⚠️ @twinbot_twinbot must be an admin in each channel. Channel ID is auto-filled and admin status verified automatically.
+                  ⚠️ Make sure @{botUsername} is admin in each channel before adding it.
                 </div>
               </div>
             )}
