@@ -56,6 +56,12 @@ export default function BotSettingsPage() {
   const [referralEnabled, setReferralEnabled] = useState(false)
   const [referralRewardAmount, setReferralRewardAmount] = useState<number>(100)
 
+  // Behavior toggles
+  const [captchaEnabled, setCaptchaEnabled] = useState(true)
+  const [bonusEnabled, setBonusEnabled] = useState(true)
+  const [bonusAmount, setBonusAmount] = useState<number | ''>('')
+  const [leaderboardEnabled, setLeaderboardEnabled] = useState(false)
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -101,6 +107,12 @@ export default function BotSettingsPage() {
         setWithdrawEnabled(Boolean(data.withdraw_enabled))
         setReferralEnabled(Boolean(data.referral_enabled))
         setReferralRewardAmount(Number(data.referral_reward_amount) || 100)
+
+        // Behavior toggles
+        setCaptchaEnabled(data.captcha_enabled ?? true)
+        setBonusEnabled(data.bonus_enabled ?? true)
+        setBonusAmount(data.bonus_amount != null ? Number(data.bonus_amount) : '')
+        setLeaderboardEnabled(Boolean(data.leaderboard_enabled))
       } catch (e: any) {
         if (cancelled) return
         const message = e?.message || 'Failed to load settings'
@@ -223,7 +235,11 @@ export default function BotSettingsPage() {
         deposit_enabled: depositEnabled,
         withdraw_enabled: withdrawEnabled,
         referral_enabled: referralEnabled,
-        referral_reward_amount: referralRewardAmount
+        referral_reward_amount: referralRewardAmount,
+        captcha_enabled: captchaEnabled,
+        bonus_enabled: bonusEnabled,
+        bonus_amount: bonusAmount === '' ? null : Number(bonusAmount),
+        leaderboard_enabled: leaderboardEnabled
       }
 
       console.log('Saving settings:', updateData)
@@ -686,6 +702,77 @@ export default function BotSettingsPage() {
                   marginTop: '8px'
                 }}>
                   ⚠️ Add an OxaPay or FaucetPay API key above before enabling withdrawals
+                </div>
+              )}
+            </div>
+
+            <div style={{ ...sectionCardStyle, marginBottom: '14px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, marginBottom: '12px' }}>🤖 Behavior</h3>
+              {[
+                {
+                  label: 'Captcha Verification',
+                  desc: 'New users must solve a math challenge before accessing the bot',
+                  enabled: captchaEnabled,
+                  set: setCaptchaEnabled
+                },
+                {
+                  label: 'Daily Bonus (/bonus)',
+                  desc: 'Users can claim a free daily coin reward',
+                  enabled: bonusEnabled,
+                  set: setBonusEnabled
+                },
+                {
+                  label: 'Leaderboard (/leaderboard)',
+                  desc: 'Show top 10 users ranked by balance',
+                  enabled: leaderboardEnabled,
+                  set: setLeaderboardEnabled
+                }
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '10px 0',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)'
+                  }}
+                >
+                  <div>
+                    <div style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 500 }}>{item.label}</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>{item.desc}</div>
+                  </div>
+                  <div
+                    className={`toggle-track ${item.enabled ? 'on' : 'off'}`}
+                    onClick={() => item.set(!item.enabled)}
+                  >
+                    <div className="toggle-thumb" />
+                  </div>
+                </div>
+              ))}
+              {bonusEnabled && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '14px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px'
+                }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Custom bonus amount (coins)
+                  </label>
+                  <input
+                    type="number"
+                    value={bonusAmount}
+                    onChange={e => setBonusAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="input-field"
+                    placeholder="Leave blank to auto-calculate (~$0.01)"
+                    style={{ maxWidth: '260px' }}
+                  />
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', margin: '6px 0 0' }}>
+                    Override the default daily bonus amount. Leave blank to auto-calculate based on USD rate.
+                  </p>
                 </div>
               )}
             </div>
