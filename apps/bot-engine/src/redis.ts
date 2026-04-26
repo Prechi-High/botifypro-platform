@@ -26,5 +26,8 @@ export async function redisIncr(key: string, ttlSeconds?: number): Promise<numbe
     return val
   } catch { return 0 }
 }
+export async function redisTtl(key: string): Promise<number> {
+  try { return await redis.ttl(key) } catch { return -1 }
+}
 export default redis
 
