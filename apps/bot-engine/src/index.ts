@@ -149,22 +149,20 @@ app.get('/api/bots/:botId/webhook-status', async (req: Request, res: Response) =
 app.post('/api/bots/verify-channel-admin', async (req: Request, res: Response) => {
   try {
     const { channelId, botToken } = req.body
-    
-    const platformBotToken = process.env.PLATFORM_BOT_TOKEN
-    if (!platformBotToken) {
-      return res.status(500).json({ error: 'Platform bot not configured' })
+    if (!channelId || !botToken) {
+      return res.status(400).json({ error: 'channelId and botToken are required' })
     }
 
-    // Get platform bot user ID first
+    // Get bot's own user ID
     const meResponse = await axios.get(
-      `https://api.telegram.org/bot${platformBotToken}/getMe` 
+      `https://api.telegram.org/bot${botToken}/getMe`
     )
-    const platformBotId = meResponse.data.result.id
+    const botId = meResponse.data.result.id
 
-    // Check if platform bot is admin in channel
+    // Check if bot is admin in channel
     const memberResponse = await axios.get(
-      `https://api.telegram.org/bot${platformBotToken}/getChatMember`,
-      { params: { chat_id: channelId, user_id: platformBotId } }
+      `https://api.telegram.org/bot${botToken}/getChatMember`,
+      { params: { chat_id: channelId, user_id: botId } }
     )
 
     const status = memberResponse.data?.result?.status
@@ -172,17 +170,18 @@ app.post('/api/bots/verify-channel-admin', async (req: Request, res: Response) =
 
     logger.info('Channel admin verification', { channelId, status, isAdmin })
 
+    const botUsername = meResponse.data.result.username || 'your bot'
     return res.json({
       isAdmin,
       status,
       message: isAdmin
-        ? '@twinbot_twinbot is admin in this channel ✓'
-        : '@twinbot_twinbot is NOT admin. Please add it as administrator first.'
+        ? `@${botUsername} is admin in this channel ✓`
+        : `@${botUsername} is NOT admin. Please add it as administrator first.`
     })
   } catch (error: any) {
     logger.error('Channel admin verify failed', { error: error.message })
-    return res.status(500).json({ 
-      error: 'Could not verify. Make sure channel ID is correct and channel is public or bot is already a member.' 
+    return res.status(500).json({
+      error: 'Could not verify. Make sure channel ID is correct and channel is public or bot is already a member.'
     })
   }
 })

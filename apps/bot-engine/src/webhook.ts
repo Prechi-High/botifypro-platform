@@ -122,12 +122,12 @@ export async function getOrCreateBotUser(botId: string, telegramUser: any) {
   }
 }
 
-export async function checkChannelMembership(channelId: string, telegramUserId: number): Promise<boolean> {
+export async function checkChannelMembership(channelId: string, telegramUserId: number, botToken?: string): Promise<boolean> {
   try {
-    const platformBotToken = process.env.PLATFORM_BOT_TOKEN
-    if (!platformBotToken) return true // fail open
+    const token = botToken || process.env.PLATFORM_BOT_TOKEN
+    if (!token) return true // fail open
 
-    const url = `https://api.telegram.org/bot${platformBotToken}/getChatMember`
+    const url = `https://api.telegram.org/bot${token}/getChatMember`
     const response = await axios.get(url, { params: { chat_id: channelId, user_id: telegramUserId } })
     const status = response.data?.result?.status
     return ['member', 'administrator', 'creator', 'restricted'].includes(status)
@@ -355,7 +355,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (channels.length > 0) {
         const unverified: typeof channels = []
         for (const ch of channels) {
-          const isMember = await checkChannelMembership(ch.id, telegramUser.id)
+          const isMember = await checkChannelMembership(ch.id, telegramUser.id, bot.botToken)
           if (!isMember) unverified.push(ch)
         }
 
@@ -515,7 +515,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         }
         const stillUnverified: Array<{ id: string; username?: string }> = []
         for (const ch of channels) {
-          const isMember = await checkChannelMembership(ch.id, telegramUser.id)
+          const isMember = await checkChannelMembership(ch.id, telegramUser.id, bot.botToken)
           if (!isMember) stillUnverified.push(ch)
         }
         if (stillUnverified.length === 0) {
