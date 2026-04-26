@@ -73,6 +73,7 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 
   const row3: any[] = []
   if (settings.referralEnabled) row3.push({ text: '👥 Referral' })
+  if (settings.leaderboardEnabled) row3.push({ text: '🏆 Leaderboard' })
   row3.push({ text: '❓ Help' })
   keyboard.push(row3)
 
@@ -135,7 +136,8 @@ export async function handleHelp(bot: any, chatId: number) {
   if (settings?.depositEnabled)  buttons.push({ text: '📥 Deposit',  callback_data: 'cmd_deposit' })
   if (settings?.withdrawEnabled) buttons.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
   buttons.push({ text: '🎁 Bonus', callback_data: 'cmd_bonus' })
-  if (settings?.referralEnabled) buttons.push({ text: '👥 Referral', callback_data: 'cmd_referral' })
+  if (settings?.referralEnabled)    buttons.push({ text: '👥 Referral',    callback_data: 'cmd_referral' })
+  if (settings?.leaderboardEnabled) buttons.push({ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' })
 
   try {
     const customCommands = await prisma.botCommand.findMany({
@@ -232,6 +234,36 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
       inline_keyboard: [[{ text: '📤 Share Link', url: shareUrl }]]
     }
   )
+}
+
+export async function handleLeaderboard(bot: any, botUser: any, chatId: number) {
+  if (!bot.settings?.leaderboardEnabled) {
+    await sendMessage(bot.botToken, chatId, '🏆 Leaderboard is not enabled on this bot.')
+    return
+  }
+
+  const sym = bot.settings?.currencySymbol || '🪙'
+  const topUsers = await prisma.botUser.findMany({
+    where: { botId: bot.id, isBanned: false },
+    orderBy: { balance: 'desc' },
+    take: 10,
+    select: { id: true, firstName: true, balance: true, telegramUserId: true }
+  })
+
+  if (topUsers.length === 0) {
+    await sendMessage(bot.botToken, chatId, '🏆 <b>Leaderboard</b>\n\nNo users yet.')
+    return
+  }
+
+  const medals = ['🥇', '🥈', '🥉']
+  let text = `🏆 <b>Leaderboard</b>\n\n`
+  topUsers.forEach((u, i) => {
+    const medal = medals[i] || `${i + 1}.`
+    const isMe = u.id === botUser.id ? ' 👈 You' : ''
+    text += `${medal} ${u.firstName} — ${u.balance} ${sym}${isMe}\n`
+  })
+
+  await sendMessage(bot.botToken, chatId, text)
 }
 
 export async function handleDeposit(bot: any, botUser: any, chatId: number) {

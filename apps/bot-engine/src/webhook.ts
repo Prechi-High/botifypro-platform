@@ -4,7 +4,7 @@ import { logger } from './logger'
 import { redisGet, redisSet, redisDel } from './redis'
 import {
   sendMessage, handleStart, handleBalance, handleDeposit,
-  handleWithdraw, handleHelp, handleBonus, handleReferralInfo
+  handleWithdraw, handleHelp, handleBonus, handleReferralInfo, handleLeaderboard
 } from './commands'
 import { maybeServeAd } from './ads'
 import { handleReferral } from './referral'
@@ -412,6 +412,10 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await handleReferralInfo(bot, botUser, chatId)
         return
       }
+      if (text === '🏆 Leaderboard') {
+        await handleLeaderboard(bot, botUser, chatId)
+        return
+      }
       if (text === '❓ Help' || text === '📋 Menu') {
         await handleHelp(bot, chatId)
         return
@@ -477,6 +481,8 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await handleBonus(bot, botUser, cbChatId)
       } else if (data === 'cmd_referral') {
         await handleReferralInfo(bot, botUser, cbChatId)
+      } else if (data === 'cmd_leaderboard') {
+        await handleLeaderboard(bot, botUser, cbChatId)
       } else if (data === 'cmd_consent_agree') {
         await prisma.botUser.update({ where: { id: botUser.id }, data: { adConsent: true } })
         await handleStart(bot, { ...botUser, adConsent: true }, cbChatId)
