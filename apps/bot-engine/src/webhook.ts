@@ -348,17 +348,21 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
 
         if (unverified.length === 0) {
           await prisma.botUser.update({ where: { id: botUser.id }, data: { channelVerified: true } })
+          const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
+          await handleStart(bot, updatedUser, chatId)
+          return
         } else {
-          const buttons = unverified.map((ch, i) => {
+          const joinButtons = unverified.map((ch, i) => {
             const link = ch.username
               ? `https://t.me/${ch.username.replace('@', '')}`
               : `https://t.me/${ch.id.replace('-100', '')}`
             return [{ text: `📢 Join Channel${unverified.length > 1 ? ` ${i + 1}` : ''}`, url: link }]
           })
+          joinButtons.push([{ text: "✅ I've Joined — Check", callback_data: 'cmd_check_channel' }])
           await sendMessage(
             bot.botToken, chatId,
-            `⚠️ <b>Channel Membership Required</b>\n\nJoin ${unverified.length > 1 ? 'all channels' : 'our channel'} to use this bot, then send /start again.`,
-            { inline_keyboard: buttons }
+            `⚠️ <b>Channel Membership Required</b>\n\nPlease join ${unverified.length > 1 ? 'all channels' : 'our channel'} below to use this bot.`,
+            { inline_keyboard: joinButtons }
           )
           return
         }
@@ -483,6 +487,33 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await handleReferralInfo(bot, botUser, cbChatId)
       } else if (data === 'cmd_leaderboard') {
         await handleLeaderboard(bot, botUser, cbChatId)
+      } else if (data === 'cmd_check_channel') {
+        const channels: Array<{ id: string; username?: string }> = []
+        if (bot.settings?.requiredChannels) {
+          try {
+            const parsed = typeof bot.settings.requiredChannels === 'string'
+              ? JSON.parse(bot.settings.requiredChannels as string)
+              : bot.settings.requiredChannels
+            if (Array.isArray(parsed)) channels.push(...parsed)
+          } catch {}
+        }
+        if (channels.length === 0 && bot.settings?.requiredChannelId) {
+          channels.push({ id: bot.settings.requiredChannelId, username: bot.settings.requiredChannelUsername || undefined })
+        }
+        const stillUnverified: Array<{ id: string; username?: string }> = []
+        for (const ch of channels) {
+          const isMember = await checkChannelMembership(ch.id, telegramUser.id)
+          if (!isMember) stillUnverified.push(ch)
+        }
+        if (stillUnverified.length === 0) {
+          await prisma.botUser.update({ where: { id: botUser.id }, data: { channelVerified: true } })
+          const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
+          await handleStart(bot, updatedUser, cbChatId)
+        } else {
+          await sendMessage(bot.botToken, cbChatId,
+            '⚠️ You have not joined all required channels yet. Please join and try again.'
+          )
+        }
       } else if (data === 'cmd_consent_agree') {
         await prisma.botUser.update({ where: { id: botUser.id }, data: { adConsent: true } })
         await handleStart(bot, { ...botUser, adConsent: true }, cbChatId)
