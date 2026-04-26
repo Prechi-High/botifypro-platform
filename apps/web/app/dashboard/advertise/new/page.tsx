@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, CheckCircle, ChevronDown, ExternalLink, Megaphone, Plus } from 'lucide-react'
+import { AlertCircle, CheckCircle, ChevronDown, Megaphone, Plus, Wallet } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 const ACTIVITY_WINDOWS = [
@@ -50,7 +50,10 @@ export default function NewCampaignPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { toasts, removeToast, toast } = useToast()
-  const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://1-touchbot-engine.onrender.com'
+
+  const [userId, setUserId] = useState('')
+  const [balance, setBalance] = useState(0)
+  const [balanceLoading, setBalanceLoading] = useState(true)
 
   const [title, setTitle] = useState('')
   const [messageText, setMessageText] = useState('')
@@ -66,28 +69,40 @@ export default function NewCampaignPage() {
     standard: 0.6, '24hr': 1.0, '48hr': 1.0, '72hr': 0.9, '7day': 0.8,
   })
 
-  const [createdCampaignId, setCreatedCampaignId] = useState<string | null>(null)
-  const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
-  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [done, setDone] = useState(false)
 
   useEffect(() => {
     async function loadMeta() {
-      const [{ data: bots }, { data: ps }] = await Promise.all([
-        supabase.from('bots').select('category'),
-        supabase.from('platform_settings').select('*').limit(1).single(),
-      ])
-      if (bots) {
-        const unique = Array.from(new Set(bots.map((b: any) => b.category).filter(Boolean))) as string[]
-        setCategories(['all', ...unique])
-      }
-      if (ps) {
-        setCpmRates({
-          standard: ps.cpm_standard ?? 0.6,
-          '24hr':   ps.cpm_24hr    ?? 1.0,
-          '48hr':   ps.cpm_48hr    ?? 1.0,
-          '72hr':   ps.cpm_72hr    ?? 0.9,
-          '7day':   ps.cpm_7day    ?? 0.8,
-        })
+      try {
+        const { data: auth } = await supabase.auth.getUser()
+        const uid = auth.user?.id
+        if (!uid) return
+        setUserId(uid)
+
+        const [{ data: user }, { data: bots }, { data: ps }] = await Promise.all([
+          supabase.from('users').select('advertiser_balance').eq('id', uid).single(),
+          supabase.from('bots').select('category'),
+          supabase.from('platform_settings').select('*').limit(1).single(),
+        ])
+        setBalance(Number(user?.advertiser_balance || 0))
+        setBalanceLoading(false)
+
+        if (bots) {
+          const unique = Array.from(new Set(bots.map((b: any) => b.category).filter(Boolean))) as string[]
+          setCategories(['all', ...unique])
+        }
+        if (ps) {
+          setCpmRates({
+            standard: ps.cpm_standard ?? 0.6,
+            '24hr':   ps.cpm_24hr    ?? 1.0,
+            '48hr':   ps.cpm_48hr    ?? 1.0,
+            '72hr':   ps.cpm_72hr    ?? 0.9,
+            '7day':   ps.cpm_7day    ?? 0.8,
+          })
+        }
+      } catch (e: any) {
+        setBalanceLoading(false)
+        toast.error(e?.message || 'Failed to load')
       }
     }
     loadMeta()
@@ -96,10 +111,12 @@ export default function NewCampaignPage() {
   const selectedWindow = ACTIVITY_WINDOWS.find(w => w.value === activityWindow)!
   const effectiveCpm = cpmRates[activityWindow] ?? selectedWindow.defaultCpm
   const estimatedReach = budgetUsd > 0 ? Math.floor((budgetUsd / effectiveCpm) * 1000) : 0
+  const hasEnoughBalance = balance >= budgetUsd
   const canCreate =
     title.trim() !== '' &&
     messageText.trim() !== '' &&
     budgetUsd >= MIN_BUDGET &&
+    hasEnoughBalance &&
     (!buttonText.trim() || buttonUrl.trim() !== '')
 
   async function create() {
@@ -110,7 +127,15 @@ export default function NewCampaignPage() {
       const advertiserId = auth.user?.id
       if (!advertiserId) throw new Error('Not authenticated')
 
-      const { data: campaign, error: cErr } = await supabase
+      // Deduct from wallet first
+      const newBalance = balance - budgetUsd
+      const { error: balErr } = await supabase
+        .from('users')
+        .update({ advertiser_balance: newBalance })
+        .eq('id', advertiserId)
+      if (balErr) throw balErr
+
+      const { error: cErr } = await supabase
         .from('ad_campaigns')
         .insert({
           advertiser_id: advertiserId,
@@ -124,40 +149,24 @@ export default function NewCampaignPage() {
           cpm_rate: effectiveCpm,
           budget_usd: budgetUsd,
           spent_usd: 0,
-          status: 'pending',
+          status: 'approved',
           users_reached: 0,
         })
-        .select()
-        .single()
-      if (cErr) throw cErr
-
-      setCreatedCampaignId(campaign.id)
-
-      setPaymentLoading(true)
-      try {
-        const res = await fetch(`${BOT_ENGINE_URL}/api/payments/create-ad-invoice`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ campaignId: campaign.id, amountUsd: budgetUsd }),
-        })
-        const payData = await res.json()
-        if (payData.paymentUrl) {
-          setPaymentUrl(payData.paymentUrl)
-        } else {
-          toast.error('Campaign created — but could not generate payment link: ' + (payData.error || 'Unknown error'))
-        }
-      } catch {
-        toast.error('Campaign created — could not reach payment service')
-      } finally {
-        setPaymentLoading(false)
+      if (cErr) {
+        // Refund balance on campaign insert failure
+        await supabase.from('users').update({ advertiser_balance: balance }).eq('id', advertiserId)
+        throw cErr
       }
+
+      setBalance(newBalance)
+      setDone(true)
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create campaign')
       setCreating(false)
     }
   }
 
-  if (createdCampaignId) {
+  if (done) {
     return (
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
         <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -165,46 +174,23 @@ export default function NewCampaignPage() {
           <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <CheckCircle size={28} color='#10B981' />
           </div>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>Campaign created!</h2>
+          <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>Campaign approved!</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '0 0 24px' }}>
-            Complete payment below to activate your campaign.
+            Your campaign is live and will start delivering to users.
           </p>
 
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'left' }}>
-            <Row label='Total cost'       value={`$${budgetUsd.toFixed(2)}`} />
-            <Row label='Estimated reach'  value={`${estimatedReach.toLocaleString()} users`} />
-            <Row label='Activity window'  value={selectedWindow.label} last />
+            <Row label='Budget charged'     value={`$${budgetUsd.toFixed(2)}`} />
+            <Row label='Estimated reach'    value={`${estimatedReach.toLocaleString()} users`} />
+            <Row label='Activity window'    value={selectedWindow.label} />
+            <Row label='Wallet balance'     value={`$${balance.toFixed(2)}`} last />
           </div>
-
-          {paymentLoading ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '14px', padding: '16px 0' }}>Generating payment link…</div>
-          ) : paymentUrl ? (
-            <a
-              href={paymentUrl}
-              target='_blank'
-              rel='noreferrer'
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                background: '#2563eb', color: 'white', textDecoration: 'none',
-                padding: '13px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: 600,
-                marginBottom: '12px',
-              }}
-            >
-              <ExternalLink size={16} />
-              Pay ${budgetUsd.toFixed(2)} via OxaPay
-            </a>
-          ) : (
-            <div style={{ ...warnStyle, justifyContent: 'center', marginBottom: '12px' }}>
-              <AlertCircle size={13} />
-              Could not generate payment link — contact support with ID: {createdCampaignId}
-            </div>
-          )}
 
           <button
             onClick={() => router.push('/dashboard/advertise')}
-            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', width: '100%' }}
+            style={{ background: '#2563eb', border: 'none', color: 'white', padding: '12px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', width: '100%' }}
           >
-            Back to campaigns
+            View campaigns
           </button>
         </div>
       </div>
@@ -225,6 +211,27 @@ export default function NewCampaignPage() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+        {/* Wallet balance */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)',
+          borderRadius: '10px', padding: '12px 14px',
+        }}>
+          <Wallet size={16} color='#8b5cf6' />
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Wallet balance:{' '}
+            <strong style={{ color: 'var(--text-primary)' }}>
+              {balanceLoading ? '—' : `$${balance.toFixed(2)}`}
+            </strong>
+          </span>
+          {!balanceLoading && balance < MIN_BUDGET && (
+            <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#FBBF24' }}>
+              Top up needed →{' '}
+              <a href='/dashboard/advertise' style={{ color: '#3b82f6', textDecoration: 'none' }}>Wallet</a>
+            </span>
+          )}
+        </div>
 
         {/* Ad content */}
         <section style={sectionStyle}>
@@ -287,6 +294,12 @@ export default function NewCampaignPage() {
           {budgetUsd > 0 && budgetUsd < MIN_BUDGET && (
             <div style={warnStyle}><AlertCircle size={13} />Minimum budget is ${MIN_BUDGET}</div>
           )}
+          {budgetUsd >= MIN_BUDGET && !balanceLoading && !hasEnoughBalance && (
+            <div style={warnStyle}>
+              <AlertCircle size={13} />
+              Insufficient wallet balance (${balance.toFixed(2)}). Top up your wallet first.
+            </div>
+          )}
           <div style={{
             padding: '14px 16px',
             background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px',
@@ -312,13 +325,13 @@ export default function NewCampaignPage() {
           disabled={creating || !canCreate}
           style={{
             padding: '13px', borderRadius: '10px', border: 'none',
-            background: creating || !canCreate ? '#93c5fd' : '#2563eb',
+            background: creating || !canCreate ? 'rgba(37,99,235,0.4)' : '#2563eb',
             color: 'white', fontSize: '14px', fontWeight: 600,
             cursor: creating || !canCreate ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
           }}
         >
-          {creating ? 'Creating…' : <><Plus size={16} />Create Campaign &amp; Pay</>}
+          {creating ? 'Creating…' : <><Plus size={16} />Create &amp; Launch Campaign</>}
         </button>
       </div>
     </div>

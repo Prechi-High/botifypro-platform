@@ -3,6 +3,7 @@ require('dotenv').config()
 import express, { type Request, type Response } from 'express'
 import cors from 'cors'
 import axios from 'axios'
+import crypto from 'crypto'
 import { handleWebhook } from './webhook'
 import { registerBot, registerBotRoute, validateBotTokenRoute } from './registration'
 import { handleOxapayWebhook } from './payments/oxapay'
@@ -209,6 +210,73 @@ app.post('/api/admin/refresh-webhooks', async (_req: Request, res: Response) => 
   } catch (err: any) {
     logger.error('Server error', { error: err?.message, stack: err?.stack })
     res.status(500).json({ message: err?.message || 'Server error' })
+  }
+})
+
+app.post('/api/payments/create-topup-invoice', async (req: Request, res: Response) => {
+  try {
+    const { userId, amountUsd } = req.body
+    if (!userId || !amountUsd || Number(amountUsd) < 5) {
+      return res.status(400).json({ error: 'userId and amountUsd (min $5) are required' })
+    }
+    const merchantKey = process.env.OXAPAY_MERCHANT_KEY
+    if (!merchantKey) {
+      return res.status(500).json({ error: 'Payment gateway not configured' })
+    }
+    const response = await axios.post(
+      'https://api.oxapay.com/v1/payment/white-label',
+      {
+        amount: Number(amountUsd),
+        currency: 'USD',
+        pay_currency: 'USDT',
+        network: 'TRC20',
+        lifetime: 30,
+        fee_paid_by_payer: 0,
+        under_paid_coverage: 2,
+        callback_url: process.env.WEBHOOK_BASE_URL + '/webhooks/oxapay-ads/' + userId,
+        description: `advertiser topup userId:${userId}`,
+      },
+      { headers: { 'merchant_api_key': merchantKey, 'Content-Type': 'application/json' } }
+    )
+    if (response.data?.status !== 200) {
+      logger.error('OxaPay ads topup invoice failed', { status: response.data?.status, message: response.data?.message })
+      return res.status(500).json({ error: response.data?.message || 'Failed to create payment link' })
+    }
+    const invoice = response.data.data
+    logger.info('Ads topup invoice created', { userId, amountUsd, trackId: invoice.track_id })
+    return res.json({ paymentUrl: invoice.payment_url })
+  } catch (err: any) {
+    logger.error('create-topup-invoice error', { error: err?.message, response: err?.response?.data })
+    return res.status(500).json({ error: err?.message || 'Server error' })
+  }
+})
+
+app.post('/webhooks/oxapay-ads/:userId', async (req: Request, res: Response) => {
+  res.status(200).json({ ok: true })
+  try {
+    const { userId } = req.params
+    const body = req.body
+    const secretKey = process.env.OXAPAY_SECRET_KEY
+    if (secretKey) {
+      const hmac = crypto.createHmac('sha512', secretKey).update(JSON.stringify(body)).digest('hex')
+      if (hmac !== req.headers['hmac']) {
+        logger.error('OxaPay ads HMAC mismatch', { userId })
+        return
+      }
+    }
+    const status = body?.data?.status || body?.status
+    const amount = body?.data?.amount || body?.amount
+    logger.info('OxaPay ads webhook received', { userId, status, amount })
+    if (status !== 'Paid' && status !== 'paid') return
+    const paidAmount = Number(amount)
+    if (!paidAmount) return
+    await prisma.user.update({
+      where: { id: userId },
+      data: { advertiserBalance: { increment: paidAmount } },
+    })
+    logger.info('Advertiser balance topped up', { userId, paidAmount })
+  } catch (err: any) {
+    logger.error('oxapay-ads webhook error', { error: err?.message })
   }
 })
 
