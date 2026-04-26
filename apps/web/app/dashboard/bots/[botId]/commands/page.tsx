@@ -34,6 +34,10 @@ export default function CommandsPage() {
   const [withdrawEnabled, setWithdrawEnabled] = useState(false)
   const [referralRewardAmount, setReferralRewardAmount] = useState(100)
 
+  // Currency
+  const [currencySymbol, setCurrencySymbol] = useState('🪙')
+  const [currencyName, setCurrencyName] = useState('Coins')
+
   // Command settings
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<'7days' | '30days'>('7days')
   const [leaderboardBonus1, setLeaderboardBonus1] = useState(1000)
@@ -82,6 +86,8 @@ export default function CommandsPage() {
           setLeaderboardBonus2(Number(settings.leaderboard_bonus_2) || 500)
           setLeaderboardBonus3(Number(settings.leaderboard_bonus_3) || 250)
           setDailyBonusAmount(Number(settings.daily_bonus_amount) || 10)
+          setCurrencySymbol(settings.currency_symbol || '🪙')
+          setCurrencyName(settings.currency_name || 'Coins')
         }
 
         const { data: wishData } = await supabase
@@ -214,7 +220,7 @@ export default function CommandsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
                   <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', flexShrink: 0 }}>/{key}</code>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                    {key === 'balance' ? "Show user's coin balance" : 'Generate referral link, earn coins for invites'}
+                    {key === 'balance' ? `Show user's ${currencyName.toLowerCase()} balance` : `Generate referral link, earn ${currencyName.toLowerCase()} for invites`}
                   </span>
                   <span style={{ fontSize: '10px', color: '#818cf8', background: 'rgba(99,102,241,0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, flexShrink: 0 }}>always on</span>
                 </div>
@@ -226,9 +232,9 @@ export default function CommandsPage() {
 
             {/* Referral reward — always visible since referral is always on */}
             <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', marginTop: '8px' }}>
-              <label style={labelStyle}>Referral reward amount (coins)</label>
+              <label style={labelStyle}>Referral reward amount ({currencyName})</label>
               <input type="number" value={referralRewardAmount} onChange={e => setReferralRewardAmount(Number(e.target.value))} className="input-field" style={{ maxWidth: '200px' }} />
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Coins credited to referrer when someone joins via their link</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{referralRewardAmount} {currencySymbol} per successful referral</div>
             </div>
 
             {/* Leaderboard command */}
@@ -283,7 +289,7 @@ export default function CommandsPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
                   <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)' }}>🎁 Daily Bonus</code>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Users claim free coins once every 24 hours</span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Users claim free {currencyName.toLowerCase()} once every 24 hours</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                   {!dailyBonusEnabled && !canAddMore && <Lock size={13} color='#6b7280' />}
@@ -294,9 +300,9 @@ export default function CommandsPage() {
               </div>
               {dailyBonusEnabled && (
                 <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
-                  <label style={labelStyle}>Daily bonus amount (coins)</label>
+                  <label style={labelStyle}>Daily bonus amount ({currencyName})</label>
                   <input type="number" value={dailyBonusAmount} onChange={e => setDailyBonusAmount(Number(e.target.value))} className="input-field" style={{ maxWidth: '200px' }} />
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Amount credited to user balance when they claim the daily bonus</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{dailyBonusAmount} {currencySymbol} credited to user balance each day</div>
                 </div>
               )}
             </div>
