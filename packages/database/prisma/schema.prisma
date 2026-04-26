@@ -13,11 +13,12 @@ model User {
   email        String       @unique
   passwordHash String       @map("password_hash")
   fullName     String       @map("full_name")
-  role         String       @default("creator")
-  plan         String       @default("free")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  bots         Bot[]
-  adCampaigns  AdCampaign[]
+  role               String       @default("creator")
+  plan               String       @default("free")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  advertiserBalance  Float        @default(0) @map("advertiser_balance")
+  bots               Bot[]
+  adCampaigns        AdCampaign[]
   @@map("users")
 }
 
@@ -85,6 +86,10 @@ model BotSettings {
   manualWithdrawal        Boolean @default(false) @map("manual_withdrawal")
   requiredChannels        Json?   @map("required_channels")
   faucetpayWithdrawalKey  String? @map("faucetpay_withdrawal_key")
+  captchaEnabled          Boolean @default(true) @map("captcha_enabled")
+  bonusEnabled            Boolean @default(true) @map("bonus_enabled")
+  bonusAmount             Float?  @map("bonus_amount")
+  leaderboardEnabled      Boolean @default(false) @map("leaderboard_enabled")
   @@map("bot_settings")
 }
 
@@ -103,6 +108,8 @@ model BotUser {
   adConsent        Boolean?      @default(false) @map("ad_consent")
   referredBy       String?       @map("referred_by")
   lastAdReceivedAt DateTime?     @map("last_ad_received_at")
+  lastBonusClaimed DateTime?     @map("last_bonus_claimed")
+  totalEarned      Decimal       @default(0) @map("total_earned")
   transactions     Transaction[]
   depositTransactions DepositTransaction[]
   adImpressions    AdImpression[]
