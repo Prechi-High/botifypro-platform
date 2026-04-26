@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Users, DollarSign, TrendingUp, ArrowUpRight, Zap } from 'lucide-react'
+import { Bot, Users, DollarSign, TrendingUp, ArrowUpRight, Zap, Megaphone } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -209,6 +210,40 @@ export default function DashboardHome() {
           )
         })}
       </div>
+
+      <Link href="/dashboard/advertise" style={{ textDecoration: 'none' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          background: 'linear-gradient(135deg, rgba(139,92,246,0.12) 0%, rgba(59,130,246,0.12) 100%)',
+          border: '1px solid rgba(139,92,246,0.3)',
+          borderRadius: '16px',
+          padding: '20px 24px',
+          cursor: 'pointer',
+          transition: 'opacity 0.15s'
+        }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        >
+          <div style={{
+            width: '44px', height: '44px', borderRadius: '12px', flexShrink: 0,
+            background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Megaphone size={20} color='white'/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              📣 Advertise on 1-TouchBot
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+              Reach thousands of active bot users across the network
+            </div>
+          </div>
+          <ArrowUpRight size={18} color='var(--text-muted)'/>
+        </div>
+      </Link>
 
       <style>{`
         @media (min-width: 1024px) {
