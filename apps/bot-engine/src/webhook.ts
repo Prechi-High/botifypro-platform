@@ -38,7 +38,11 @@ export async function getOrCreateBotUser(botId: string, telegramUser: any) {
   }
 }
 
-export async function checkChannelMembership(channelId: string, telegramUserId: number, botToken: string): Promise<boolean> {
+export async function checkChannelMembership(
+  channelId: string,
+  telegramUserId: number,
+  botToken: string
+): Promise<boolean> {
   try {
     const response = await axios.get(
       `https://api.telegram.org/bot${botToken}/getChatMember`,
@@ -47,6 +51,22 @@ export async function checkChannelMembership(channelId: string, telegramUserId: 
     const status = response.data?.result?.status
     return ['member', 'administrator', 'creator', 'restricted'].includes(status)
   } catch (error: any) {
+    const errData = error.response?.data
+    const description = errData?.description || ''
+
+    // If bot is not admin in channel, skip this channel check
+    // (bot owner must add bot as admin — warn in logs but don't block user)
+    if (description.includes('inaccessible') ||
+        description.includes('administrator') ||
+        error.response?.status === 400) {
+      logger.warn('Channel membership check skipped - bot not admin in channel', {
+        channelId,
+        error: description,
+        note: 'Add bot as admin to this channel to enforce membership'
+      })
+      return true // fail open - can't verify, don't block user
+    }
+
     logger.error('checkChannelMembership failed', { error: error.message, channelId })
     return false
   }
@@ -129,19 +149,42 @@ async function getChannels(bot: any): Promise<Array<{ id: string; username?: str
   return channels
 }
 
-async function showChannelGate(bot: any, chatId: number, unverified: Array<{ id: string; username?: string; title?: string }>) {
-  const joinButtons: any[] = unverified.map((ch, i) => {
-    const link = ch.username
-      ? `https://t.me/${ch.username.replace('@', '')}`
-      : `https://t.me/${String(ch.id).replace('-100', '')}`
-    return [{ text: `📢 Join ${ch.title || ch.username || `Channel ${i + 1}`}`, url: link }]
-  })
-  joinButtons.push([{ text: "✅ I've Joined All — Check Now", callback_data: 'cmd_check_channel' }])
+async function showChannelGate(
+  bot: any,
+  chatId: number,
+  unverified: Array<{ id: string; username?: string; title?: string }>
+) {
+  // Build channel buttons 2 per row
+  const channelRows: any[][] = []
+  for (let i = 0; i < unverified.length; i += 2) {
+    const row: any[] = []
+    const ch1 = unverified[i]
+    const link1 = ch1.username
+      ? `https://t.me/${ch1.username.replace('@', '')}`
+      : `https://t.me/${String(ch1.id).replace('-100', '')}`
+    row.push({ text: `📢 ${ch1.title || ch1.username || `Channel ${i + 1}`}`, url: link1 })
+
+    if (i + 1 < unverified.length) {
+      const ch2 = unverified[i + 1]
+      const link2 = ch2.username
+        ? `https://t.me/${ch2.username.replace('@', '')}`
+        : `https://t.me/${String(ch2.id).replace('-100', '')}`
+      row.push({ text: `📢 ${ch2.title || ch2.username || `Channel ${i + 2}`}`, url: link2 })
+    }
+    channelRows.push(row)
+  }
+
+  // Add check button as full width row at bottom
+  channelRows.push([{
+    text: "✅ I've Joined All — Check Now",
+    callback_data: 'cmd_check_channel'
+  }])
+
   await sendMessage(
     bot.botToken, chatId,
     `📢 <b>Join Required Channels</b>\n\n` +
-    `Please join ${unverified.length > 1 ? 'all channels' : 'the channel'} below to use this bot:`,
-    { inline_keyboard: joinButtons }
+    `Please join ${unverified.length > 1 ? 'all ' + unverified.length + ' channels' : 'the channel'} below to use this bot:`,
+    { inline_keyboard: channelRows }
   )
 }
 
@@ -169,7 +212,14 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
 
     if (!telegramUser || !chatId) return
 
-    const botUser = await getOrCreateBotUser(bot.id, telegramUser)
+    await getOrCreateBotUser(bot.id, telegramUser)
+    const botUser = await prisma.botUser.findUnique({
+      where: { botId_telegramUserId: {
+        botId: bot.id,
+        telegramUserId: BigInt(telegramUser.id)
+      }}
+    })
+    if (!botUser) return
     if (botUser.isBanned) return
 
     // ── CAPTCHA GATE ──────────────────────────────────────────────────────────
