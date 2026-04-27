@@ -97,12 +97,18 @@ export default function UsersPage() {
 
   // Broadcast state
   const [broadcastImage, setBroadcastImage] = useState('')
+  const [broadcastImagePreview, setBroadcastImagePreview] = useState('')
+  const [broadcastImageFile, setBroadcastImageFile] = useState<File | null>(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [broadcastText, setBroadcastText] = useState('')
-  const [broadcastBtnText, setBroadcastBtnText] = useState('')
   const [broadcastBtnType, setBroadcastBtnType] = useState('url')
   const [broadcastBtnLink, setBroadcastBtnLink] = useState('')
   const [broadcasting, setBroadcasting] = useState(false)
   const [broadcastProgress, setBroadcastProgress] = useState(0)
+
+  // Notification badge state
+  const [newUsersCount, setNewUsersCount] = useState(0)
+  const [pendingWithdrawalsCount, setPendingWithdrawalsCount] = useState(0)
 
   useEffect(() => {
     const c = () => setMobile(window.innerWidth <= 768)
@@ -122,7 +128,12 @@ export default function UsersPage() {
       supabase.from('bot_users').select('*').eq('bot_id', botId).order('joined_at', { ascending: false }),
       supabase.from('bot_settings').select('currency_symbol,currency_name,usd_to_currency_rate').eq('bot_id', botId).single()
     ])
-    if (ur.data) setUsers(ur.data)
+    if (ur.data) {
+      setUsers(ur.data)
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const newCount = ur.data.filter((u: any) => u.joined_at > oneDayAgo).length
+      setNewUsersCount(newCount)
+    }
     if (sr.data) setSettings(sr.data)
 
     // Load bot settings for withdrawal passphrase
@@ -131,6 +142,14 @@ export default function UsersPage() {
       .select('manual_withdrawal, withdrawal_passphrase, faucetpay_withdrawal_key, faucetpay_api_key')
       .eq('bot_id', botId).single()
     setBotSettings(bs)
+
+    const { count: pendingCount } = await supabase
+      .from('transactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('bot_id', botId)
+      .eq('type', 'withdrawal')
+      .eq('status', 'pending')
+    setPendingWithdrawalsCount(pendingCount || 0)
 
     setLoading(false)
   }, [botId])
@@ -146,6 +165,8 @@ export default function UsersPage() {
       .eq('type', 'withdrawal')
       .order('created_at', { ascending: false })
     setWithdrawals(data || [])
+    const pendingCount = (data || []).filter((w: any) => w.status === 'pending').length
+    setPendingWithdrawalsCount(pendingCount)
     setLoadingWithdrawals(false)
   }
 
@@ -206,17 +227,18 @@ export default function UsersPage() {
             })
           })
         } catch {}
-        const { data: botUser } = await supabase
-          .from('bot_users')
-          .select('id, balance')
-          .eq('bot_id', botId)
-          .eq('telegram_user_id', String(w.bot_users?.telegram_user_id))
-          .single()
-        if (botUser) {
-          await supabase
+        if (w?.bot_user_id) {
+          const { data: botUser } = await supabase
             .from('bot_users')
-            .update({ balance: Number(botUser.balance) + Number(w.amount_currency) })
-            .eq('id', botUser.id)
+            .select('id, balance')
+            .eq('id', w.bot_user_id)
+            .single()
+          if (botUser) {
+            await supabase
+              .from('bot_users')
+              .update({ balance: Number(botUser.balance) + Number(w.amount_currency || 0) })
+              .eq('id', botUser.id)
+          }
         }
       }
       notify('Withdrawal rejected')
@@ -232,6 +254,8 @@ export default function UsersPage() {
     if (!confirm(`Send broadcast to all ${users.length} users?`)) return
     setBroadcasting(true)
     setBroadcastProgress(0)
+    const selectedBtnType = BUTTON_TYPES.find(t => t.value === broadcastBtnType)
+    const btnText = selectedBtnType ? selectedBtnType.label : broadcastBtnType
     const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
     try {
       const res = await fetch(`${BOT_ENGINE_URL}/api/bots/${botId}/broadcast`, {
@@ -240,7 +264,7 @@ export default function UsersPage() {
         body: JSON.stringify({
           text: broadcastText,
           imageUrl: broadcastImage || null,
-          buttonText: broadcastBtnText || null,
+          buttonText: broadcastBtnLink ? btnText : null,
           buttonUrl: broadcastBtnLink || null,
         })
       })
@@ -377,9 +401,9 @@ export default function UsersPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '4px' }}>
         {[
-          { key: 'users', label: '👥 Users' },
-          { key: 'withdrawals', label: '💸 Withdrawals' },
-          { key: 'broadcast', label: '📣 Broadcast' }
+          { key: 'users', label: '👥 Users', badge: newUsersCount },
+          { key: 'withdrawals', label: '💸 Withdrawals', badge: pendingWithdrawalsCount },
+          { key: 'broadcast', label: '📣 Broadcast', badge: 0 }
         ].map(tab => (
           <button
             key={tab.key}
@@ -392,10 +416,20 @@ export default function UsersPage() {
               background: activeTab === tab.key ? 'rgba(59,130,246,0.15)' : 'transparent',
               color: activeTab === tab.key ? '#60A5FA' : 'var(--text-secondary)',
               fontSize: '13px', fontWeight: activeTab === tab.key ? 600 : 400,
-              cursor: 'pointer'
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
             }}
           >
             {tab.label}
+            {tab.badge > 0 && (
+              <span style={{
+                background: '#EF4444', color: 'white',
+                borderRadius: '999px', padding: '1px 6px',
+                fontSize: '10px', fontWeight: 700, minWidth: '16px',
+                textAlign: 'center', lineHeight: '16px'
+              }}>
+                {tab.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -685,8 +719,66 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Image URL (optional)</label>
-                <input value={broadcastImage} onChange={e => setBroadcastImage(e.target.value)} className="input-field" placeholder="https://example.com/image.jpg" />
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Image (optional)</label>
+                <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                  <input
+                    value={broadcastImage}
+                    onChange={e => { setBroadcastImage(e.target.value); setBroadcastImagePreview(e.target.value) }}
+                    className="input-field"
+                    placeholder="Paste image URL..."
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ height: '1px', flex: 1, background: 'rgba(255,255,255,0.08)' }} />
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>or</span>
+                    <div style={{ height: '1px', flex: 1, background: 'rgba(255,255,255,0.08)' }} />
+                  </div>
+                  <label style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                    border: '1px dashed rgba(255,255,255,0.15)',
+                    background: 'rgba(255,255,255,0.02)',
+                    color: 'var(--text-secondary)', fontSize: '13px'
+                  }}>
+                    📁 Upload Image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > 5000000) { notify('Image too large. Max 5MB.', false); return }
+                        setUploadingImage(true)
+                        try {
+                          const reader = new FileReader()
+                          reader.onload = (ev) => {
+                            const dataUrl = ev.target?.result as string
+                            setBroadcastImage(dataUrl)
+                            setBroadcastImagePreview(dataUrl)
+                          }
+                          reader.readAsDataURL(file)
+                        } catch { notify('Failed to load image', false) }
+                        setUploadingImage(false)
+                      }}
+                    />
+                  </label>
+                  {broadcastImagePreview && (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img
+                        src={broadcastImagePreview}
+                        alt="Preview"
+                        style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}
+                        onError={() => setBroadcastImagePreview('')}
+                      />
+                      <button
+                        onClick={() => { setBroadcastImage(''); setBroadcastImagePreview('') }}
+                        style={{ position: 'absolute', top: '6px', right: '6px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', color: 'white', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -694,17 +786,11 @@ export default function UsersPage() {
                 <textarea value={broadcastText} onChange={e => setBroadcastText(e.target.value)} className="input-field" style={{ minHeight: '120px' }} placeholder="Enter your broadcast message..." />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Type</label>
-                  <select value={broadcastBtnType} onChange={e => setBroadcastBtnType(e.target.value)} className="input-field" style={{ color: '#1e293b', background: 'white' }}>
-                    {BUTTON_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Text</label>
-                  <input value={broadcastBtnText} onChange={e => setBroadcastBtnText(e.target.value)} className="input-field" placeholder="e.g. Join Now" />
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Type</label>
+                <select value={broadcastBtnType} onChange={e => setBroadcastBtnType(e.target.value)} className="input-field" style={{ color: '#1e293b', background: 'white' }}>
+                  {BUTTON_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </div>
 
               <div>
