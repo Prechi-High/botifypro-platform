@@ -307,16 +307,34 @@ app.post('/api/bots/:botId/broadcast', async (req: Request, res: Response) => {
     for (const user of users) {
       try {
         if (imageUrl) {
-          await axios.post(
-            `https://api.telegram.org/bot${bot.botToken}/sendPhoto`,
-            {
-              chat_id: Number(user.telegramUserId),
-              photo: imageUrl,
-              caption: text,
-              parse_mode: 'HTML',
-              reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
-            }
-          )
+          if (imageUrl.startsWith('data:')) {
+            const base64Data = imageUrl.split(',')[1]
+            const mimeType = imageUrl.split(';')[0].split(':')[1]
+            const buffer = Buffer.from(base64Data, 'base64')
+            const FormData = require('form-data')
+            const form = new FormData()
+            form.append('chat_id', String(Number(user.telegramUserId)))
+            form.append('caption', text)
+            form.append('parse_mode', 'HTML')
+            form.append('photo', buffer, { filename: 'image.jpg', contentType: mimeType })
+            if (replyMarkup) form.append('reply_markup', JSON.stringify(replyMarkup))
+            await axios.post(
+              `https://api.telegram.org/bot${bot.botToken}/sendPhoto`,
+              form,
+              { headers: form.getHeaders() }
+            )
+          } else {
+            await axios.post(
+              `https://api.telegram.org/bot${bot.botToken}/sendPhoto`,
+              {
+                chat_id: Number(user.telegramUserId),
+                photo: imageUrl,
+                caption: text,
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
+              }
+            )
+          }
         } else {
           await axios.post(
             `https://api.telegram.org/bot${bot.botToken}/sendMessage`,
