@@ -154,7 +154,6 @@ async function showChannelGate(
   chatId: number,
   unverified: Array<{ id: string; username?: string; title?: string }>
 ) {
-  // Build channel buttons 2 per row
   const channelRows: any[][] = []
   for (let i = 0; i < unverified.length; i += 2) {
     const row: any[] = []
@@ -162,28 +161,22 @@ async function showChannelGate(
     const link1 = ch1.username
       ? `https://t.me/${ch1.username.replace('@', '')}`
       : `https://t.me/${String(ch1.id).replace('-100', '')}`
-    row.push({ text: `📢 ${ch1.title || ch1.username || `Channel ${i + 1}`}`, url: link1 })
-
+    row.push({ text: `📢 ${ch1.title || ch1.username || 'Channel'}`, url: link1 })
     if (i + 1 < unverified.length) {
       const ch2 = unverified[i + 1]
       const link2 = ch2.username
         ? `https://t.me/${ch2.username.replace('@', '')}`
         : `https://t.me/${String(ch2.id).replace('-100', '')}`
-      row.push({ text: `📢 ${ch2.title || ch2.username || `Channel ${i + 2}`}`, url: link2 })
+      row.push({ text: `📢 ${ch2.title || ch2.username || 'Channel'}`, url: link2 })
     }
     channelRows.push(row)
   }
-
-  // Add check button as full width row at bottom
-  channelRows.push([{
-    text: "✅ I've Joined All — Check Now",
-    callback_data: 'cmd_check_channel'
-  }])
+  channelRows.push([{ text: "✅ I've Joined All — Check Now", callback_data: 'cmd_check_channel' }])
 
   await sendMessage(
     bot.botToken, chatId,
     `📢 <b>Join Required Channels</b>\n\n` +
-    `Please join ${unverified.length > 1 ? 'all ' + unverified.length + ' channels' : 'the channel'} below to use this bot:`,
+    `Please join ${unverified.length > 1 ? 'all ' + unverified.length + ' channels' : 'the channel'} below:`,
     { inline_keyboard: channelRows }
   )
 }

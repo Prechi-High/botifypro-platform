@@ -53,9 +53,7 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
   const replyMarkup = { keyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
 
   if (settings.welcomeMessageEnabled !== false && settings.welcomeMessage) {
-    const sym = settings.currencySymbol || '🪙'
-    const balanceText = `\n\n💰 Balance: ${botUser.balance} ${sym}`
-    await sendMessage(bot.botToken, chatId, settings.welcomeMessage + balanceText, replyMarkup)
+    await sendMessage(bot.botToken, chatId, settings.welcomeMessage, replyMarkup)
   } else {
     await sendMessage(bot.botToken, chatId, '👋 Welcome back!', replyMarkup)
   }
@@ -63,16 +61,12 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
   const sym = bot.settings?.currencySymbol || '🪙'
-  const currencyName = bot.settings?.currencyName || 'coins'
-  const rate = Number(bot.settings?.usdToCurrencyRate) || 1000
-  const usdValue = (Number(botUser.balance) / rate).toFixed(4)
 
   await sendMessage(
     bot.botToken, chatId,
     `🏦 <b>Account Balance Overview</b>\n\n` +
     `• User ID: ${botUser.telegramUserId}\n` +
-    `• Balance: ${botUser.balance} ${sym} (${currencyName})\n` +
-    `• USD Value: ≈ $${usdValue}\n` +
+    `• Balance: ${botUser.balance} ${sym}\n` +
     `• Wallet: ${(botUser as any).walletAddress || 'Not set'}\n\n` +
     `✅ Keep growing. Withdraw anytime!`,
     {
@@ -93,16 +87,6 @@ export async function handleHelp(bot: any, chatId: number) {
   if (settings?.dailyBonusEnabled || settings?.bonusEnabled) buttons.push({ text: '🎁 Daily Bonus', callback_data: 'cmd_bonus' })
   if (settings?.leaderboardEnabled) buttons.push({ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' })
   if (settings?.depositEnabled) buttons.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
-
-  try {
-    const customCommands = await prisma.botCommand.findMany({
-      where: { botId: bot.id, isActive: true },
-      orderBy: { createdAt: 'asc' }
-    })
-    customCommands.forEach((cmd: any) => {
-      buttons.push({ text: cmd.command, callback_data: 'custom_' + cmd.command })
-    })
-  } catch {}
 
   const inline_keyboard: any[][] = []
   for (let i = 0; i < buttons.length; i += 2) {
@@ -165,7 +149,7 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
   )
 }
 
-export async function handleReferralInfo(bot: any, botUser: any, chatId: number) {
+export async function handleReferralInfo(bot: any, botUser: any, chatId: number, messageId?: number) {
   const { getReferralStats } = await import('./referral')
   const stats = await getReferralStats(bot.id, botUser.id)
   const botUsername = bot.botUsername || 'yourbot'
@@ -175,16 +159,23 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
   const rewardAmount = bot.settings?.referralRewardAmount || 100
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join and start earning!')}`
 
+  const subButtons: any[] = []
+  if (bot.settings?.leaderboardEnabled) {
+    subButtons.push([{ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' }])
+  }
+  subButtons.push([{ text: '📤 Share Referral Link', url: shareUrl }])
+  subButtons.push([{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }])
+
   await sendMessage(
     bot.botToken, chatId,
     `🏁 <b>Referral Program Overview</b>\n\n` +
-    `• Reward per invite: ${rewardAmount} ${sym} (${currencyName})\n` +
+    `• Reward per invite: ${rewardAmount} ${sym}\n` +
     `• Total referrals: ${stats.count}\n` +
-    `• Your referral link: ${referralLink}\n\n` +
-    `Total earned: <b>${stats.totalEarned} ${sym} (${currencyName})</b>\n\n` +
+    `• Your referral link:\n${referralLink}\n\n` +
+    `Total earned: <b>${stats.totalEarned} ${sym}</b>\n\n` +
     `⚠️ Please avoid fake or self-referrals.\n` +
     `💬 Share your link and earn more daily!`,
-    { inline_keyboard: [[{ text: '📤 Share Link', url: shareUrl }]] }
+    { inline_keyboard: subButtons }
   )
 }
 
