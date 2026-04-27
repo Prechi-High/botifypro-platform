@@ -274,60 +274,62 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
     const captchaDoneKey = `captcha_done:${bot.id}:${botUser.id}`
     const captchaDone = await redisGet(captchaDoneKey)
 
-    if (!captchaDone) {
-      const captchaPendingKey = `captcha_pending:${botUser.id}`
-      const captchaRaw = await redisGet(captchaPendingKey)
+    if (bot.settings?.captchaEnabled) {
+      if (!captchaDone) {
+        const captchaPendingKey = `captcha_pending:${botUser.id}`
+        const captchaRaw = await redisGet(captchaPendingKey)
 
-      if (!captchaRaw) {
-        // First interaction — issue challenge
-        const { question, answer } = makeCaptcha()
-        await redisSet(captchaPendingKey, JSON.stringify({ answer, attempts: 0 }), 300)
-        await sendMessage(
-          bot.botToken, chatId,
-          `👋 <b>Quick Verification</b>\n\nType the number you see below to continue:\n\n` +
-          `<b>${question}</b>\n\n<i>Just type the number exactly as shown.</i>`
-        )
-        return
-      }
-
-      // Captcha pending — evaluate user's reply
-      const { answer, attempts } = JSON.parse(captchaRaw)
-      const incomingText = update.message?.text?.trim() || ''
-      const userAnswer = parseInt(incomingText, 10)
-
-      if (!isNaN(userAnswer) && userAnswer === answer) {
-        // ✅ Passed
-        await redisDel(captchaPendingKey)
-        await redisSet(captchaDoneKey, '1', 31536000) // remember for 1 year
-        const pendingRefKey = `pending_referral:${botUser.id}`
-        const pendingRef = await redisGet(pendingRefKey)
-        if (pendingRef) {
-          await redisDel(pendingRefKey)
-          const { handleReferral } = await import('./referral')
-          await handleReferral(bot, botUser, pendingRef, chatId)
-        }
-        await sendMessage(bot.botToken, chatId, '✅ Verified! Welcome.')
-        await handleStart(bot, botUser, chatId)
-        return
-      } else if (incomingText && !incomingText.startsWith('/')) {
-        // ❌ Wrong answer
-        const newAttempts = attempts + 1
-        if (newAttempts >= 3) {
-          await redisDel(captchaPendingKey)
-          await sendMessage(bot.botToken, chatId, '❌ Verification failed. Send /start to try again.')
+        if (!captchaRaw) {
+          // First interaction — issue challenge
+          const { question, answer } = makeCaptcha()
+          await redisSet(captchaPendingKey, JSON.stringify({ answer, attempts: 0 }), 300)
+          await sendMessage(
+            bot.botToken, chatId,
+            `👋 <b>Quick Verification</b>\n\nType the number you see below to continue:\n\n` +
+            `<b>${question}</b>\n\n<i>Just type the number exactly as shown.</i>`
+          )
           return
         }
-        const { question: q2, answer: a2 } = makeCaptcha()
-        await redisSet(captchaPendingKey, JSON.stringify({ answer: a2, attempts: newAttempts }), 300)
-        await sendMessage(
-          bot.botToken, chatId,
-          `❌ Incorrect. ${3 - newAttempts} attempt(s) remaining.\n\n<b>${q2}</b>`
-        )
-        return
-      } else {
-        // Command or callback while captcha pending
-        await sendMessage(bot.botToken, chatId, '🔐 Please answer the verification question first.')
-        return
+
+        // Captcha pending — evaluate user's reply
+        const { answer, attempts } = JSON.parse(captchaRaw)
+        const incomingText = update.message?.text?.trim() || ''
+        const userAnswer = parseInt(incomingText, 10)
+
+        if (!isNaN(userAnswer) && userAnswer === answer) {
+          // ✅ Passed
+          await redisDel(captchaPendingKey)
+          await redisSet(captchaDoneKey, '1', 31536000) // remember for 1 year
+          const pendingRefKey = `pending_referral:${botUser.id}`
+          const pendingRef = await redisGet(pendingRefKey)
+          if (pendingRef) {
+            await redisDel(pendingRefKey)
+            const { handleReferral } = await import('./referral')
+            await handleReferral(bot, botUser, pendingRef, chatId)
+          }
+          await sendMessage(bot.botToken, chatId, '✅ Verified! Welcome.')
+          await handleStart(bot, botUser, chatId)
+          return
+        } else if (incomingText && !incomingText.startsWith('/')) {
+          // ❌ Wrong answer
+          const newAttempts = attempts + 1
+          if (newAttempts >= 3) {
+            await redisDel(captchaPendingKey)
+            await sendMessage(bot.botToken, chatId, '❌ Verification failed. Send /start to try again.')
+            return
+          }
+          const { question: q2, answer: a2 } = makeCaptcha()
+          await redisSet(captchaPendingKey, JSON.stringify({ answer: a2, attempts: newAttempts }), 300)
+          await sendMessage(
+            bot.botToken, chatId,
+            `❌ Incorrect. ${3 - newAttempts} attempt(s) remaining.\n\n<b>${q2}</b>`
+          )
+          return
+        } else {
+          // Command or callback while captcha pending
+          await sendMessage(bot.botToken, chatId, '🔐 Please answer the verification question first.')
+          return
+        }
       }
     }
 
