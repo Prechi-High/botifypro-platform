@@ -343,6 +343,34 @@ app.post('/api/bots/:botId/broadcast', async (req: Request, res: Response) => {
   }
 })
 
+app.post('/api/bots/:botId/notify-user', async (req: Request, res: Response) => {
+  try {
+    const { botId } = req.params
+    const { telegramUserId, message } = req.body
+
+    if (!telegramUserId || !message) {
+      return res.status(400).json({ error: 'telegramUserId and message required' })
+    }
+
+    const bot = await prisma.bot.findUnique({ where: { id: botId } })
+    if (!bot) return res.status(404).json({ error: 'Bot not found' })
+
+    await axios.post(
+      `https://api.telegram.org/bot${bot.botToken}/sendMessage`,
+      {
+        chat_id: Number(telegramUserId),
+        text: message,
+        parse_mode: 'HTML'
+      }
+    )
+
+    return res.json({ success: true })
+  } catch (err: any) {
+    logger.error('notify-user error', { error: err.message })
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   logger.info('1-TouchBot Bot Engine starting', { port: PORT })

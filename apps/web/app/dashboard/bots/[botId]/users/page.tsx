@@ -206,10 +206,18 @@ export default function UsersPage() {
             })
           })
         } catch {}
-        await supabase
+        const { data: botUser } = await supabase
           .from('bot_users')
-          .update({ balance: supabase.rpc('increment', { x: Number(w?.amount_currency || 0) }) })
-          .eq('id', w?.bot_user_id)
+          .select('id, balance')
+          .eq('bot_id', botId)
+          .eq('telegram_user_id', String(w.bot_users?.telegram_user_id))
+          .single()
+        if (botUser) {
+          await supabase
+            .from('bot_users')
+            .update({ balance: Number(botUser.balance) + Number(w.amount_currency) })
+            .eq('id', botUser.id)
+        }
       }
       notify('Withdrawal rejected')
       setRejectingId(null)
