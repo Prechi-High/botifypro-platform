@@ -330,8 +330,12 @@ app.post('/api/bots/:botId/broadcast', async (req: Request, res: Response) => {
         }
         sent++
         await new Promise(r => setTimeout(r, 50))
-      } catch {
+      } catch (err: any) {
         failed++
+        logger.error('Broadcast send failed', {
+          telegramUserId: String(user.telegramUserId),
+          error: err.response?.data?.description || err.message
+        })
       }
     }
 
