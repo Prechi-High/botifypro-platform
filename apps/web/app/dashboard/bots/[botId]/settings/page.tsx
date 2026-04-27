@@ -321,7 +321,10 @@ export default function BotSettingsPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className={`pulse-dot ${webhookStatus ? 'green' : 'red'}`} />
+              {webhookStatus
+                ? <i className="fa-solid fa-circle-check" style={{ color: '#10B981', fontSize: '14px' }}></i>
+                : <i className="fa-solid fa-circle-xmark" style={{ color: '#EF4444', fontSize: '14px' }}></i>
+              }
               <span style={{ fontSize: '13px', fontWeight: 500, color: webhookStatus ? '#10B981' : '#FCA5A5' }}>
                 {webhookStatus ? 'Webhook active — bot is receiving messages' : 'Webhook not set — bot cannot receive messages'}
               </span>
@@ -338,7 +341,7 @@ export default function BotSettingsPage() {
 
           {/* Welcome */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}>Welcome message</h3>
+            <h3 style={sectionTitle}><i className="fa-solid fa-comment-dots" style={{ marginRight: '8px', color: '#3B82F6' }}></i>Welcome Message</h3>
             <ToggleRow
               label="Send welcome message"
               desc="Show a message when users first start the bot"
@@ -361,7 +364,7 @@ export default function BotSettingsPage() {
 
           {/* Security */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}>Security</h3>
+            <h3 style={sectionTitle}><i className="fa-solid fa-shield-halved" style={{ marginRight: '8px', color: '#3B82F6' }}></i>Security</h3>
             <ToggleRow
               label="Captcha verification"
               desc="New users must solve a math challenge before accessing the bot"
@@ -372,7 +375,7 @@ export default function BotSettingsPage() {
 
           {/* Currency */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}>💱 Currency</h3>
+            <h3 style={sectionTitle}><i className="fa-solid fa-coins" style={{ marginRight: '8px', color: '#F59E0B' }}></i>Currency</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={labelStyle}>Currency name</label>
@@ -414,7 +417,7 @@ export default function BotSettingsPage() {
 
           {/* Channels */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}>📢 Channels</h3>
+            <h3 style={sectionTitle}><i className="fa-solid fa-bullhorn" style={{ marginRight: '8px', color: '#10B981' }}></i>Channels</h3>
             <ToggleRow
               label="Require channel join"
               desc="Users must join all listed channels before using the bot"
@@ -493,7 +496,7 @@ export default function BotSettingsPage() {
 
           {/* Withdrawal Settings */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}>📤 Withdrawal Settings</h3>
+            <h3 style={sectionTitle}><i className="fa-solid fa-money-bill-transfer" style={{ marginRight: '8px', color: '#8B5CF6' }}></i>Withdrawal Settings</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
               <div>

@@ -409,7 +409,13 @@ export default function UsersPage() {
             key={tab.key}
             onClick={() => {
               setActiveTab(tab.key as any)
-              if (tab.key === 'withdrawals') loadWithdrawals()
+              if (tab.key === 'withdrawals') {
+                loadWithdrawals()
+                setPendingWithdrawalsCount(0)
+              }
+              if (tab.key === 'users') {
+                setNewUsersCount(0)
+              }
             }}
             style={{
               flex: 1, padding: '8px 12px', borderRadius: '8px', border: 'none',
