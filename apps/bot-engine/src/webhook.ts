@@ -178,6 +178,18 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       const captchaDone = await redisGet(captchaDoneKey)
 
       if (!captchaDone) {
+        // Allow callback queries to pass through only if it's
+        // a captcha-related callback (none exist, so block all callbacks)
+        if (update.callback_query) {
+          try {
+            await axios.post(
+              `https://api.telegram.org/bot${bot.botToken}/answerCallbackQuery`,
+              { callback_query_id: update.callback_query.id, text: '🔐 Complete verification first' }
+            )
+          } catch {}
+          return
+        }
+
         const captchaPendingKey = `captcha_pending:${bot.id}:${botUser.id}`
         const captchaRaw = await redisGet(captchaPendingKey)
 
@@ -247,6 +259,17 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       const channels = await getChannels(bot)
 
       if (channels.length > 0) {
+        // Allow cmd_check_channel callback through, block everything else
+        if (update.callback_query && update.callback_query.data !== 'cmd_check_channel') {
+          try {
+            await axios.post(
+              `https://api.telegram.org/bot${bot.botToken}/answerCallbackQuery`,
+              { callback_query_id: update.callback_query.id, text: '📢 Join required channels first' }
+            )
+          } catch {}
+          return
+        }
+
         const unverified: typeof channels = []
         for (const ch of channels) {
           const isMember = await checkChannelMembership(ch.id, Number(telegramUser.id), bot.botToken)

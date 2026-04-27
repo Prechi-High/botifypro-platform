@@ -191,6 +191,19 @@ export default function BotSettingsPage() {
       setRequiredChannels(updated)
       setNewChannelUsername('')
       toast.success('Channel added and verified ✓')
+      try {
+        const { error } = await supabase
+          .from('bot_settings')
+          .update({
+            required_channels: updated,
+            require_channel_join: true
+          })
+          .eq('bot_id', botId)
+        if (error) throw error
+        toast.success('Channel saved ✓')
+      } catch (e: any) {
+        toast.error('Channel added but failed to save: ' + e.message)
+      }
     } catch {
       toast.error('Failed to add channel')
     }
@@ -374,7 +387,17 @@ export default function BotSettingsPage() {
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{ch.username} · {ch.id}</div>
                         </div>
                         <button
-                          onClick={() => setRequiredChannels(prev => prev.filter((_, idx) => idx !== i))}
+                          onClick={() => {
+                            const updated = requiredChannels.filter((_, idx) => idx !== i)
+                            setRequiredChannels(updated)
+                            supabase.from('bot_settings')
+                              .update({ required_channels: updated })
+                              .eq('bot_id', botId)
+                              .then(({ error }) => {
+                                if (error) toast.error('Failed to remove channel')
+                                else toast.success('Channel removed ✓')
+                              })
+                          }}
                           style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '6px', color: '#FCA5A5', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}
                         >
                           Remove

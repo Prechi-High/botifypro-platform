@@ -73,7 +73,7 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
     `• User ID: ${botUser.telegramUserId}\n` +
     `• Balance: ${botUser.balance} ${sym} (${currencyName})\n` +
     `• USD Value: ≈ $${usdValue}\n` +
-    `• Wallet: ${botUser.walletAddress || 'Not set'}\n\n` +
+    `• Wallet: ${(botUser as any).walletAddress || 'Not set'}\n\n` +
     `✅ Keep growing. Withdraw anytime!`,
     {
       inline_keyboard: [[
