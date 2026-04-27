@@ -93,17 +93,19 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 }
 
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
-  const usdValue = (Number(botUser.balance) / Number(bot.settings.usdToCurrencyRate)).toFixed(4)
-  const text =
-    '💰 <b>Your Balance</b>\n\n' +
-    botUser.balance + ' ' + bot.settings.currencySymbol +
-    '\n≈ $' + usdValue + ' USD'
-  const balanceButtons: any[] = []
-  if (bot.settings?.depositEnabled) balanceButtons.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
-  if (bot.settings?.withdrawEnabled) balanceButtons.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
-  await sendMessage(
-    bot.botToken, chatId, text,
-    balanceButtons.length > 0 ? { inline_keyboard: [balanceButtons] } : undefined
+  const sym = bot.settings?.currencySymbol || '🪙'
+  const currencyName = bot.settings?.currencyName || 'coins'
+  await sendMessage(bot.botToken, chatId,
+    `🏦 <b>Account Balance Overview</b>\n\n` +
+    `• User ID: ${botUser.telegramUserId}\n` +
+    `• Balance: ${botUser.balance} ${sym} (${currencyName})\n` +
+    `• Wallet: ${botUser.walletAddress || 'Not set'}\n\n` +
+    `✅ Keep growing. Withdraw anytime!`,
+    {
+      inline_keyboard: [[
+        { text: '📢 Advertise with AdsGalaxy', url: 'https://t.me/Ads_Galaxy_bot' }
+      ]]
+    }
   )
 }
 
@@ -212,17 +214,18 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
   const referralLink = `https://t.me/${botUsername}?start=ref_${botUser.id}`
   const sym = bot.settings?.currencySymbol || '🪙'
   const rewardAmount = bot.settings?.referralRewardAmount || 100
+  const currencyName = bot.settings?.currencyName || 'coins'
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join and start earning!')}`
 
   await sendMessage(
     bot.botToken,
     chatId,
     `👥 <b>Referral Program</b>\n\n` +
-    `Earn <b>${rewardAmount} ${sym}</b> for every friend you invite!\n\n` +
+    `Earn <b>${rewardAmount} ${sym} (${currencyName})</b> for every friend you invite!\n\n` +
     `🔗 <b>Your referral link:</b>\n<code>${referralLink}</code>\n\n` +
     `📊 <b>Your Stats</b>\n` +
     `Referrals: <b>${stats.count}</b>\n` +
-    `Total earned: <b>${stats.totalEarned} ${sym}</b>`,
+    `Total earned: <b>${stats.totalEarned} ${sym} (${currencyName})</b>`,
     {
       inline_keyboard: [[{ text: '📤 Share Link', url: shareUrl }]]
     }
@@ -236,6 +239,7 @@ export async function handleLeaderboard(bot: any, botUser: any, chatId: number) 
   }
 
   const sym = bot.settings?.currencySymbol || '🪙'
+  const currencyName = bot.settings?.currencyName || 'coins'
   const topUsers = await prisma.botUser.findMany({
     where: { botId: bot.id, isBanned: false },
     orderBy: { balance: 'desc' },

@@ -271,63 +271,63 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
     if (botUser.isBanned) return
 
     // ── Captcha verification (one-time for each new user) ──────────────────────
-    const captchaDoneKey = `captcha_done:${bot.id}:${botUser.id}`
-    const captchaDone = await redisGet(captchaDoneKey)
-
     if (bot.settings?.captchaEnabled) {
+      const captchaDoneKey = `captcha_done:${bot.id}:${botUser.id}`
+      const captchaDone = await redisGet(captchaDoneKey)
+
       if (!captchaDone) {
         const captchaPendingKey = `captcha_pending:${botUser.id}`
         const captchaRaw = await redisGet(captchaPendingKey)
 
         if (!captchaRaw) {
-          // First interaction — issue challenge
-          const { question, answer } = makeCaptcha()
+          const answer = Math.floor(Math.random() * 90) + 10
           await redisSet(captchaPendingKey, JSON.stringify({ answer, attempts: 0 }), 300)
           await sendMessage(
             bot.botToken, chatId,
-            `👋 <b>Quick Verification</b>\n\nType the number you see below to continue:\n\n` +
-            `<b>${question}</b>\n\n<i>Just type the number exactly as shown.</i>`
+            `👋 <b>Quick Verification</b>\n\nType the number shown below to continue:\n\n` +
+            `🔢 <b>${answer}</b>\n\n<i>Just type the number exactly.</i>`
           )
           return
         }
 
-        // Captcha pending — evaluate user's reply
         const { answer, attempts } = JSON.parse(captchaRaw)
         const incomingText = update.message?.text?.trim() || ''
         const userAnswer = parseInt(incomingText, 10)
 
         if (!isNaN(userAnswer) && userAnswer === answer) {
-          // ✅ Passed
           await redisDel(captchaPendingKey)
-          await redisSet(captchaDoneKey, '1', 31536000) // remember for 1 year
+          await redisSet(captchaDoneKey, '1', 31536000)
+
+          // Credit pending referral only if no channel gate remains
           const pendingRefKey = `pending_referral:${botUser.id}`
           const pendingRef = await redisGet(pendingRefKey)
-          if (pendingRef) {
+          const needsChannels = bot.settings?.requireChannelJoin && !botUser.channelVerified
+          if (pendingRef && !needsChannels) {
             await redisDel(pendingRefKey)
             const { handleReferral } = await import('./referral')
             await handleReferral(bot, botUser, pendingRef, chatId)
           }
+
           await sendMessage(bot.botToken, chatId, '✅ Verified! Welcome.')
-          await handleStart(bot, botUser, chatId)
+          const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
+          await handleStart(bot, freshUser, chatId)
           return
         } else if (incomingText && !incomingText.startsWith('/')) {
-          // ❌ Wrong answer
           const newAttempts = attempts + 1
           if (newAttempts >= 3) {
             await redisDel(captchaPendingKey)
-            await sendMessage(bot.botToken, chatId, '❌ Verification failed. Send /start to try again.')
+            await sendMessage(bot.botToken, chatId, '❌ Too many wrong attempts. Send /start to try again.')
             return
           }
-          const { question: q2, answer: a2 } = makeCaptcha()
-          await redisSet(captchaPendingKey, JSON.stringify({ answer: a2, attempts: newAttempts }), 300)
+          const newAnswer = Math.floor(Math.random() * 90) + 10
+          await redisSet(captchaPendingKey, JSON.stringify({ answer: newAnswer, attempts: newAttempts }), 300)
           await sendMessage(
             bot.botToken, chatId,
-            `❌ Incorrect. ${3 - newAttempts} attempt(s) remaining.\n\n<b>${q2}</b>`
+            `❌ Wrong. ${3 - newAttempts} attempt(s) left.\n\n🔢 <b>${newAnswer}</b>`
           )
           return
         } else {
-          // Command or callback while captcha pending
-          await sendMessage(bot.botToken, chatId, '🔐 Please answer the verification question first.')
+          await sendMessage(bot.botToken, chatId, '🔐 Please complete verification first. Type the number shown.')
           return
         }
       }
@@ -452,14 +452,14 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         const startParam = (text.split(' ')[1] || '').trim()
         if (startParam.startsWith('ref_') && !botUser.referredBy) {
           const referrerId = startParam.replace('ref_', '')
+          const captchaDoneKey = `captcha_done:${bot.id}:${botUser.id}`
+          const captchaDone = await redisGet(captchaDoneKey)
           const needsCaptcha = bot.settings?.captchaEnabled && !captchaDone
           const needsChannels = bot.settings?.requireChannelJoin && !botUser.channelVerified
 
           if (needsCaptcha || needsChannels) {
-            // Store referral for after verification completes
             await redisSet(`pending_referral:${botUser.id}`, referrerId, 86400)
           } else {
-            // No gates — credit immediately
             const { handleReferral } = await import('./referral')
             await handleReferral(bot, botUser, referrerId, chatId)
           }
@@ -545,7 +545,8 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           if (pendingRef) {
             await redisDel(pendingRefKey)
             const { handleReferral } = await import('./referral')
-            await handleReferral(bot, botUser, pendingRef, cbChatId)
+            const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
+            await handleReferral(bot, freshUser || botUser, pendingRef, cbChatId)
           }
           const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
           await handleStart(bot, updatedUser, cbChatId)
