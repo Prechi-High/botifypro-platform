@@ -279,6 +279,70 @@ app.post('/webhooks/oxapay-ads/:userId', async (req: Request, res: Response) => 
   }
 })
 
+app.post('/api/bots/:botId/broadcast', async (req: Request, res: Response) => {
+  try {
+    const { botId } = req.params
+    const { text, imageUrl, buttonText, buttonUrl } = req.body
+
+    if (!text) return res.status(400).json({ error: 'text is required' })
+
+    const bot = await prisma.bot.findUnique({
+      where: { id: botId },
+      include: { settings: true }
+    })
+    if (!bot) return res.status(404).json({ error: 'Bot not found' })
+
+    const users = await prisma.botUser.findMany({
+      where: { botId, isBanned: false },
+      select: { telegramUserId: true }
+    })
+
+    const replyMarkup = buttonText && buttonUrl
+      ? { inline_keyboard: [[{ text: buttonText, url: buttonUrl }]] }
+      : undefined
+
+    let sent = 0
+    let failed = 0
+
+    for (const user of users) {
+      try {
+        if (imageUrl) {
+          await axios.post(
+            `https://api.telegram.org/bot${bot.botToken}/sendPhoto`,
+            {
+              chat_id: Number(user.telegramUserId),
+              photo: imageUrl,
+              caption: text,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
+            }
+          )
+        } else {
+          await axios.post(
+            `https://api.telegram.org/bot${bot.botToken}/sendMessage`,
+            {
+              chat_id: Number(user.telegramUserId),
+              text,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
+            }
+          )
+        }
+        sent++
+        await new Promise(r => setTimeout(r, 50))
+      } catch {
+        failed++
+      }
+    }
+
+    logger.info('Broadcast sent', { botId, sent, failed })
+    return res.json({ success: true, sent, failed })
+  } catch (err: any) {
+    logger.error('Broadcast error', { error: err.message })
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   logger.info('1-TouchBot Bot Engine starting', { port: PORT })
