@@ -87,6 +87,7 @@ model BotSettings {
   requiredChannels        Json?   @map("required_channels")
   faucetpayWithdrawalKey  String? @map("faucetpay_withdrawal_key")
   captchaEnabled          Boolean @default(true) @map("captcha_enabled")
+  withdrawalPassphrase    String? @map("withdrawal_passphrase")
   bonusEnabled            Boolean @default(true) @map("bonus_enabled")
   bonusAmount             Float?  @map("bonus_amount")
   dailyBonusEnabled       Boolean @default(false) @map("daily_bonus_enabled")

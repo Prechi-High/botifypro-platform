@@ -58,6 +58,7 @@ export default function BotSettingsPage() {
   const [requiredChannels, setRequiredChannels] = useState<any[]>([])
   const [newChannelUsername, setNewChannelUsername] = useState('')
   const [addingChannel, setAddingChannel] = useState(false)
+  const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free')
 
   // Withdrawal
   const [withdrawMode, setWithdrawMode] = useState<'manual' | 'automatic' | null>(null)
@@ -65,6 +66,8 @@ export default function BotSettingsPage() {
   const [faucetpayKey, setFaucetpayKey] = useState('')
   const [minWithdrawUsd, setMinWithdrawUsd] = useState(0.5)
   const [withdrawFeePercent, setWithdrawFeePercent] = useState(0)
+  const [withdrawalPassphrase, setWithdrawalPassphrase] = useState('')
+  const [showPassphrase, setShowPassphrase] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -85,6 +88,14 @@ export default function BotSettingsPage() {
         setBotUsername(botRow?.bot_username || 'your bot')
         setWebhookStatus(botRow?.webhook_set || false)
 
+        const { data: auth } = await supabase.auth.getUser()
+        const uid = auth.user?.id
+        if (uid) {
+          const { data: userRow } = await supabase
+            .from('users').select('plan').eq('id', uid).single()
+          setUserPlan(userRow?.plan === 'pro' ? 'pro' : 'free')
+        }
+
         const msg = data.welcome_message || ''
         setWelcomeMessage(msg)
         setWelcomeEnabled(!!msg)
@@ -104,6 +115,7 @@ export default function BotSettingsPage() {
         setMinWithdrawUsd(Number(data.min_withdraw_usd) || 0.5)
         setWithdrawFeePercent(Number(data.withdraw_fee_percent) || 0)
         setWithdrawMode(data.manual_withdrawal ? 'manual' : data.withdraw_enabled ? 'automatic' : null)
+        setWithdrawalPassphrase(data.withdrawal_passphrase || '')
       } catch (e: any) {
         if (cancelled) return
         const message = e?.message || 'Failed to load settings'
@@ -156,13 +168,27 @@ export default function BotSettingsPage() {
     setFixingWebhook(false)
   }
 
+  const channelLimit = userPlan === 'pro' ? 10 : 4
+
+  function parseChannelUsername(input: string): string {
+    const trimmed = input.trim()
+    const tmeLinkMatch = trimmed.match(/(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]+)/)
+    if (tmeLinkMatch) return '@' + tmeLinkMatch[1]
+    if (trimmed.startsWith('@')) return trimmed
+    if (trimmed.match(/^[A-Za-z0-9_]+$/)) return '@' + trimmed
+    return trimmed
+  }
+
   async function addChannel() {
     if (!newChannelUsername.trim()) return
     setAddingChannel(true)
+    if (requiredChannels.length >= channelLimit) {
+      toast.error(`Channel limit reached. ${userPlan === 'free' ? 'Free plan allows 4 channels. Upgrade to Pro for 10.' : 'Pro plan allows 10 channels.'}`)
+      setAddingChannel(false)
+      return
+    }
     try {
-      const clean = newChannelUsername.trim().startsWith('@')
-        ? newChannelUsername.trim()
-        : '@' + newChannelUsername.trim()
+      const clean = parseChannelUsername(newChannelUsername)
 
       const infoRes = await fetch(`${BOT_ENGINE_URL}/api/bots/channel-info`, {
         method: 'POST',
@@ -229,7 +255,8 @@ export default function BotSettingsPage() {
           min_withdraw_usd: minWithdrawUsd,
           withdraw_fee_percent: withdrawFeePercent,
           manual_withdrawal: withdrawMode === 'manual',
-          withdraw_enabled: withdrawMode !== null
+          withdraw_enabled: withdrawMode !== null,
+          withdrawal_passphrase: withdrawalPassphrase || null
         })
         .eq('bot_id', botId)
       if (upErr) throw upErr
@@ -353,7 +380,52 @@ export default function BotSettingsPage() {
               </div>
               <div>
                 <label style={labelStyle}>Currency symbol</label>
-                <input value={currencySymbol} onChange={e => setCurrencySymbol(e.target.value)} className="input-field" placeholder="🪙" />
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    value={currencySymbol}
+                    onChange={e => setCurrencySymbol(e.target.value)}
+                    className="input-field"
+                    placeholder="🪙 or text"
+                    style={{ flex: 1 }}
+                  />
+                  <div style={{
+                    width: '42px', height: '42px', borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '22px', flexShrink: 0
+                  }}>
+                    {currencySymbol || '🪙'}
+                  </div>
+                  <label style={{
+                    width: '42px', height: '42px', borderRadius: '8px',
+                    background: 'rgba(59,130,246,0.1)',
+                    border: '1px solid rgba(59,130,246,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', flexShrink: 0, fontSize: '18px'
+                  }} title="Upload image symbol">
+                    📁
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > 500000) { toast.error('Image too large. Max 500KB.'); return }
+                        const reader = new FileReader()
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result as string
+                          setCurrencySymbol(dataUrl)
+                        }
+                        reader.readAsDataURL(file)
+                      }}
+                    />
+                  </label>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Type an emoji, text, or upload a small image (max 500KB)
+                </div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={labelStyle}>USD to currency rate</label>
@@ -374,6 +446,15 @@ export default function BotSettingsPage() {
               enabled={requireChannelJoin}
               onToggle={() => setRequireChannelJoin(!requireChannelJoin)}
             />
+
+            <div style={{
+              fontSize: '12px', color: 'var(--text-muted)',
+              marginTop: '8px',
+              display: requireChannelJoin ? 'block' : 'none'
+            }}>
+              {requiredChannels.length}/{channelLimit} channels used
+              {userPlan === 'free' ? ' (free plan)' : ' (pro plan)'}
+            </div>
 
             {requireChannelJoin && (
               <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -415,7 +496,7 @@ export default function BotSettingsPage() {
                       onChange={e => setNewChannelUsername(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && addChannel()}
                       className="input-field"
-                      placeholder="@mychannel"
+                      placeholder="@channel, t.me/channel or https://t.me/channel"
                     />
                   </div>
                   <button
@@ -500,6 +581,46 @@ export default function BotSettingsPage() {
               {withdrawMode === 'manual' && (
                 <div style={{ marginTop: '10px', fontSize: '12px', color: '#FBBF24', padding: '10px 14px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '8px' }}>
                   ✋ Users submit withdrawal requests. You approve them manually from the dashboard.
+                </div>
+              )}
+              {withdrawMode === 'manual' && (
+                <div style={{ marginTop: '14px' }}>
+                  <label style={labelStyle}>
+                    Withdrawal Secret Passphrase
+                    <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassphrase ? 'text' : 'password'}
+                      value={withdrawalPassphrase}
+                      onChange={e => setWithdrawalPassphrase(e.target.value)}
+                      className="input-field"
+                      placeholder="Enter a secret passphrase"
+                      style={{ paddingRight: '44px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassphrase(!showPassphrase)}
+                      style={{
+                        position: 'absolute', right: '12px', top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none', border: 'none',
+                        cursor: 'pointer', color: 'var(--text-muted)',
+                        fontSize: '16px'
+                      }}
+                    >
+                      {showPassphrase ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#FBBF24', marginTop: '6px' }}>
+                    ⚠️ This passphrase is required when approving withdrawals manually.
+                    Keep it safe — it cannot be recovered if lost.
+                  </div>
+                  {!withdrawalPassphrase && (
+                    <div style={{ fontSize: '12px', color: '#FCA5A5', marginTop: '4px' }}>
+                      ⚠️ Passphrase is required for manual withdrawal mode
+                    </div>
+                  )}
                 </div>
               )}
             </div>
