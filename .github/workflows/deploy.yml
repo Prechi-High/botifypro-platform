@@ -21,6 +21,7 @@ jobs:
             cd /var/www/1-touchbot
             git pull origin main
             npm install
+            sed -i 's|"main": "./index.ts"|"main": "./dist/index.js"|' packages/database/package.json
             cd packages/database
             npx tsc
             cd /var/www/1-touchbot/apps/bot-engine
