@@ -397,34 +397,9 @@ export default function BotSettingsPage() {
                   }}>
                     {currencySymbol || '🪙'}
                   </div>
-                  <label style={{
-                    width: '42px', height: '42px', borderRadius: '8px',
-                    background: 'rgba(59,130,246,0.1)',
-                    border: '1px solid rgba(59,130,246,0.3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', flexShrink: 0, fontSize: '18px'
-                  }} title="Upload image symbol">
-                    📁
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        if (file.size > 500000) { toast.error('Image too large. Max 500KB.'); return }
-                        const reader = new FileReader()
-                        reader.onload = (ev) => {
-                          const dataUrl = ev.target?.result as string
-                          setCurrencySymbol(dataUrl)
-                        }
-                        reader.readAsDataURL(file)
-                      }}
-                    />
-                  </label>
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Type an emoji, text, or upload a small image (max 500KB)
+                  Type an emoji or short text
                 </div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
