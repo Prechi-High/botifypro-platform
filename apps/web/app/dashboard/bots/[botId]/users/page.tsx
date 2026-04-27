@@ -103,7 +103,6 @@ export default function UsersPage() {
   const [broadcastBtnLink, setBroadcastBtnLink] = useState('')
   const [broadcasting, setBroadcasting] = useState(false)
   const [broadcastProgress, setBroadcastProgress] = useState(0)
-  const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free')
 
   useEffect(() => {
     const c = () => setMobile(window.innerWidth <= 768)
@@ -132,13 +131,6 @@ export default function UsersPage() {
       .select('manual_withdrawal, withdrawal_passphrase, faucetpay_withdrawal_key, faucetpay_api_key')
       .eq('bot_id', botId).single()
     setBotSettings(bs)
-
-    // Load user plan
-    const { data: auth } = await supabase.auth.getUser()
-    if (auth.user?.id) {
-      const { data: uRow } = await supabase.from('users').select('plan').eq('id', auth.user.id).single()
-      setUserPlan(uRow?.plan === 'pro' ? 'pro' : 'free')
-    }
 
     setLoading(false)
   }, [botId])
@@ -169,8 +161,25 @@ export default function UsersPage() {
         .from('transactions')
         .update({ status: 'completed' })
         .eq('id', id)
-      if (error) notify('Failed to approve: ' + error.message, false)
-      else notify('Payment approved ✓')
+      if (!error) {
+        const w = withdrawals.find(w => w.id === id)
+        if (w) {
+          try {
+            const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
+            await fetch(`${BOT_ENGINE_URL}/api/bots/${botId}/notify-user`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                telegramUserId: w.bot_users?.telegram_user_id,
+                message: `✅ <b>Withdrawal Approved!</b>\n\nYour withdrawal of ${Number(w.amount_currency).toLocaleString()} has been processed.\n\nAddress: <code>${w.withdraw_address}</code>\n\n⏳ Funds should arrive within 24 hours.`
+              })
+            })
+          } catch {}
+        }
+        notify('Payment approved ✓')
+      } else {
+        notify('Failed to approve: ' + error.message, false)
+      }
     }
     setProcessingWithdrawal(null)
     setSelectedWithdrawals([])
@@ -184,6 +193,24 @@ export default function UsersPage() {
       .update({ status: 'failed', gateway_tx_id: 'rejected: ' + reason })
       .eq('id', id)
     if (!error) {
+      const w = withdrawals.find(w => w.id === id)
+      if (w) {
+        try {
+          const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
+          await fetch(`${BOT_ENGINE_URL}/api/bots/${botId}/notify-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramUserId: w.bot_users?.telegram_user_id,
+              message: `❌ <b>Withdrawal Rejected</b>\n\nYour withdrawal request has been declined.\n\nReason: ${reason}\n\nYour balance has been restored. Contact support if you have questions.`
+            })
+          })
+        } catch {}
+        await supabase
+          .from('bot_users')
+          .update({ balance: supabase.rpc('increment', { x: Number(w?.amount_currency || 0) }) })
+          .eq('id', w?.bot_user_id)
+      }
       notify('Withdrawal rejected')
       setRejectingId(null)
       setRejectReason('')
@@ -376,7 +403,7 @@ export default function UsersPage() {
               />
             </div>
             <select value={filter} onChange={e => setFilter(e.target.value)}
-              style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', background: 'white', cursor: 'pointer', color: '#374151' }}>
+              style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', background: 'white', cursor: 'pointer', color: '#1e293b' }}>
               <option value="all">All ({users.length})</option>
               <option value="active">Active ({users.filter(u => !u.is_banned && recent(u.last_active)).length})</option>
               <option value="inactive">Inactive ({users.filter(u => !u.is_banned && !recent(u.last_active)).length})</option>
@@ -564,7 +591,7 @@ export default function UsersPage() {
                             value={rejectReason}
                             onChange={e => setRejectReason(e.target.value)}
                             className="input-field"
-                            style={{ marginBottom: '8px' }}
+                            style={{ marginBottom: '8px', color: '#1e293b', background: 'white' }}
                           >
                             <option value="">Choose reason...</option>
                             {REJECT_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
@@ -644,19 +671,7 @@ export default function UsersPage() {
       {/* Broadcast tab */}
       {activeTab === 'broadcast' && (
         <div>
-          {userPlan !== 'pro' ? (
-            <div style={{ textAlign: 'center', padding: '48px 24px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '16px' }}>
-              <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚡</div>
-              <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>Pro Feature</h3>
-              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
-                Broadcast messages to all your bot users. Upgrade to Pro to unlock this feature.
-              </p>
-              <a href="/dashboard/upgrade" style={{ display: 'inline-block', padding: '10px 24px', background: 'var(--blue-gradient)', color: 'white', borderRadius: '10px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
-                Upgrade to Pro
-              </a>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '600px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '600px' }}>
               <div style={{ padding: '16px 20px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '10px', fontSize: '13px', color: '#60A5FA' }}>
                 📣 This message will be sent to all <b>{users.filter(u => !u.is_banned).length}</b> active users of this bot.
               </div>
@@ -674,7 +689,7 @@ export default function UsersPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Type</label>
-                  <select value={broadcastBtnType} onChange={e => setBroadcastBtnType(e.target.value)} className="input-field">
+                  <select value={broadcastBtnType} onChange={e => setBroadcastBtnType(e.target.value)} className="input-field" style={{ color: '#1e293b', background: 'white' }}>
                     {BUTTON_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
@@ -697,7 +712,6 @@ export default function UsersPage() {
                 {broadcasting ? 'Sending...' : `📣 Send Broadcast to ${users.filter(u => !u.is_banned).length} Users`}
               </button>
             </div>
-          )}
         </div>
       )}
 
