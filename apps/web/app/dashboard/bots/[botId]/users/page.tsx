@@ -38,11 +38,36 @@ function recent(v: any): boolean {
   } catch { return false }
 }
 
+const REJECT_REASONS = [
+  'Insufficient verification',
+  'Suspicious activity detected',
+  'Address format invalid',
+  'Duplicate withdrawal request',
+  'Account under review',
+  'Minimum threshold not met',
+  'Custom reason...'
+]
+
+const BUTTON_TYPES = [
+  { value: 'url', label: '🔗 Open URL / Website' },
+  { value: 'join_channel', label: '📢 Join Channel' },
+  { value: 'learn_more', label: '📖 Learn More' },
+  { value: 'get_started', label: '🚀 Get Started' },
+  { value: 'shop_now', label: '🛒 Shop Now' },
+  { value: 'download', label: '⬇️ Download' },
+  { value: 'contact_us', label: '📞 Contact Us' },
+  { value: 'watch_video', label: '▶️ Watch Video' },
+  { value: 'claim_offer', label: '🎁 Claim Offer' },
+  { value: 'subscribe', label: '🔔 Subscribe' },
+  { value: 'view_more', label: '👀 View More' },
+]
+
 export default function UsersPage() {
   const params = useParams()
   const botId = params.botId as string
   const supabase = createClient()
 
+  // Users state
   const [users, setUsers] = useState<any[]>([])
   const [settings, setSettings] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -53,6 +78,32 @@ export default function UsersPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [mobile, setMobile] = useState(false)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'users' | 'withdrawals' | 'broadcast'>('users')
+
+  // Withdrawals state
+  const [withdrawals, setWithdrawals] = useState<any[]>([])
+  const [loadingWithdrawals, setLoadingWithdrawals] = useState(false)
+  const [selectedWithdrawals, setSelectedWithdrawals] = useState<string[]>([])
+  const [processingWithdrawal, setProcessingWithdrawal] = useState<string | null>(null)
+  const [passphrase, setPassphrase] = useState('')
+  const [showPassphraseModal, setShowPassphraseModal] = useState(false)
+  const [pendingApprovalIds, setPendingApprovalIds] = useState<string[]>([])
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [customRejectReason, setCustomRejectReason] = useState('')
+  const [botSettings, setBotSettings] = useState<any>(null)
+
+  // Broadcast state
+  const [broadcastImage, setBroadcastImage] = useState('')
+  const [broadcastText, setBroadcastText] = useState('')
+  const [broadcastBtnText, setBroadcastBtnText] = useState('')
+  const [broadcastBtnType, setBroadcastBtnType] = useState('url')
+  const [broadcastBtnLink, setBroadcastBtnLink] = useState('')
+  const [broadcasting, setBroadcasting] = useState(false)
+  const [broadcastProgress, setBroadcastProgress] = useState(0)
+  const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free')
 
   useEffect(() => {
     const c = () => setMobile(window.innerWidth <= 768)
@@ -74,10 +125,98 @@ export default function UsersPage() {
     ])
     if (ur.data) setUsers(ur.data)
     if (sr.data) setSettings(sr.data)
+
+    // Load bot settings for withdrawal passphrase
+    const { data: bs } = await supabase
+      .from('bot_settings')
+      .select('manual_withdrawal, withdrawal_passphrase, faucetpay_withdrawal_key, faucetpay_api_key')
+      .eq('bot_id', botId).single()
+    setBotSettings(bs)
+
+    // Load user plan
+    const { data: auth } = await supabase.auth.getUser()
+    if (auth.user?.id) {
+      const { data: uRow } = await supabase.from('users').select('plan').eq('id', auth.user.id).single()
+      setUserPlan(uRow?.plan === 'pro' ? 'pro' : 'free')
+    }
+
     setLoading(false)
   }, [botId])
 
   useEffect(() => { load() }, [load])
+
+  async function loadWithdrawals() {
+    setLoadingWithdrawals(true)
+    const { data } = await supabase
+      .from('transactions')
+      .select('*, bot_users(first_name, telegram_username, telegram_user_id)')
+      .eq('bot_id', botId)
+      .eq('type', 'withdrawal')
+      .order('created_at', { ascending: false })
+    setWithdrawals(data || [])
+    setLoadingWithdrawals(false)
+  }
+
+  async function approveWithdrawals(ids: string[]) {
+    if (passphrase !== botSettings?.withdrawal_passphrase) {
+      notify('Incorrect passphrase', false)
+      return
+    }
+    setShowPassphraseModal(false)
+    for (const id of ids) {
+      setProcessingWithdrawal(id)
+      const { error } = await supabase
+        .from('transactions')
+        .update({ status: 'completed' })
+        .eq('id', id)
+      if (error) notify('Failed to approve: ' + error.message, false)
+      else notify('Payment approved ✓')
+    }
+    setProcessingWithdrawal(null)
+    setSelectedWithdrawals([])
+    setPassphrase('')
+    await loadWithdrawals()
+  }
+
+  async function rejectWithdrawal(id: string, reason: string) {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ status: 'failed', gateway_tx_id: 'rejected: ' + reason })
+      .eq('id', id)
+    if (!error) {
+      notify('Withdrawal rejected')
+      setRejectingId(null)
+      setRejectReason('')
+      setCustomRejectReason('')
+      await loadWithdrawals()
+    } else notify(error.message, false)
+  }
+
+  async function sendBroadcast() {
+    if (!broadcastText.trim()) { notify('Message text is required', false); return }
+    if (!confirm(`Send broadcast to all ${users.length} users?`)) return
+    setBroadcasting(true)
+    setBroadcastProgress(0)
+    const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
+    try {
+      const res = await fetch(`${BOT_ENGINE_URL}/api/bots/${botId}/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: broadcastText,
+          imageUrl: broadcastImage || null,
+          buttonText: broadcastBtnText || null,
+          buttonUrl: broadcastBtnLink || null,
+        })
+      })
+      const data = await res.json()
+      if (data.success) notify(`Broadcast sent to ${data.sent} users ✓`)
+      else notify(data.error || 'Broadcast failed', false)
+    } catch (e: any) {
+      notify(e.message, false)
+    }
+    setBroadcasting(false)
+  }
 
   async function openDetail(u: any) {
     setSelected(u)
@@ -142,7 +281,7 @@ export default function UsersPage() {
     ].join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([rows], { type: 'text/csv' }))
-    a.download = `bot-users-${botId}-${new Date().toISOString().split('T')[0]}.csv` 
+    a.download = `bot-users-${botId}-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
   }
 
@@ -200,125 +339,406 @@ export default function UsersPage() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-          <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or username..."
-            style={{ width: '100%', padding: '9px 12px 9px 32px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
-          />
-        </div>
-        <select value={filter} onChange={e => setFilter(e.target.value)}
-          style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', background: 'white', cursor: 'pointer', color: '#374151' }}>
-          <option value="all">All ({users.length})</option>
-          <option value="active">Active ({users.filter(u => !u.is_banned && recent(u.last_active)).length})</option>
-          <option value="inactive">Inactive ({users.filter(u => !u.is_banned && !recent(u.last_active)).length})</option>
-          <option value="banned">Banned ({users.filter(u => u.is_banned).length})</option>
-        </select>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '4px' }}>
+        {[
+          { key: 'users', label: '👥 Users' },
+          { key: 'withdrawals', label: '💸 Withdrawals' },
+          { key: 'broadcast', label: '📣 Broadcast' }
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => {
+              setActiveTab(tab.key as any)
+              if (tab.key === 'withdrawals') loadWithdrawals()
+            }}
+            style={{
+              flex: 1, padding: '8px 12px', borderRadius: '8px', border: 'none',
+              background: activeTab === tab.key ? 'rgba(59,130,246,0.15)' : 'transparent',
+              color: activeTab === tab.key ? '#60A5FA' : 'var(--text-secondary)',
+              fontSize: '13px', fontWeight: activeTab === tab.key ? 600 : 400,
+              cursor: 'pointer'
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {loading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', padding: '20px' }}>
-          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />Loading users...
-        </div>
+      {/* Users tab */}
+      {activeTab === 'users' && (
+        <>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+              <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or username..."
+                style={{ width: '100%', padding: '9px 12px 9px 32px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
+              />
+            </div>
+            <select value={filter} onChange={e => setFilter(e.target.value)}
+              style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', background: 'white', cursor: 'pointer', color: '#374151' }}>
+              <option value="all">All ({users.length})</option>
+              <option value="active">Active ({users.filter(u => !u.is_banned && recent(u.last_active)).length})</option>
+              <option value="inactive">Inactive ({users.filter(u => !u.is_banned && !recent(u.last_active)).length})</option>
+              <option value="banned">Banned ({users.filter(u => u.is_banned).length})</option>
+            </select>
+          </div>
+
+          {loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', padding: '20px' }}>
+              <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />Loading users...
+            </div>
+          )}
+
+          {!loading && filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 20px', background: 'white', borderRadius: '12px', border: '1px dashed #e2e8f0' }}>
+              <Users size={36} color='#cbd5e1' style={{ marginBottom: '12px' }} />
+              <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>
+                {users.length === 0 ? 'No users have messaged this bot yet.' : 'No users match your search.'}
+              </p>
+            </div>
+          )}
+
+          {!loading && filtered.length > 0 && !mobile && (
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      {['#', 'Name', 'Username', 'Total Balance', 'Joined', 'Last Active', 'Status', 'Actions'].map(h => (
+                        <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((u, i) => (
+                      <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+                      >
+                        <td style={{ padding: '10px 12px', fontSize: '13px', color: '#94a3b8' }}>{i + 1}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>ID: {String(u.telegram_user_id)}</div>
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '13px', color: u.telegram_username ? '#2563eb' : '#cbd5e1' }}>
+                          {u.telegram_username ? '@' + u.telegram_username : 'No username'}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: '500', fontFamily: 'monospace', color: '#1e293b' }}>
+                          {Number(u.balance || 0).toLocaleString()} {sym}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmt(u.joined_at)}</td>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>{ago(u.last_active)}</td>
+                        <td style={{ padding: '10px 12px' }}><StatusBadge u={u} /></td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button onClick={() => openDetail(u)} style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: '6px', background: 'white', color: '#374151', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <Eye size={12} />View
+                            </button>
+                            <button onClick={() => banUser(u.id, !u.is_banned, u.first_name || 'User')} style={{ padding: '4px 8px', border: `1px solid ${u.is_banned ? '#bbf7d0' : '#fecaca'}`, borderRadius: '6px', background: u.is_banned ? '#f0fdf4' : '#fef2f2', color: u.is_banned ? '#166534' : '#dc2626', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <Ban size={12} />{u.is_banned ? 'Unban' : 'Ban'}
+                            </button>
+                            <button onClick={() => deleteUser(u.id, u.first_name || 'User')} disabled={deleting === u.id} style={{ padding: '4px 8px', border: '1px solid #fecaca', borderRadius: '6px', background: '#fef2f2', color: '#dc2626', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', opacity: deleting === u.id ? 0.5 : 1 }}>
+                              {deleting === u.id ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={12} />}
+                              {deleting === u.id ? '...' : 'Del'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!loading && filtered.length > 0 && mobile && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {filtered.map(u => (
+                <div key={u.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
+                      <div style={{ fontSize: '12px', color: u.telegram_username ? '#2563eb' : '#cbd5e1', marginTop: '1px' }}>
+                        {u.telegram_username ? '@' + u.telegram_username : 'No username'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>ID: {String(u.telegram_user_id)}</div>
+                    </div>
+                    <StatusBadge u={u} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
+                    <span><b style={{ color: '#1e293b', fontSize: '11px' }}>Total Balance: </b><b style={{ color: '#1e293b' }}>{Number(u.balance || 0).toLocaleString()}</b> {sym}</span>
+                    <span>Joined {fmt(u.joined_at)}</span>
+                    <span>{ago(u.last_active)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={() => openDetail(u)} style={{ flex: 1, padding: '7px', border: '1px solid #e2e8f0', borderRadius: '7px', background: 'white', color: '#374151', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <Eye size={13} />View
+                    </button>
+                    <button onClick={() => banUser(u.id, !u.is_banned, u.first_name || 'User')} style={{ flex: 1, padding: '7px', border: `1px solid ${u.is_banned ? '#bbf7d0' : '#fecaca'}`, borderRadius: '7px', background: u.is_banned ? '#f0fdf4' : '#fef2f2', color: u.is_banned ? '#166534' : '#dc2626', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <Ban size={13} />{u.is_banned ? 'Unban' : 'Ban'}
+                    </button>
+                    <button onClick={() => deleteUser(u.id, u.first_name || 'User')} disabled={deleting === u.id} style={{ flex: 1, padding: '7px', border: '1px solid #fecaca', borderRadius: '7px', background: '#fef2f2', color: '#dc2626', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <Trash2 size={13} />{deleting === u.id ? '...' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {!loading && filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 20px', background: 'white', borderRadius: '12px', border: '1px dashed #e2e8f0' }}>
-          <Users size={36} color='#cbd5e1' style={{ marginBottom: '12px' }} />
-          <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>
-            {users.length === 0 ? 'No users have messaged this bot yet.' : 'No users match your search.'}
-          </p>
-        </div>
-      )}
+      {/* Withdrawals tab */}
+      {activeTab === 'withdrawals' && (
+        <div>
+          {loadingWithdrawals ? (
+            <div style={{ color: 'var(--text-secondary)', padding: '20px' }}>Loading...</div>
+          ) : (
+            <>
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
+                ⏳ Pending Withdrawals
+              </h3>
 
-      {!loading && filtered.length > 0 && !mobile && (
-        <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  {['#', 'Name', 'Username', 'Balance', 'Joined', 'Last Active', 'Status', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((u, i) => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+              {selectedWithdrawals.length > 0 && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '12px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '10px', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '13px', color: '#60A5FA' }}>{selectedWithdrawals.length} selected</span>
+                  <button
+                    onClick={() => { setPendingApprovalIds(selectedWithdrawals); setShowPassphraseModal(true) }}
+                    style={{ padding: '7px 14px', background: '#10B981', border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
                   >
-                    <td style={{ padding: '10px 12px', fontSize: '13px', color: '#94a3b8' }}>{i + 1}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>ID: {String(u.telegram_user_id)}</div>
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: '13px', color: u.telegram_username ? '#2563eb' : '#cbd5e1' }}>
-                      {u.telegram_username ? '@' + u.telegram_username : 'No username'}
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: '500', fontFamily: 'monospace', color: '#1e293b' }}>
-                      {Number(u.balance || 0).toLocaleString()} {sym}
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmt(u.joined_at)}</td>
-                    <td style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>{ago(u.last_active)}</td>
-                    <td style={{ padding: '10px 12px' }}><StatusBadge u={u} /></td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button onClick={() => openDetail(u)} style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: '6px', background: 'white', color: '#374151', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <Eye size={12} />View
+                    ✅ Pay Selected
+                  </button>
+                  <button onClick={() => setSelectedWithdrawals([])} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {withdrawals.filter(w => w.status === 'pending').length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '24px' }}>
+                  No pending withdrawals
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+                  {withdrawals.filter(w => w.status === 'pending').map(w => (
+                    <div key={w.id} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedWithdrawals.includes(w.id)}
+                        onChange={e => setSelectedWithdrawals(prev => e.target.checked ? [...prev, w.id] : prev.filter(id => id !== w.id))}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {w.bot_users?.first_name || 'Unknown'}
+                          {w.bot_users?.telegram_username && <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '12px', marginLeft: '8px' }}>@{w.bot_users.telegram_username}</span>}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          {Number(w.amount_currency).toLocaleString()} {sym} · ≈${Number(w.amount_usd).toFixed(4)} USD
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace' }}>
+                          {w.withdraw_address}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{fmt(w.created_at)}</div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => { setPendingApprovalIds([w.id]); setShowPassphraseModal(true) }}
+                          style={{ padding: '6px 12px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '7px', color: '#10B981', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
+                        >
+                          ✅ Approve
                         </button>
-                        <button onClick={() => banUser(u.id, !u.is_banned, u.first_name || 'User')} style={{ padding: '4px 8px', border: `1px solid ${u.is_banned ? '#bbf7d0' : '#fecaca'}`, borderRadius: '6px', background: u.is_banned ? '#f0fdf4' : '#fef2f2', color: u.is_banned ? '#166534' : '#dc2626', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <Ban size={12} />{u.is_banned ? 'Unban' : 'Ban'}
-                        </button>
-                        <button onClick={() => deleteUser(u.id, u.first_name || 'User')} disabled={deleting === u.id} style={{ padding: '4px 8px', border: '1px solid #fecaca', borderRadius: '6px', background: '#fef2f2', color: '#dc2626', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', opacity: deleting === u.id ? 0.5 : 1 }}>
-                          {deleting === u.id ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={12} />}
-                          {deleting === u.id ? '...' : 'Del'}
+                        <button
+                          onClick={() => setRejectingId(w.id)}
+                          style={{ padding: '6px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', color: '#FCA5A5', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
+                        >
+                          ❌ Reject
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+                      {rejectingId === w.id && (
+                        <div style={{ position: 'absolute', right: '16px', top: '100%', marginTop: '8px', zIndex: 100, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', width: '280px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '10px' }}>Select reject reason</div>
+                          <select
+                            value={rejectReason}
+                            onChange={e => setRejectReason(e.target.value)}
+                            className="input-field"
+                            style={{ marginBottom: '8px' }}
+                          >
+                            <option value="">Choose reason...</option>
+                            {REJECT_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                          {rejectReason === 'Custom reason...' && (
+                            <input
+                              value={customRejectReason}
+                              onChange={e => setCustomRejectReason(e.target.value)}
+                              placeholder="Enter custom reason"
+                              className="input-field"
+                              style={{ marginBottom: '8px' }}
+                            />
+                          )}
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={() => rejectWithdrawal(w.id, rejectReason === 'Custom reason...' ? customRejectReason : rejectReason)}
+                              disabled={!rejectReason || (rejectReason === 'Custom reason...' && !customRejectReason)}
+                              style={{ flex: 1, padding: '8px', background: '#EF4444', border: 'none', borderRadius: '7px', color: 'white', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
+                            >
+                              Confirm Reject
+                            </button>
+                            <button onClick={() => setRejectingId(null)} style={{ padding: '8px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
+                ✅ Completed Transactions
+              </h3>
+              {withdrawals.filter(w => w.status === 'completed' || w.status === 'failed').length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                  No completed transactions yet
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {withdrawals.filter(w => w.status === 'completed' || w.status === 'failed').map(w => (
+                    <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {w.bot_users?.first_name || 'Unknown'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                          {w.withdraw_address}
+                        </div>
+                        {w.status === 'failed' && w.gateway_tx_id?.startsWith('rejected:') && (
+                          <div style={{ fontSize: '11px', color: '#FCA5A5', marginTop: '2px' }}>
+                            Reason: {w.gateway_tx_id.replace('rejected: ', '')}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        {Number(w.amount_currency).toLocaleString()} {sym}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{fmt(w.created_at)}</div>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 500,
+                        background: w.status === 'completed' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                        color: w.status === 'completed' ? '#10B981' : '#FCA5A5'
+                      }}>
+                        {w.status === 'completed' ? '✅ Paid' : '❌ Rejected'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Broadcast tab */}
+      {activeTab === 'broadcast' && (
+        <div>
+          {userPlan !== 'pro' ? (
+            <div style={{ textAlign: 'center', padding: '48px 24px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '16px' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚡</div>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>Pro Feature</h3>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
+                Broadcast messages to all your bot users. Upgrade to Pro to unlock this feature.
+              </p>
+              <a href="/dashboard/upgrade" style={{ display: 'inline-block', padding: '10px 24px', background: 'var(--blue-gradient)', color: 'white', borderRadius: '10px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+                Upgrade to Pro
+              </a>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '600px' }}>
+              <div style={{ padding: '16px 20px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '10px', fontSize: '13px', color: '#60A5FA' }}>
+                📣 This message will be sent to all <b>{users.filter(u => !u.is_banned).length}</b> active users of this bot.
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Image URL (optional)</label>
+                <input value={broadcastImage} onChange={e => setBroadcastImage(e.target.value)} className="input-field" placeholder="https://example.com/image.jpg" />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Message Text <span style={{ color: '#EF4444' }}>*</span></label>
+                <textarea value={broadcastText} onChange={e => setBroadcastText(e.target.value)} className="input-field" style={{ minHeight: '120px' }} placeholder="Enter your broadcast message..." />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Type</label>
+                  <select value={broadcastBtnType} onChange={e => setBroadcastBtnType(e.target.value)} className="input-field">
+                    {BUTTON_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Text</label>
+                  <input value={broadcastBtnText} onChange={e => setBroadcastBtnText(e.target.value)} className="input-field" placeholder="e.g. Join Now" />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Link</label>
+                <input value={broadcastBtnLink} onChange={e => setBroadcastBtnLink(e.target.value)} className="input-field" placeholder="https://t.me/yourchannel" />
+              </div>
+
+              <button
+                onClick={sendBroadcast}
+                disabled={broadcasting || !broadcastText.trim()}
+                style={{ padding: '12px', background: 'var(--blue-gradient)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '15px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                {broadcasting ? 'Sending...' : `📣 Send Broadcast to ${users.filter(u => !u.is_banned).length} Users`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Passphrase modal */}
+      {showPassphraseModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '380px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+              🔐 Confirm Payment
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+              Enter your withdrawal passphrase to approve {pendingApprovalIds.length} payment(s)
+            </p>
+            <input
+              type="password"
+              value={passphrase}
+              onChange={e => setPassphrase(e.target.value)}
+              placeholder="Enter passphrase"
+              className="input-field"
+              style={{ marginBottom: '16px' }}
+              onKeyDown={e => e.key === 'Enter' && approveWithdrawals(pendingApprovalIds)}
+            />
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => approveWithdrawals(pendingApprovalIds)}
+                style={{ flex: 1, padding: '10px', background: '#10B981', border: 'none', borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Confirm & Pay
+              </button>
+              <button
+                onClick={() => { setShowPassphraseModal(false); setPassphrase('') }}
+                style={{ padding: '10px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '14px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {!loading && filtered.length > 0 && mobile && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {filtered.map(u => (
-            <div key={u.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
-                  <div style={{ fontSize: '12px', color: u.telegram_username ? '#2563eb' : '#cbd5e1', marginTop: '1px' }}>
-                    {u.telegram_username ? '@' + u.telegram_username : 'No username'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>ID: {String(u.telegram_user_id)}</div>
-                </div>
-                <StatusBadge u={u} />
-              </div>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
-                <span><b style={{ color: '#1e293b' }}>{Number(u.balance || 0).toLocaleString()}</b> {sym}</span>
-                <span>Joined {fmt(u.joined_at)}</span>
-                <span>{ago(u.last_active)}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={() => openDetail(u)} style={{ flex: 1, padding: '7px', border: '1px solid #e2e8f0', borderRadius: '7px', background: 'white', color: '#374151', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <Eye size={13} />View
-                </button>
-                <button onClick={() => banUser(u.id, !u.is_banned, u.first_name || 'User')} style={{ flex: 1, padding: '7px', border: `1px solid ${u.is_banned ? '#bbf7d0' : '#fecaca'}`, borderRadius: '7px', background: u.is_banned ? '#f0fdf4' : '#fef2f2', color: u.is_banned ? '#166534' : '#dc2626', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <Ban size={13} />{u.is_banned ? 'Unban' : 'Ban'}
-                </button>
-                <button onClick={() => deleteUser(u.id, u.first_name || 'User')} disabled={deleting === u.id} style={{ flex: 1, padding: '7px', border: '1px solid #fecaca', borderRadius: '7px', background: '#fef2f2', color: '#dc2626', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <Trash2 size={13} />{deleting === u.id ? '...' : 'Delete'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
+      {/* User detail modal */}
       {selected && (
         <div onClick={e => { if (e.target === e.currentTarget) setSelected(null) }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -338,7 +758,7 @@ export default function UsersPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
                 {[
                   ['Telegram ID', String(selected.telegram_user_id || 'N/A')],
-                  ['Balance', Number(selected.balance || 0).toLocaleString() + ' ' + sym],
+                  ['Total Balance', Number(selected.balance || 0).toLocaleString() + ' ' + sym],
                   ['Channel Verified', selected.channel_verified ? '✅ Yes' : '❌ No'],
                   ['Status', selected.is_banned ? '🚫 Banned' : '✅ Active'],
                   ['Joined', fmt(selected.joined_at)],
