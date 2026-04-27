@@ -49,25 +49,16 @@ export async function checkChannelMembership(
       { params: { chat_id: channelId, user_id: telegramUserId } }
     )
     const status = response.data?.result?.status
+    logger.info('Channel membership check', { channelId, telegramUserId, status })
     return ['member', 'administrator', 'creator', 'restricted'].includes(status)
   } catch (error: any) {
-    const errData = error.response?.data
-    const description = errData?.description || ''
-
-    // If bot is not admin in channel, skip this channel check
-    // (bot owner must add bot as admin — warn in logs but don't block user)
-    if (description.includes('inaccessible') ||
-        description.includes('administrator') ||
-        error.response?.status === 400) {
-      logger.warn('Channel membership check skipped - bot not admin in channel', {
-        channelId,
-        error: description,
-        note: 'Add bot as admin to this channel to enforce membership'
-      })
-      return true // fail open - can't verify, don't block user
-    }
-
-    logger.error('checkChannelMembership failed', { error: error.message, channelId })
+    const description = error.response?.data?.description || ''
+    logger.error('checkChannelMembership failed', {
+      error: description || error.message,
+      channelId
+    })
+    // Return false - if we can't check, assume not member
+    // Bot MUST be admin in channel for this to work
     return false
   }
 }
@@ -124,7 +115,7 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
 
   await sendMessage(bot.botToken, chatId,
     `✅ <b>Withdrawal Submitted</b>\n\n` +
-    `Amount: ${currencyAmount} ${sym} (${currencyName})\n` +
+    `Amount: ${currencyAmount} ${sym} ${currencyName}\n` +
     `≈ $${netUsd.toFixed(4)} USD\n` +
     `Address: <code>${address}</code>\n\n${note}`
   )
@@ -268,7 +259,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
             }
           }
 
-          await sendMessage(bot.botToken, chatId, '✅ Verified! Welcome.')
+          await sendMessage(bot.botToken, chatId, '✅ Verified!')
           const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
           await handleStart(bot, freshUser || botUser, chatId)
           return

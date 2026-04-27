@@ -61,12 +61,13 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
   const sym = bot.settings?.currencySymbol || '🪙'
+  const currencyName = bot.settings?.currencyName || 'coins'
 
   await sendMessage(
     bot.botToken, chatId,
     `🏦 <b>Account Balance Overview</b>\n\n` +
     `• User ID: ${botUser.telegramUserId}\n` +
-    `• Balance: ${botUser.balance} ${sym}\n` +
+    `• Balance: ${botUser.balance} ${sym} ${currencyName}\n` +
     `• Wallet: ${(botUser as any).walletAddress || 'Not set'}\n\n` +
     `✅ Keep growing. Withdraw anytime!`,
     {
@@ -144,7 +145,7 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
   await sendMessage(
     bot.botToken, chatId,
     `🎁 <b>Daily Bonus Claimed!</b>\n\n` +
-    `+${bonusAmount} ${sym} (${currencyName}) added to your balance!\n\n` +
+    `+${bonusAmount} ${sym} ${currencyName} added to your balance!\n\n` +
     `💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
   )
 }
@@ -169,10 +170,10 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number,
   await sendMessage(
     bot.botToken, chatId,
     `🏁 <b>Referral Program Overview</b>\n\n` +
-    `• Reward per invite: ${rewardAmount} ${sym}\n` +
+    `• Reward per invite: ${rewardAmount} ${sym} ${currencyName}\n` +
     `• Total referrals: ${stats.count}\n` +
     `• Your referral link:\n${referralLink}\n\n` +
-    `Total earned: <b>${stats.totalEarned} ${sym}</b>\n\n` +
+    `Total earned: <b>${stats.totalEarned} ${sym} ${currencyName}</b>\n\n` +
     `⚠️ Please avoid fake or self-referrals.\n` +
     `💬 Share your link and earn more daily!`,
     { inline_keyboard: subButtons }
@@ -216,7 +217,11 @@ export async function handleLeaderboard(bot: any, botUser: any, chatId: number) 
     text += `${medal} ${user?.firstName || 'User'} — ${r._count.referrerId} referrals${isMe}\n`
   })
 
-  await sendMessage(bot.botToken, chatId, text)
+  await sendMessage(bot.botToken, chatId, text, {
+    inline_keyboard: [[
+      { text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }
+    ]]
+  })
 }
 
 export async function handleDeposit(bot: any, botUser: any, chatId: number) {
@@ -256,7 +261,7 @@ export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
       bot.botToken, chatId,
       `❌ <b>Insufficient Balance</b>\n\n` +
       `✅ You need at least\n\n` +
-      `<b>${(minWithdraw * Number(settings?.usdToCurrencyRate || 1000)).toFixed(2)} ${sym} (${currencyName})</b>\n\n` +
+      `<b>${(minWithdraw * Number(settings?.usdToCurrencyRate || 1000)).toFixed(2)} ${sym} ${currencyName}</b>\n\n` +
       `👥 Share your referral link to increase your balance`
     )
     return
