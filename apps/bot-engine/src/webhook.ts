@@ -11,21 +11,13 @@ import { handleReferral } from './referral'
 
 // ─── Captcha helpers ───────────────────────────────────────────────────────────
 
-function rnd(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
-
-function makeCaptcha(): { question: string; answer: number } {
-  const type = rnd(0, 2)
-  if (type === 0) {
-    const a = rnd(1, 15), b = rnd(1, 15)
-    return { question: `${a} + ${b} = ?`, answer: a + b }
-  } else if (type === 1) {
-    const a = rnd(5, 20), b = rnd(1, Math.min(a, 10))
-    return { question: `${a} - ${b} = ?`, answer: a - b }
-  } else {
-    const a = rnd(2, 9), b = rnd(2, 9)
-    return { question: `${a} × ${b} = ?`, answer: a * b }
+function makeCaptcha(): { question: string; answer: number; display: string } {
+  const answer = Math.floor(Math.random() * 90) + 10 // random 2-digit number 10-99
+  const display = answer.toString()
+  return {
+    question: display,
+    answer,
+    display
   }
 }
 
@@ -292,7 +284,8 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await redisSet(captchaPendingKey, JSON.stringify({ answer, attempts: 0 }), 300)
         await sendMessage(
           bot.botToken, chatId,
-          `👋 <b>Human Verification</b>\n\nBefore you can use this bot, please solve:\n\n🔐 <b>${question}</b>\n\n<i>Reply with just the number.</i>`
+          `👋 <b>Quick Verification</b>\n\nType the number you see below to continue:\n\n` +
+          `<b>${question}</b>\n\n<i>Just type the number exactly as shown.</i>`
         )
         return
       }
@@ -306,6 +299,13 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         // ✅ Passed
         await redisDel(captchaPendingKey)
         await redisSet(captchaDoneKey, '1', 31536000) // remember for 1 year
+        const pendingRefKey = `pending_referral:${botUser.id}`
+        const pendingRef = await redisGet(pendingRefKey)
+        if (pendingRef) {
+          await redisDel(pendingRefKey)
+          const { handleReferral } = await import('./referral')
+          await handleReferral(bot, botUser, pendingRef, chatId)
+        }
         await sendMessage(bot.botToken, chatId, '✅ Verified! Welcome.')
         await handleStart(bot, botUser, chatId)
         return
@@ -321,7 +321,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await redisSet(captchaPendingKey, JSON.stringify({ answer: a2, attempts: newAttempts }), 300)
         await sendMessage(
           bot.botToken, chatId,
-          `❌ Incorrect. ${3 - newAttempts} attempt(s) remaining.\n\n🔐 <b>${q2}</b>`
+          `❌ Incorrect. ${3 - newAttempts} attempt(s) remaining.\n\n<b>${q2}</b>`
         )
         return
       } else {
@@ -361,6 +361,13 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
 
         if (unverified.length === 0) {
           await prisma.botUser.update({ where: { id: botUser.id }, data: { channelVerified: true } })
+          const pendingRefKey = `pending_referral:${botUser.id}`
+          const pendingRef = await redisGet(pendingRefKey)
+          if (pendingRef) {
+            await redisDel(pendingRefKey)
+            const { handleReferral } = await import('./referral')
+            await handleReferral(bot, botUser, pendingRef, chatId)
+          }
           const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
           await handleStart(bot, updatedUser, chatId)
           return
@@ -421,11 +428,11 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         if (bot.settings?.withdrawEnabled) await handleWithdraw(bot, botUser, chatId)
         return
       }
-      if (text === '🎁 Bonus') {
+      if (text === '🎁 Daily Bonus') {
         await handleBonus(bot, botUser, chatId)
         return
       }
-      if (text === '👥 Referral') {
+      if (text === '🔗 Referral') {
         await handleReferralInfo(bot, botUser, chatId)
         return
       }
@@ -442,7 +449,18 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (text.startsWith('/start')) {
         const startParam = (text.split(' ')[1] || '').trim()
         if (startParam.startsWith('ref_') && !botUser.referredBy) {
-          await handleReferral(bot, botUser, startParam.replace('ref_', ''), chatId)
+          const referrerId = startParam.replace('ref_', '')
+          const needsCaptcha = bot.settings?.captchaEnabled && !captchaDone
+          const needsChannels = bot.settings?.requireChannelJoin && !botUser.channelVerified
+
+          if (needsCaptcha || needsChannels) {
+            // Store referral for after verification completes
+            await redisSet(`pending_referral:${botUser.id}`, referrerId, 86400)
+          } else {
+            // No gates — credit immediately
+            const { handleReferral } = await import('./referral')
+            await handleReferral(bot, botUser, referrerId, chatId)
+          }
         }
         await handleStart(bot, botUser, chatId)
       } else if (text.startsWith('/balance')) {
@@ -520,6 +538,13 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         }
         if (stillUnverified.length === 0) {
           await prisma.botUser.update({ where: { id: botUser.id }, data: { channelVerified: true } })
+          const pendingRefKey = `pending_referral:${botUser.id}`
+          const pendingRef = await redisGet(pendingRefKey)
+          if (pendingRef) {
+            await redisDel(pendingRefKey)
+            const { handleReferral } = await import('./referral')
+            await handleReferral(bot, botUser, pendingRef, cbChatId)
+          }
           const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
           await handleStart(bot, updatedUser, cbChatId)
         } else {
@@ -527,20 +552,24 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
             '⚠️ You have not joined all required channels yet. Please join and try again.'
           )
         }
-      } else if (data === 'cmd_consent_agree') {
-        await prisma.botUser.update({ where: { id: botUser.id }, data: { adConsent: true } })
-        await handleStart(bot, { ...botUser, adConsent: true }, cbChatId)
       } else if (data === 'cmd_cancel_deposit') {
         await redisDel('oxapay_invoice:' + bot.id + ':' + botUser.id)
+        const cancelButtons: any[] = []
+        cancelButtons.push({ text: '💰 Balance' })
+        cancelButtons.push({ text: '🔗 Referral' })
+        if (bot.settings?.withdrawEnabled) cancelButtons.push({ text: '📤 Withdraw' })
+        if (bot.settings?.dailyBonusEnabled || bot.settings?.bonusEnabled) cancelButtons.push({ text: '🎁 Daily Bonus' })
+        if (bot.settings?.leaderboardEnabled) cancelButtons.push({ text: '🏆 Leaderboard' })
+        if (bot.settings?.depositEnabled) cancelButtons.push({ text: '📥 Deposit' })
+        const cancelKeyboard: any[][] = []
+        for (let i = 0; i < cancelButtons.length; i += 2) {
+          cancelKeyboard.push(cancelButtons.slice(i, i + 2))
+        }
         await sendMessage(
           bot.botToken, cbChatId,
           '✅ Deposit cancelled.',
           {
-            keyboard: [
-              [{ text: '💰 Balance' }, { text: '📥 Deposit' }],
-              [{ text: '📤 Withdraw' }, { text: '🎁 Bonus' }],
-              [{ text: '👥 Referral' }, { text: '❓ Help' }]
-            ],
+            keyboard: cancelKeyboard,
             resize_keyboard: true,
             persistent: true,
             one_time_keyboard: false

@@ -40,44 +40,31 @@ export async function sendMessage(
 }
 
 export async function handleStart(bot: any, botUser: any, chatId: number) {
-  if (!botUser.adConsent) {
-    await sendMessage(
-      bot.botToken,
-      chatId,
-      `👋 Welcome!\n\nThis bot is powered by <b>1-TouchBot</b>.\n\n📢 Occasionally you may receive sponsored messages from advertisers.\n\nBy tapping <b>✅ I Agree</b> below you consent to receiving occasional sponsored messages and agree to our terms of use.\n\nYou must agree to continue using this bot.`,
-      {
-        inline_keyboard: [[{ text: '✅ I Agree & Continue', callback_data: 'cmd_consent_agree' }]]
-      }
-    )
-    return
-  }
-
   const settings = bot.settings
   if (!settings) {
     await sendMessage(bot.botToken, chatId, '👋 Welcome!')
     return
   }
 
-  // Build reply keyboard
+  // Build reply keyboard — only show activated commands
   const keyboard: any[][] = []
+  const allButtons: any[] = []
 
-  const row1: any[] = []
-  if (settings.balanceEnabled) row1.push({ text: '💰 Balance' })
-  if (settings.depositEnabled) row1.push({ text: '📥 Deposit' })
-  if (row1.length > 0) keyboard.push(row1)
+  // Fixed first: Balance always first
+  allButtons.push({ text: '💰 Balance' })
+  // Referral always second
+  allButtons.push({ text: '🔗 Referral' })
 
-  const row2: any[] = []
-  if (settings.withdrawEnabled) row2.push({ text: '📤 Withdraw' })
-  if (settings.dailyBonusEnabled || settings.bonusEnabled) row2.push({ text: '🎁 Bonus' })
-  if (row2.length > 0) keyboard.push(row2)
+  // Optional: only if enabled in settings
+  if (settings?.withdrawEnabled) allButtons.push({ text: '📤 Withdraw' })
+  if (settings?.dailyBonusEnabled || settings?.bonusEnabled) allButtons.push({ text: '🎁 Daily Bonus' })
+  if (settings?.leaderboardEnabled) allButtons.push({ text: '🏆 Leaderboard' })
+  if (settings?.depositEnabled) allButtons.push({ text: '📥 Deposit' })
 
-  const row3: any[] = []
-  if (settings.referralEnabled) row3.push({ text: '👥 Referral' })
-  if (settings.leaderboardEnabled) row3.push({ text: '🏆 Leaderboard' })
-  row3.push({ text: '❓ Help' })
-  keyboard.push(row3)
-
-  keyboard.push([{ text: '📋 Menu' }])
+  // Stack 2 per row
+  for (let i = 0; i < allButtons.length; i += 2) {
+    keyboard.push(allButtons.slice(i, i + 2))
+  }
 
   const replyMarkup = {
     keyboard,
@@ -86,28 +73,23 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
     one_time_keyboard: false
   }
 
-  const balanceText = settings.balanceEnabled
-    ? `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}`
-    : ''
+  const balanceText = `\n\n💰 Your balance: ${botUser.balance} ${settings.currencySymbol || '🪙'}`
 
-  // welcomeMessageEnabled defaults to true — only skip if explicitly false
-  if (settings.welcomeMessageEnabled !== false) {
+  if (settings.welcomeMessageEnabled !== false && settings.welcomeMessage) {
     await sendMessage(
       bot.botToken,
       chatId,
-      (settings.welcomeMessage || '👋 Welcome!') + balanceText,
+      settings.welcomeMessage + balanceText,
       replyMarkup
     )
   } else {
     await sendMessage(
       bot.botToken,
       chatId,
-      balanceText || '👋 Welcome back!',
+      '👋 Welcome back!' + balanceText,
       replyMarkup
     )
   }
-
-  await handleHelp(bot, chatId)
 }
 
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
@@ -127,17 +109,20 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
 
 export async function handleHelp(bot: any, chatId: number) {
   const settings = bot.settings
-  const buttons: Array<{ text: string; callback_data: string }> = []
+  const buttons: any[] = []
 
-  buttons.push({ text: '🏠 Start',    callback_data: 'cmd_start' })
-  buttons.push({ text: '❓ Help',     callback_data: 'cmd_help' })
-  if (settings?.balanceEnabled)  buttons.push({ text: '💰 Balance',  callback_data: 'cmd_balance' })
-  if (settings?.depositEnabled)  buttons.push({ text: '📥 Deposit',  callback_data: 'cmd_deposit' })
+  // Balance always first (always active)
+  buttons.push({ text: '💰 Balance', callback_data: 'cmd_balance' })
+  // Referral always second (always active)
+  buttons.push({ text: '🔗 Referral', callback_data: 'cmd_referral' })
+
+  // Only add if enabled
   if (settings?.withdrawEnabled) buttons.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
-  if (settings?.dailyBonusEnabled || settings?.bonusEnabled) buttons.push({ text: '🎁 Bonus', callback_data: 'cmd_bonus' })
-  if (settings?.referralEnabled)    buttons.push({ text: '👥 Referral',    callback_data: 'cmd_referral' })
+  if (settings?.dailyBonusEnabled || settings?.bonusEnabled) buttons.push({ text: '🎁 Daily Bonus', callback_data: 'cmd_bonus' })
   if (settings?.leaderboardEnabled) buttons.push({ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' })
+  if (settings?.depositEnabled) buttons.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
 
+  // Custom commands
   try {
     const customCommands = await prisma.botCommand.findMany({
       where: { botId: bot.id, isActive: true },
@@ -148,7 +133,8 @@ export async function handleHelp(bot: any, chatId: number) {
     })
   } catch {}
 
-  const inline_keyboard: Array<Array<{ text: string; callback_data: string }>> = []
+  // Stack 2 per row
+  const inline_keyboard: any[][] = []
   for (let i = 0; i < buttons.length; i += 2) {
     inline_keyboard.push(buttons.slice(i, i + 2))
   }
@@ -168,6 +154,7 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
     return
   }
   const sym = settings?.currencySymbol || '🪙'
+  const currencyName = settings?.currencyName || 'coins'
   const rate = Math.max(1, Number(settings?.usdToCurrencyRate || 1000))
   const bonusAmount = settings?.dailyBonusAmount
     ? Number(settings.dailyBonusAmount)
@@ -207,7 +194,7 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
     bot.botToken,
     chatId,
     `🎁 <b>Daily Bonus Claimed!</b>\n\n` +
-    `+${bonusAmount} ${sym} added to your balance!\n\n` +
+    `+${bonusAmount} ${sym} (${currencyName}) added to your balance!\n\n` +
     `💰 New balance: <b>${updatedUser?.balance} ${sym}</b>\n\n` +
     `Come back in 24 hours for your next bonus! 🕐`
   )
