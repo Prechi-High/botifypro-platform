@@ -103,6 +103,7 @@ export default function UsersPage() {
   const [broadcastText, setBroadcastText] = useState('')
   const [broadcastBtnType, setBroadcastBtnType] = useState('url')
   const [broadcastBtnLink, setBroadcastBtnLink] = useState('')
+  const [broadcastBtnLinkError, setBroadcastBtnLinkError] = useState('')
   const [broadcasting, setBroadcasting] = useState(false)
   const [broadcastProgress, setBroadcastProgress] = useState(0)
 
@@ -251,6 +252,7 @@ export default function UsersPage() {
 
   async function sendBroadcast() {
     if (!broadcastText.trim()) { notify('Message text is required', false); return }
+    if (broadcastBtnLink && !broadcastBtnLink.startsWith('https://')) { notify('Please enter a valid button link starting with https://', false); return }
     if (!confirm(`Send broadcast to all ${users.length} users?`)) return
     setBroadcasting(true)
     setBroadcastProgress(0)
@@ -809,13 +811,32 @@ export default function UsersPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>Button Link</label>
-                <input value={broadcastBtnLink} onChange={e => setBroadcastBtnLink(e.target.value)} className="input-field" placeholder="https://t.me/yourchannel" />
+                <input
+                  value={broadcastBtnLink}
+                  onChange={e => {
+                    const val = e.target.value
+                    setBroadcastBtnLink(val)
+                    if (val && !val.startsWith('https://')) {
+                      setBroadcastBtnLinkError('Please enter a valid link starting with https://')
+                    } else {
+                      setBroadcastBtnLinkError('')
+                    }
+                  }}
+                  className="input-field"
+                  placeholder="https://t.me/yourchannel"
+                  style={broadcastBtnLinkError ? { borderColor: '#EF4444' } : {}}
+                />
+                {broadcastBtnLinkError && (
+                  <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#EF4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    ⚠️ {broadcastBtnLinkError}
+                  </p>
+                )}
               </div>
 
               <button
                 onClick={sendBroadcast}
-                disabled={broadcasting || !broadcastText.trim()}
-                style={{ padding: '12px', background: 'var(--blue-gradient)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '15px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                disabled={broadcasting || !broadcastText.trim() || !!broadcastBtnLinkError}
+                style={{ padding: '12px', background: 'var(--blue-gradient)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '15px', fontWeight: 600, cursor: broadcasting || !broadcastText.trim() || !!broadcastBtnLinkError ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: !!broadcastBtnLinkError ? 0.6 : 1 }}
               >
                 {broadcasting ? 'Sending...' : `📣 Send Broadcast to ${users.filter(u => !u.is_banned).length} Users`}
               </button>
