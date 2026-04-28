@@ -251,6 +251,83 @@ app.post('/api/payments/create-topup-invoice', async (req: Request, res: Respons
   }
 })
 
+app.post('/api/payments/get-deposit-address', async (req: Request, res: Response) => {
+  try {
+    const { userId, email } = req.body || {}
+    if (!userId) return res.status(400).json({ error: 'userId required' })
+
+    const merchantKey = process.env.OXAPAY_MERCHANT_KEY
+    if (!merchantKey) return res.status(500).json({ error: 'OxaPay not configured' })
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, depositAddress: true, depositTrackId: true }
+    })
+
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    if (user.depositAddress) {
+      return res.json({
+        success: true,
+        address: user.depositAddress,
+        trackId: user.depositTrackId,
+        network: 'TRON',
+        currency: 'USDT'
+      })
+    }
+
+    const response = await axios.post(
+      'https://api.oxapay.com/v1/payment/static-address',
+      {
+        network: 'TRON',
+        to_currency: 'USDT',
+        auto_withdrawal: false,
+        callback_url: `${process.env.WEBHOOK_BASE_URL}/api/payments/oxapay-deposit-callback`,
+        email: email || user.email || `user_${userId}@1-touchbot.com`,
+        order_id: userId,
+        description: `Deposit for user ${userId}`
+      },
+      {
+        headers: {
+          merchant_api_key: merchantKey,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
+    const data = response.data?.data
+    if (!data?.address) {
+      logger.error('OxaPay address generation failed', { response: response.data })
+      return res.status(500).json({ error: 'Failed to generate deposit address' })
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        depositAddress: data.address,
+        depositTrackId: String(data.track_id)
+      }
+    })
+
+    logger.info('Deposit address generated', { userId, address: data.address })
+
+    return res.json({
+      success: true,
+      address: data.address,
+      trackId: String(data.track_id),
+      qrCode: data.qr_code,
+      network: 'TRON',
+      currency: 'USDT'
+    })
+  } catch (err: any) {
+    logger.error('get-deposit-address error', {
+      error: err?.message,
+      response: err?.response?.data
+    })
+    return res.status(500).json({ error: err?.message || 'Failed to generate deposit address' })
+  }
+})
+
 app.post('/webhooks/oxapay-ads/:userId', async (req: Request, res: Response) => {
   res.status(200).json({ ok: true })
   try {
@@ -277,6 +354,82 @@ app.post('/webhooks/oxapay-ads/:userId', async (req: Request, res: Response) => 
     logger.info('Advertiser balance topped up', { userId, paidAmount })
   } catch (err: any) {
     logger.error('oxapay-ads webhook error', { error: err?.message })
+  }
+})
+
+app.post('/api/payments/oxapay-deposit-callback', async (req: Request, res: Response) => {
+  try {
+    const payload = req.body || {}
+    const data = payload?.data || payload
+    logger.info('OxaPay deposit callback received', { payload: data })
+
+    const secretKey = process.env.OXAPAY_SECRET_KEY
+    const headerHmac = typeof req.headers.hmac === 'string' ? req.headers.hmac : undefined
+    if (secretKey && headerHmac) {
+      const expected = crypto.createHmac('sha512', secretKey).update(JSON.stringify(payload)).digest('hex')
+      if (expected !== headerHmac) {
+        logger.warn('OxaPay deposit callback HMAC mismatch', { orderId: data?.order_id })
+        return res.status(401).json({ error: 'Invalid signature' })
+      }
+    }
+
+    const status = String(data?.status || '').toLowerCase()
+    const type = String(data?.type || '').toLowerCase()
+    if (status !== 'paid') {
+      return res.json({ ok: true })
+    }
+    if (type && type !== 'static_payment') {
+      return res.json({ ok: true })
+    }
+
+    const orderId = String(data?.order_id || '')
+    const amountUsd = Number(data?.amount || data?.pay_amount || 0)
+    if (!orderId || amountUsd <= 0) {
+      logger.warn('Invalid callback payload', { payload: data })
+      return res.json({ ok: true })
+    }
+
+    const gatewayTxId = String(
+      data?.track_id ||
+      data?.txid ||
+      data?.transaction_id ||
+      crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex')
+    )
+
+    const existing = await prisma.advertiserDepositTransaction.findUnique({
+      where: { gatewayTxId }
+    })
+    if (existing) {
+      logger.info('Duplicate advertiser deposit callback ignored', { gatewayTxId, userId: orderId })
+      return res.json({ ok: true })
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: orderId },
+        data: {
+          advertiserBalance: { increment: amountUsd }
+        }
+      }),
+      prisma.advertiserDepositTransaction.create({
+        data: {
+          userId: orderId,
+          amountUsd,
+          status: 'completed',
+          gateway: 'oxapay',
+          gatewayTxId
+        }
+      })
+    ])
+
+    logger.info('Advertiser balance credited', { userId: orderId, amountUsd, gatewayTxId })
+    return res.json({ ok: true })
+  } catch (err: any) {
+    logger.error('oxapay-deposit-callback error', {
+      error: err?.message,
+      response: err?.response?.data
+    })
+    return res.status(500).json({ error: err?.message || 'Server error' })
   }
 })
 

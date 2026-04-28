@@ -9,16 +9,19 @@ datasource db {
 }
 
 model User {
-  id           String       @id @default(uuid())
-  email        String       @unique
-  passwordHash String       @map("password_hash")
-  fullName     String       @map("full_name")
-  role               String       @default("creator")
-  plan               String       @default("free")
-  createdAt          DateTime     @default(now()) @map("created_at")
-  advertiserBalance  Float        @default(0) @map("advertiser_balance")
-  bots               Bot[]
-  adCampaigns        AdCampaign[]
+  id                  String                       @id @default(uuid())
+  email               String                       @unique
+  passwordHash        String                       @map("password_hash")
+  fullName            String                       @map("full_name")
+  role                String                       @default("creator")
+  plan                String                       @default("free")
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  advertiserBalance   Float                        @default(0) @map("advertiser_balance")
+  depositAddress      String?                      @map("deposit_address")
+  depositTrackId      String?                      @map("deposit_track_id")
+  bots                Bot[]
+  adCampaigns         AdCampaign[]
+  advertiserDeposits  AdvertiserDepositTransaction[]
   @@map("users")
 }
 
@@ -178,6 +181,19 @@ model DepositTransaction {
   botUser          BotUser  @relation(fields: [botUserId], references: [id])
 
   @@map("deposit_transactions")
+}
+
+model AdvertiserDepositTransaction {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  amountUsd   Float    @map("amount_usd")
+  status      String   @default("completed")
+  gateway     String
+  gatewayTxId String   @unique @map("gateway_tx_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("advertiser_deposit_transactions")
 }
 
 model AdCampaign {

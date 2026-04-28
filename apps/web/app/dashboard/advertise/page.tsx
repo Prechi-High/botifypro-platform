@@ -3,10 +3,9 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, ArrowUpRight, Megaphone, Plus, Wallet } from 'lucide-react'
+import { Megaphone, Plus, Wallet } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
-
-const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://1-touchbot-engine.onrender.com'
+import DepositModal from '@/components/ui/DepositModal'
 
 const sectionStyle: React.CSSProperties = {
   background: 'rgba(255,255,255,0.03)',
@@ -31,10 +30,7 @@ export default function AdvertisePage() {
   const [loading, setLoading]         = useState(true)
   const [campaigns, setCampaigns]     = useState<any[]>([])
   const [balance, setBalance]         = useState(0)
-  const [userId, setUserId]           = useState('')
-  const [topupAmount, setTopupAmount] = useState<number>(20)
-  const [topupLoading, setTopupLoading] = useState(false)
-  const [paymentUrl, setPaymentUrl]   = useState<string | null>(null)
+  const [showDepositModal, setShowDepositModal] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -44,7 +40,6 @@ export default function AdvertisePage() {
         const { data: auth } = await supabase.auth.getUser()
         const uid = auth.user?.id
         if (!uid) throw new Error('Not authenticated')
-        setUserId(uid)
 
         const [{ data: user }, { data: cData, error: cErr }] = await Promise.all([
           supabase.from('users').select('advertiser_balance').eq('id', uid).single(),
@@ -67,29 +62,6 @@ export default function AdvertisePage() {
     load()
     return () => { cancelled = true }
   }, [supabase])
-
-  async function topUp() {
-    if (topupAmount < 5) { toast.error('Minimum top-up is $5'); return }
-    setTopupLoading(true)
-    setPaymentUrl(null)
-    try {
-      const res = await fetch(`${BOT_ENGINE_URL}/api/payments/create-topup-invoice`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, amountUsd: topupAmount }),
-      })
-      const data = await res.json()
-      if (data.paymentUrl) {
-        setPaymentUrl(data.paymentUrl)
-      } else {
-        toast.error(data.error || 'Failed to create payment link')
-      }
-    } catch {
-      toast.error('Could not reach payment service')
-    } finally {
-      setTopupLoading(false)
-    }
-  }
 
   return (
     <div style={{ maxWidth: '760px', margin: '0 auto' }}>
@@ -128,51 +100,18 @@ export default function AdvertisePage() {
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div style={{ flex: '0 0 auto' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px' }}>
-              Amount (USD)
-            </label>
-            <input
-              type='number'
-              min={5}
-              step={5}
-              value={topupAmount}
-              onChange={e => setTopupAmount(Math.max(0, Number(e.target.value)))}
-              className='input-field'
-              style={{ width: '130px' }}
-            />
-          </div>
           <button
-            onClick={topUp}
-            disabled={topupLoading || !userId}
+            onClick={() => setShowDepositModal(true)}
             style={{
               padding: '9px 18px', borderRadius: '8px', border: 'none',
-              background: topupLoading ? 'rgba(99,102,241,0.4)' : 'rgba(99,102,241,0.9)',
+              background: 'rgba(99,102,241,0.9)',
               color: 'white', fontSize: '13px', fontWeight: 600,
-              cursor: topupLoading ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+              cursor: 'pointer', whiteSpace: 'nowrap',
             }}
           >
-            {topupLoading ? 'Generating…' : 'Top Up via OxaPay'}
+            💳 Deposit USDT
           </button>
         </div>
-
-        {paymentUrl && (
-          <a
-            href={paymentUrl}
-            target='_blank'
-            rel='noreferrer'
-            style={{
-              marginTop: '12px',
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)',
-              color: '#10B981', padding: '10px 14px', borderRadius: '8px',
-              fontSize: '13px', fontWeight: 500, textDecoration: 'none',
-            }}
-          >
-            <ArrowUpRight size={14} />
-            Pay ${topupAmount.toFixed(2)} — click to open OxaPay
-          </a>
-        )}
       </div>
 
       {/* Campaigns */}
@@ -238,6 +177,15 @@ export default function AdvertisePage() {
           </div>
         )}
       </div>
+
+      <DepositModal
+        isOpen={showDepositModal}
+        onClose={() => setShowDepositModal(false)}
+        onSuccess={(newBalance) => {
+          setBalance(newBalance)
+          toast.success(`Balance updated: $${newBalance.toFixed(2)} ✓`)
+        }}
+      />
     </div>
   )
 }

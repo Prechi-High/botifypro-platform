@@ -3,15 +3,15 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Bot, LayoutDashboard, Plus, Megaphone,
-  Settings, LogOut, Menu, X, ChevronRight
+  Bot, LayoutDashboard, Megaphone,
+  Settings, LogOut, Menu, X, ChevronRight, Zap
 } from 'lucide-react'
 
 const NAV = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: Bot,             label: 'My Bots',   href: '/dashboard/bots' },
-  { icon: Plus,            label: 'Add Bot',   href: '/dashboard/bots/add' },
   { icon: Megaphone,       label: 'Advertise', href: '/dashboard/advertise' },
+  { icon: Zap,             label: 'PRO',       href: '/dashboard/upgrade' },
   { icon: Settings,        label: 'Settings',  href: '/dashboard/settings' },
 ]
 
@@ -56,20 +56,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid var(--border)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '34px',
-            height: '34px',
-            borderRadius: '10px',
-            background: 'var(--blue-gradient)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(59,130,246,0.35)'
-          }}>
-            <Bot size={18} color="#fff" />
-          </div>
-          <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>1-TouchBot</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <img
+            src="/logo-mark.svg"
+            alt="1-TouchBot"
+            style={{ height: '42px', width: '42px', display: 'block' }}
+          />
         </div>
         {mobile && (
           <button
@@ -241,19 +233,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <Menu size={22} />
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <div style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '8px',
-                background: 'var(--blue-gradient)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Bot size={14} color="#fff" />
-              </div>
-              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>1-TouchBot</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img
+                src="/logo-mark.svg"
+                alt="1-TouchBot"
+                style={{ height: '30px', width: '30px', display: 'block' }}
+              />
             </div>
             <div />
           </div>
