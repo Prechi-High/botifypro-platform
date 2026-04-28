@@ -39,7 +39,6 @@ model Bot {
   botUsers               BotUser[]
   transactions           Transaction[]
   depositTransactions    DepositTransaction[]
-  adImpressions          AdImpression[]
   referrals              Referral[]
   @@map("bots")
 }
@@ -182,39 +181,38 @@ model DepositTransaction {
 }
 
 model AdCampaign {
-  id              String   @id @default(cuid())
-  advertiserId    String   @map("advertiser_id")
-  title           String
-  messageText     String?  @map("message_text")
-  imageUrl        String?  @map("image_url")
-  buttonText      String?  @map("button_text")
-  buttonUrl       String?  @map("button_url")
-  targetCategory  String?  @map("target_category")
-  activityWindow  String   @map("activity_window")
-  cpmRate         Float    @map("cpm_rate")
-  budgetUsd       Float    @map("budget_usd")
-  spentUsd        Float    @default(0) @map("spent_usd")
-  status          String   @default("pending")
-  usersReached    Int      @default(0) @map("users_reached")
-  startDate       DateTime @default(now()) @map("start_date")
-  endDate         DateTime? @map("end_date")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  advertiser      User     @relation(fields: [advertiserId], references: [id])
-  impressions     AdImpression[]
+  id                  String    @id @default(uuid())
+  advertiserId        String    @map("advertiser_id")
+  title               String
+  message             String
+  imageUrl            String?   @map("image_url")
+  buttonText          String?   @map("button_text")
+  buttonUrl           String?   @map("button_url")
+  budgetUsd           Decimal   @map("budget_usd")
+  spentUsd            Decimal   @default(0) @map("spent_usd")
+  targetAudienceCount Int       @map("target_audience_count")
+  impressionsCount    Int       @default(0) @map("impressions_count")
+  activityWindow      String    @map("activity_window")
+  status              String    @default("pending_approval")
+  approvedAt          DateTime? @map("approved_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  advertiser          User      @relation(fields: [advertiserId], references: [id])
+  impressions         AdImpression[]
   @@map("ad_campaigns")
 }
 
 model AdImpression {
-  id          String   @id @default(cuid())
-  campaignId  String   @map("campaign_id")
-  botId       String   @map("bot_id")
-  botUserId   String   @map("bot_user_id")
-  sentAt      DateTime @default(now()) @map("sent_at")
+  id          String     @id @default(uuid())
+  campaignId  String     @map("campaign_id")
+  botUserId   String     @map("bot_user_id")
+  botId       String     @map("bot_id")
+  servedAt    DateTime   @default(now()) @map("served_at")
+
   campaign    AdCampaign @relation(fields: [campaignId], references: [id])
-  bot         Bot      @relation(fields: [botId], references: [id])
-  botUser     BotUser  @relation(fields: [botUserId], references: [id])
-  @@unique([campaignId, botUserId])
+  botUser     BotUser    @relation(fields: [botUserId], references: [id])
+
   @@map("ad_impressions")
 }
 

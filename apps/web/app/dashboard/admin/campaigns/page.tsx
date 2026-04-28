@@ -1,142 +1,130 @@
 'use client'
-
-import { useEffect, useMemo, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, BarChart2, CheckCircle, XCircle } from 'lucide-react'
-import Button from '@/components/ui/Button'
-import { ToastContainer, useToast } from '@/components/ui/Toast'
+import { CheckCircle, XCircle, Pause, Play } from 'lucide-react'
 
 export default function AdminCampaignsPage() {
-  const supabase = useMemo(() => createClient(), [])
-  const { toasts, removeToast, toast } = useToast()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const supabase = createClient()
+  const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
   const [campaigns, setCampaigns] = useState<any[]>([])
-  const [savingId, setSavingId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState<{msg:string;ok:boolean}|null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const { data, error: cErr } = await supabase
-          .from('ad_campaigns')
-          .select('id, title, advertiser_id, budget_usd, spent_usd, is_active, is_paid, target_category, created_at')
-          .order('created_at', { ascending: false })
-        if (cErr) throw cErr
-        if (cancelled) return
-        setCampaigns(data || [])
-      } catch (e: any) {
-        if (cancelled) return
-        const message = e?.message || 'Failed to load admin campaigns'
-        setError(message)
-        toast.error(message)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [supabase])
-
-  async function toggleActive(id: string, next: boolean) {
-    setSavingId(id)
-    setError(null)
-    try {
-      const { error: upErr } = await supabase.from('ad_campaigns').update({ is_active: next }).eq('id', id)
-      if (upErr) throw upErr
-      setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, is_active: next } : c)))
-      toast.success('Campaign updated!')
-    } catch (e: any) {
-      const message = e?.message || 'Update failed'
-      setError(message)
-      toast.error(message)
-    } finally {
-      setSavingId(null)
-    }
+  function notify(msg: string, ok = true) {
+    setToast({msg, ok})
+    setTimeout(() => setToast(null), 3500)
   }
 
-  async function togglePaid(id: string, next: boolean) {
-    setSavingId(id)
-    setError(null)
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('ad_campaigns')
+      .select('*, users(email)')
+      .order('created_at', { ascending: false })
+    setCampaigns(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function action(id: string, endpoint: string, body?: any) {
     try {
-      const { error: upErr } = await supabase.from('ad_campaigns').update({ is_paid: next }).eq('id', id)
-      if (upErr) throw upErr
-      setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, is_paid: next } : c)))
-      toast.success('Campaign updated!')
-    } catch (e: any) {
-      const message = e?.message || 'Update failed'
-      setError(message)
-      toast.error(message)
-    } finally {
-      setSavingId(null)
-    }
+      const res = await fetch(`${BOT_ENGINE_URL}/api/admin/campaigns/${id}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
+      })
+      const data = await res.json()
+      if (data.success) { notify(`Campaign ${endpoint}d ✓`); load() }
+      else notify(data.error || 'Failed', false)
+    } catch { notify('Request failed', false) }
+  }
+
+  const statusColor: any = {
+    pending_approval: '#FBBF24',
+    active: '#10B981',
+    paused: '#60A5FA',
+    completed: '#94a3b8',
+    rejected: '#EF4444'
   }
 
   return (
-    <div className="space-y-6">
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Admin campaigns</h1>
-        <p className="text-sm text-gray-600 mt-1">Review and enable paid campaigns.</p>
-      </div>
-
-      {error && (
-        <div className="flex gap-2 items-start text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
-          <AlertCircle size={18} className="mt-0.5" />
-          <div>{error}</div>
-        </div>
+    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
+          padding: '11px 16px', borderRadius: '10px', fontSize: '13px',
+          background: toast.ok ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${toast.ok ? '#bbf7d0' : '#fecaca'}`,
+          color: toast.ok ? '#166534' : '#dc2626'
+        }}>{toast.msg}</div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-2 text-sm font-medium text-gray-700">
-          <BarChart2 size={18} />
-          All campaigns
-        </div>
-        <div className="divide-y divide-gray-200">
-          {loading ? (
-            <div className="p-4 text-sm text-gray-600">Loading...</div>
-          ) : campaigns.length === 0 ? (
-            <div className="p-4 text-sm text-gray-600">No campaigns.</div>
-          ) : (
-            campaigns.map((c) => (
-              <div key={c.id} className="p-4 flex items-center justify-between gap-4">
+      <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '20px' }}>
+        📢 Ad Campaigns — Admin
+      </h1>
+
+      {loading ? (
+        <div style={{ color: 'var(--text-secondary)' }}>Loading...</div>
+      ) : campaigns.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>No campaigns yet</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {campaigns.map(c => (
+            <div key={c.id} style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px', padding: '16px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px' }}>
                 <div>
-                  <div className="font-medium text-gray-900">{c.title}</div>
-                  <div className="text-sm text-gray-600">
-                    Budget: ${c.budget_usd} · Spent: ${c.spent_usd} · Target: {c.target_category}
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '14px' }}>{c.title}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    By: {c.users?.email} · Window: {c.activity_window} · Budget: ${Number(c.budget_usd).toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    Target: {c.target_audience_count} users · Reached: {c.impressions_count} · Spent: ${Number(c.spent_usd).toFixed(4)}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={c.is_paid ? 'success' : 'secondary'}
-                    disabled={savingId === c.id}
-                    loading={savingId === c.id}
-                    loadingText="Updating..."
-                    onClick={() => togglePaid(c.id, !c.is_paid)}
-                  >
-                    {c.is_paid ? <CheckCircle size={18} color="#16a34a" /> : <XCircle size={18} color="#dc2626" />}
-                    {c.is_paid ? 'Paid' : 'Mark paid'}
-                  </Button>
-                  <Button
-                    variant={c.is_active ? 'success' : 'secondary'}
-                    disabled={savingId === c.id}
-                    loading={savingId === c.id}
-                    loadingText="Updating..."
-                    onClick={() => toggleActive(c.id, !c.is_active)}
-                  >
-                    {c.is_active ? <CheckCircle size={18} color="#2563eb" /> : <XCircle size={18} color="#dc2626" />}
-                    {c.is_active ? 'Active' : 'Activate'}
-                  </Button>
-                </div>
+                <span style={{
+                  padding: '3px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 600,
+                  color: statusColor[c.status] || '#94a3b8',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${statusColor[c.status] || '#94a3b8'}40`,
+                  whiteSpace: 'nowrap'
+                }}>{c.status}</span>
               </div>
-            ))
-          )}
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                {c.status === 'pending_approval' && (
+                  <>
+                    <button onClick={() => action(c.id, 'approve')}
+                      style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '7px', color: '#10B981', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckCircle size={13} /> Approve
+                    </button>
+                    <button onClick={() => action(c.id, 'reject')}
+                      style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', color: '#FCA5A5', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <XCircle size={13} /> Reject
+                    </button>
+                  </>
+                )}
+                {c.status === 'active' && (
+                  <button onClick={() => action(c.id, 'pause', { action: 'pause' })}
+                    style={{ padding: '6px 14px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '7px', color: '#60A5FA', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Pause size={13} /> Pause
+                  </button>
+                )}
+                {c.status === 'paused' && (
+                  <button onClick={() => action(c.id, 'pause', { action: 'resume' })}
+                    style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '7px', color: '#10B981', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Play size={13} /> Resume
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   )
 }

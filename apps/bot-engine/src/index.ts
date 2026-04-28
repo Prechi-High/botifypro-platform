@@ -10,6 +10,7 @@ import { handleOxapayWebhook } from './payments/oxapay'
 import { prisma } from '@botifypro/database'
 import { registerWebhook } from './registration'
 import logger from './logger'
+import { startAdCron } from './adCron'
 
 const app = express()
 app.use(express.json())
@@ -393,8 +394,87 @@ app.post('/api/bots/:botId/notify-user', async (req: Request, res: Response) => 
   }
 })
 
+// Admin approve campaign
+app.post('/api/admin/campaigns/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const campaign = await prisma.adCampaign.update({
+      where: { id },
+      data: {
+        status: 'active',
+        approvedAt: new Date(),
+        updatedAt: new Date()
+      }
+    })
+    logger.info('Campaign approved', { campaignId: id })
+    return res.json({ success: true, campaign })
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+// Admin reject campaign
+app.post('/api/admin/campaigns/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const { reason } = req.body
+    const campaign = await prisma.adCampaign.update({
+      where: { id },
+      data: { status: 'rejected', updatedAt: new Date() }
+    })
+    logger.info('Campaign rejected', { campaignId: id, reason })
+    return res.json({ success: true, campaign })
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+// Admin pause/resume campaign
+app.post('/api/admin/campaigns/:id/pause', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const { action } = req.body // "pause" or "resume"
+    const campaign = await prisma.adCampaign.update({
+      where: { id },
+      data: {
+        status: action === 'resume' ? 'active' : 'paused',
+        updatedAt: new Date()
+      }
+    })
+    return res.json({ success: true, campaign })
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+// Get campaign stats
+app.get('/api/campaigns/:id/stats', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const campaign = await prisma.adCampaign.findUnique({
+      where: { id },
+      select: {
+        id: true, title: true, status: true,
+        budgetUsd: true, spentUsd: true,
+        targetAudienceCount: true, impressionsCount: true,
+        activityWindow: true, createdAt: true, approvedAt: true
+      }
+    })
+    if (!campaign) return res.status(404).json({ error: 'Not found' })
+    return res.json({
+      ...campaign,
+      remainingAudience: campaign.targetAudienceCount - campaign.impressionsCount,
+      remainingBudget: Number(campaign.budgetUsd) - Number(campaign.spentUsd),
+      completionPercent: Math.round((campaign.impressionsCount / campaign.targetAudienceCount) * 100)
+    })
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   logger.info('1-TouchBot Bot Engine starting', { port: PORT })
   logger.info(`1-TouchBot Bot Engine running on port ${PORT}`)
 })
+startAdCron()

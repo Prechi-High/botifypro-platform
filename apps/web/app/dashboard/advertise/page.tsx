@@ -16,8 +16,11 @@ const sectionStyle: React.CSSProperties = {
 }
 
 function statusStyle(s: string) {
-  if (s === 'approved') return { bg: 'rgba(16,185,129,0.12)', color: '#10B981', border: 'rgba(16,185,129,0.25)' }
-  if (s === 'pending')  return { bg: 'rgba(245,158,11,0.12)', color: '#FBBF24', border: 'rgba(245,158,11,0.25)' }
+  if (s === 'active') return { bg: 'rgba(16,185,129,0.12)', color: '#10B981', border: 'rgba(16,185,129,0.25)' }
+  if (s === 'pending_approval') return { bg: 'rgba(245,158,11,0.12)', color: '#FBBF24', border: 'rgba(245,158,11,0.25)' }
+  if (s === 'paused') return { bg: 'rgba(59,130,246,0.12)', color: '#60A5FA', border: 'rgba(96,165,250,0.25)' }
+  if (s === 'completed') return { bg: 'rgba(148,163,184,0.12)', color: '#94a3b8', border: 'rgba(148,163,184,0.25)' }
+  if (s === 'rejected') return { bg: 'rgba(239,68,68,0.12)', color: '#EF4444', border: 'rgba(239,68,68,0.25)' }
   return { bg: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', border: 'var(--border)' }
 }
 
@@ -47,7 +50,7 @@ export default function AdvertisePage() {
           supabase.from('users').select('advertiser_balance').eq('id', uid).single(),
           supabase
             .from('ad_campaigns')
-            .select('id, title, budget_usd, spent_usd, status, target_category, created_at')
+            .select('id, title, budget_usd, spent_usd, status, target_audience_count, impressions_count, activity_window, created_at')
             .eq('advertiser_id', uid)
             .order('created_at', { ascending: false }),
         ])
@@ -191,7 +194,10 @@ export default function AdvertisePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {campaigns.map(c => {
               const sc = statusStyle(c.status)
-              const pct = c.budget_usd > 0 ? Math.min(100, (Number(c.spent_usd) / Number(c.budget_usd)) * 100) : 0
+              const pct = c.target_audience_count > 0
+                ? Math.min(100, (Number(c.impressions_count) / Number(c.target_audience_count)) * 100)
+                : 0
+              const statusLabel = c.status === 'pending_approval' ? '⏳ Awaiting Approval' : c.status
               return (
                 <div key={c.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '6px' }}>
@@ -200,13 +206,28 @@ export default function AdvertisePage() {
                       fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '999px',
                       background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, whiteSpace: 'nowrap',
                     }}>
-                      {c.status}
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
+                    <span style={{
+                      fontSize: '11px',
+                      padding: '3px 8px',
+                      borderRadius: '999px',
+                      background: 'rgba(99,102,241,0.08)',
+                      border: '1px solid rgba(99,102,241,0.18)',
+                      color: '#818cf8'
+                    }}>
+                      {c.activity_window}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Spent: <strong style={{ color: 'var(--text-secondary)' }}>${Number(c.spent_usd).toFixed(2)}</strong>
+                      {' '}of{' '}
+                      <strong style={{ color: 'var(--text-secondary)' }}>${Number(c.budget_usd).toFixed(2)}</strong>
                     </span>
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    Budget: <strong style={{ color: 'var(--text-secondary)' }}>${Number(c.budget_usd).toFixed(2)}</strong>
-                    {' · '}Spent: <strong style={{ color: 'var(--text-secondary)' }}>${Number(c.spent_usd).toFixed(2)}</strong>
-                    {' · '}Target: {c.target_category}
+                    Impressions: {Number(c.impressions_count)} / {Number(c.target_audience_count)}
                   </div>
                   <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '999px', height: '4px', overflow: 'hidden' }}>
                     <div style={{ background: '#3b82f6', height: '100%', width: `${pct}%`, borderRadius: '999px', transition: 'width 0.3s' }} />
