@@ -1,54 +1,107 @@
 import { prisma } from '@botifypro/database'
-import { redisIncr, redisSet } from './redis'
+import axios from 'axios'
 import logger from './logger'
 
 export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
   try {
-    if (!bot.platformAdminConfirmed) return
+    if (!bot?.settings) return
+    if (bot.settings.isPro) return // pro bot owners don't receive ads
 
-    const count = await redisIncr('msg_count:' + botUser.id, 3600)
-    if (count < 5) return
+    // Check 24hr rule - no ad to this user in last 24hrs from ANY campaign
+    const lastAd = botUser.lastAdReceivedAt
+    if (lastAd) {
+      const hoursSinceLast = (Date.now() - new Date(lastAd).getTime()) / (1000 * 60 * 60)
+      if (hoursSinceLast < 24) return
+    }
 
-    await redisSet('msg_count:' + botUser.id, '0')
-
+    // Find eligible campaigns - active, has budget, matches bot category
+    const now = new Date()
     const campaigns = await prisma.adCampaign.findMany({
-      where: { status: 'approved' },
-      take: 20
+      where: {
+        status: 'active',
+        budgetUsd: { gt: 0 },
+        startDate: { lte: now },
+        OR: [
+          { endDate: null },
+          { endDate: { gte: now } }
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
     })
 
-    const eligible = campaigns
-      .filter((c: any) => Number(c.spentUsd) < Number(c.budgetUsd))
-      .filter((c: any) => c.targetCategory === 'all' || c.targetCategory === bot.category)
+    if (campaigns.length === 0) return
 
-    if (eligible.length === 0) {
-      logger.debug('No ads available', { botId: bot.id, category: bot.category })
-      return
-    }
+    // Filter out campaigns already shown to this user
+    const shownImpressions = await prisma.adImpression.findMany({
+      where: { botUserId: botUser.id },
+      select: { campaignId: true }
+    })
+    const shownCampaignIds = new Set(shownImpressions.map((i: any) => i.campaignId))
 
+    const eligible = campaigns.filter((c: any) => !shownCampaignIds.has(c.id))
+    if (eligible.length === 0) return
+
+    // Pick random eligible campaign
     const campaign = eligible[Math.floor(Math.random() * eligible.length)]
-    const { sendMessage } = await import('./commands')
 
-    const text = '\n━━━━━━━━━━━━\n📢 <b>Sponsored</b>\n\n' + campaign.messageText
-    if (campaign.buttonText && campaign.buttonUrl) {
-      await sendMessage(bot.botToken, chatId, text, {
-        inline_keyboard: [[{ text: campaign.buttonText, url: campaign.buttonUrl }]]
-      })
+    // Build message
+    const replyMarkup = campaign.buttonText && campaign.buttonUrl
+      ? { inline_keyboard: [[{ text: campaign.buttonText, url: campaign.buttonUrl }]] }
+      : undefined
+
+    // Send the ad
+    if (campaign.imageUrl) {
+      await axios.post(
+        `https://api.telegram.org/bot${bot.botToken}/sendPhoto`,
+        {
+          chat_id: chatId,
+          photo: campaign.imageUrl,
+          caption: `📢 <b>${campaign.title}</b>\n\n${campaign.messageText}`,
+          parse_mode: 'HTML',
+          reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
+        }
+      )
     } else {
-      await sendMessage(bot.botToken, chatId, text)
+      await axios.post(
+        `https://api.telegram.org/bot${bot.botToken}/sendMessage`,
+        {
+          chat_id: chatId,
+          text: `📢 <b>${campaign.title}</b>\n\n${campaign.messageText}`,
+          parse_mode: 'HTML',
+          reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
+        }
+      )
     }
 
+    // Record impression
     await prisma.adImpression.create({
-      data: { campaignId: campaign.id, botId: bot.id, botUserId: botUser.id }
+      data: {
+        id: require('crypto').randomUUID(),
+        campaignId: campaign.id,
+        botUserId: botUser.id,
+        botId: bot.id,
+        sentAt: new Date()
+      }
     })
 
+    // Update user lastAdReceivedAt
+    await prisma.botUser.update({
+      where: { id: botUser.id },
+      data: { lastAdReceivedAt: new Date() }
+    })
+
+    // Deduct CPM cost from campaign budget
+    const cpmRate = 0.001 // $0.001 per impression
     await prisma.adCampaign.update({
       where: { id: campaign.id },
-      data: { spentUsd: { increment: campaign.cpmRate / 1000 } }
+      data: {
+        budgetUsd: { decrement: cpmRate },
+        updatedAt: new Date()
+      }
     })
 
-    logger.info('Ad served', { campaignId: campaign.id, botId: bot.id, botUserId: botUser.id })
-  } catch {
-    return
+    logger.info('Ad served', { campaignId: campaign.id, botUserId: botUser.id })
+  } catch (error: any) {
+    logger.error('maybeServeAd error', { error: error.message })
   }
 }
-

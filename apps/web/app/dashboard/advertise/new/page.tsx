@@ -166,6 +166,8 @@ export default function NewCampaignPage() {
         .from('ad_campaigns')
         .insert({
           id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
           advertiser_id: advertiserId,
           title: title.trim(),
           message_text: messageText.trim(),

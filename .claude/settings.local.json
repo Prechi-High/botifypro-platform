@@ -3,7 +3,9 @@
     "allow": [
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npx prisma *)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.nnlljpwrabcyochobflq:gETCHARGED123o@aws-1-eu-west-1.pooler.supabase.com:5432/postgres\" DIRECT_URL=\"postgresql://postgres.nnlljpwrabcyochobflq:gETCHARGED123o@aws-1-eu-west-1.pooler.supabase.com:5432/postgres\" npx prisma db push)"
     ]
   }
 }

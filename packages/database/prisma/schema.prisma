@@ -196,6 +196,8 @@ model AdCampaign {
   spentUsd        Float    @default(0) @map("spent_usd")
   status          String   @default("pending")
   usersReached    Int      @default(0) @map("users_reached")
+  startDate       DateTime @default(now()) @map("start_date")
+  endDate         DateTime? @map("end_date")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   advertiser      User     @relation(fields: [advertiserId], references: [id])
