@@ -5,13 +5,12 @@ import { logger } from './logger'
 
 // Activity window → time range in hours
 function getActivityWindowRange(window: string): { minHours: number; maxHours: number } {
-  switch (window) {
-    case '24h': return { minHours: 0, maxHours: 24 }
-    case '48h': return { minHours: 24, maxHours: 48 }
-    case '72h': return { minHours: 48, maxHours: 72 }
-    case '7d':  return { minHours: 72, maxHours: 168 }
-    default:    return { minHours: 0, maxHours: 24 }
-  }
+  const w = window.toLowerCase().trim()
+  if (w === '24h' || w === '24hr') return { minHours: 0, maxHours: 24 }
+  if (w === '48h' || w === '48hr') return { minHours: 24, maxHours: 48 }
+  if (w === '72h' || w === '72hr') return { minHours: 48, maxHours: 72 }
+  if (w === '7d' || w === '7day' || w === '7days') return { minHours: 72, maxHours: 168 }
+  return { minHours: 0, maxHours: 24 } // default to 24h
 }
 
 export async function runAdDispatch() {
@@ -20,7 +19,7 @@ export async function runAdDispatch() {
   try {
     // Only process ACTIVE campaigns (not pending_approval, not paused, not completed)
     const campaigns = await prisma.adCampaign.findMany({
-      where: { status: 'active' },
+      where: { status: { in: ['active', 'approved'] } },
       include: { advertiser: true }
     })
 
