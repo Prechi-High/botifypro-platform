@@ -1,191 +1,184 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, Settings, ShieldAlert, Banknote } from 'lucide-react'
-import { ToastContainer, useToast } from '@/components/ui/Toast'
+import { Save, Eye, EyeOff, Settings, DollarSign, Megaphone } from 'lucide-react'
 
 export default function AdminSettingsPage() {
-  const supabase = useMemo(() => createClient(), [])
-  const { toasts, removeToast, toast } = useToast()
+  const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
-  const [settingsId, setSettingsId] = useState<string | null>(null)
+  const [toast, setToast] = useState<{msg:string;ok:boolean}|null>(null)
 
-  const [minCampaignBudgetUsd, setMinCampaignBudgetUsd] = useState(20)
+  const [oxapayMerchantKey, setOxapayMerchantKey] = useState('')
+  const [oxapaySecretKey, setOxapaySecretKey] = useState('')
+  const [showMerchantKey, setShowMerchantKey] = useState(false)
+  const [showSecretKey, setShowSecretKey] = useState(false)
+
+  const [minCampaignBudget, setMinCampaignBudget] = useState(20)
   const [adIntervalHours, setAdIntervalHours] = useState(5)
-  const [cpmStandard, setCpmStandard] = useState(0.6)
-  const [cpm24hr, setCpm24hr] = useState(1.0)
-  const [cpm48hr, setCpm48hr] = useState(1.0)
-  const [cpm72hr, setCpm72hr] = useState(0.9)
-  const [cpm7day, setCpm7day] = useState(0.8)
+  const [cpmRate24h, setCpmRate24h] = useState(0.02)
+  const [cpmRate48h, setCpmRate48h] = useState(0.015)
+  const [cpmRate72h, setCpmRate72h] = useState(0.01)
+  const [cpmRate7d, setCpmRate7d] = useState(0.005)
+
+  const [platformFeePercent, setPlatformFeePercent] = useState(10)
+  const [proPlanPrice, setProPlanPrice] = useState(10)
+
+  function notify(msg: string, ok = true) {
+    setToast({msg, ok})
+    setTimeout(() => setToast(null), 3500)
+  }
 
   useEffect(() => {
-    let cancelled = false
     async function load() {
       setLoading(true)
-      try {
-        const { data: auth } = await supabase.auth.getUser()
-        const userId = auth.user?.id
-        if (!userId) throw new Error('Not authenticated')
-
-        const { data: user } = await supabase.from('users').select('role').eq('id', userId).single()
-        if (cancelled) return
-        if (user?.role !== 'admin') { setIsAdmin(false); setLoading(false); return }
-        setIsAdmin(true)
-
-        const { data: ps, error } = await supabase.from('platform_settings').select('*').limit(1).single()
-        if (error) throw error
-        if (cancelled) return
-
-        setSettingsId(ps.id)
-        setMinCampaignBudgetUsd(ps.min_campaign_budget_usd)
-        setAdIntervalHours(ps.ad_interval_hours)
-        setCpmStandard(ps.cpm_standard)
-        setCpm24hr(ps.cpm_24hr)
-        setCpm48hr(ps.cpm_48hr)
-        setCpm72hr(ps.cpm_72hr)
-        setCpm7day(ps.cpm_7day)
-      } catch (e: any) {
-        if (!cancelled) toast.error(e?.message || 'Failed to load settings')
-      } finally {
-        if (!cancelled) setLoading(false)
+      const { data } = await supabase
+        .from('platform_settings').select('*').single()
+      if (data) {
+        setOxapayMerchantKey(data.oxapay_merchant_key || '')
+        setOxapaySecretKey(data.oxapay_secret_key || '')
+        setMinCampaignBudget(Number(data.min_campaign_budget_usd || 20))
+        setAdIntervalHours(Number(data.ad_interval_hours || 5))
+        setCpmRate24h(Number(data.cpm_24hr || 0.02))
+        setCpmRate48h(Number(data.cpm_48hr || 0.015))
+        setCpmRate72h(Number(data.cpm_72hr || 0.01))
+        setCpmRate7d(Number(data.cpm_7day || 0.005))
+        setPlatformFeePercent(Number(data.platform_fee_percent || 10))
+        setProPlanPrice(Number(data.pro_plan_price || 10))
       }
+      setLoading(false)
     }
     load()
-    return () => { cancelled = true }
-  }, [supabase])
+  }, [])
 
   async function save() {
-    if (!settingsId) return
     setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('platform_settings')
-        .update({
-          min_campaign_budget_usd: minCampaignBudgetUsd,
-          ad_interval_hours: adIntervalHours,
-          cpm_standard: cpmStandard,
-          cpm_24hr: cpm24hr,
-          cpm_48hr: cpm48hr,
-          cpm_72hr: cpm72hr,
-          cpm_7day: cpm7day,
-        })
-        .eq('id', settingsId)
-      if (error) throw error
-      toast.success('Settings saved!')
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to save')
-    } finally {
-      setSaving(false)
-    }
+    const { error } = await supabase.from('platform_settings').upsert({
+      id: '1',
+      oxapay_merchant_key: oxapayMerchantKey,
+      oxapay_secret_key: oxapaySecretKey,
+      min_campaign_budget_usd: minCampaignBudget,
+      ad_interval_hours: adIntervalHours,
+      cpm_24hr: cpmRate24h,
+      cpm_48hr: cpmRate48h,
+      cpm_72hr: cpmRate72h,
+      cpm_7day: cpmRate7d,
+      platform_fee_percent: platformFeePercent,
+      pro_plan_price: proPlanPrice,
+      updated_at: new Date().toISOString()
+    })
+    if (error) notify(error.message, false)
+    else notify('Settings saved ✓')
+    setSaving(false)
   }
 
-  if (!loading && isAdmin === false) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', textAlign: 'center', gap: '16px' }}>
-        <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ShieldAlert size={28} color='#EF4444' />
-        </div>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Access denied</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0 }}>This page is restricted to platform administrators.</p>
-      </div>
-    )
-  }
+  const section = (title: string, icon: any, children: any) => (
+    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+      <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {icon} {title}
+      </h3>
+      {children}
+    </div>
+  )
 
-  const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px',
-  }
-  const sectionStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px',
-  }
+  const field = (label: string, input: any, hint?: string) => (
+    <div style={{ marginBottom: '16px' }}>
+      <label style={{ display: 'block', fontSize: '13px', color: '#374151', fontWeight: 500, marginBottom: '6px' }}>{label}</label>
+      {input}
+      {hint && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>{hint}</div>}
+    </div>
+  )
 
-  const cpmRows = [
-    { label: 'Standard',     value: cpmStandard, set: setCpmStandard },
-    { label: '24hr Active',  value: cpm24hr,     set: setCpm24hr },
-    { label: '48hr Active',  value: cpm48hr,     set: setCpm48hr },
-    { label: '72hr Active',  value: cpm72hr,     set: setCpm72hr },
-    { label: '7 Day Active', value: cpm7day,     set: setCpm7day },
-  ]
+  const secretInput = (value: string, onChange: any, show: boolean, setShow: any, placeholder: string) => (
+    <div style={{ position: 'relative' }}>
+      <input
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ width: '100%', padding: '9px 44px 9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b', boxSizing: 'border-box' as const }}
+      />
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  )
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    <div style={{ background: '#f8fafc', minHeight: '100vh', padding: '24px' }}>
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
+          padding: '11px 16px', borderRadius: '10px', fontSize: '13px',
+          background: toast.ok ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${toast.ok ? '#bbf7d0' : '#fecaca'}`,
+          color: toast.ok ? '#166534' : '#dc2626'
+        }}>{toast.msg}</div>
+      )}
 
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Settings size={22} color='#6366f1' />Platform Settings
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
-          Configure platform-wide ad delivery rates and limits.
-        </p>
-      </div>
-
-      {loading ? (
-        <div className='skeleton' style={{ height: '320px', borderRadius: '16px' }} />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-
-          <div style={sectionStyle}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '6px' }}><Settings size={16} /> General</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={labelStyle}>Min campaign budget (USD)</label>
-                <input
-                  type='number' step='1' min='1'
-                  value={minCampaignBudgetUsd}
-                  onChange={e => setMinCampaignBudgetUsd(Number(e.target.value))}
-                  className='input-field'
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Ad interval (hours)</label>
-                <input
-                  type='number' step='1' min='1'
-                  value={adIntervalHours}
-                  onChange={e => setAdIntervalHours(Number(e.target.value))}
-                  className='input-field'
-                />
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Min hours between ads per user
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style={sectionStyle}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '6px' }}><Banknote size={16} /> CPM Rates (USD per 1,000 users)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {cpmRows.map(row => (
-                <div key={row.label}>
-                  <label style={labelStyle}>{row.label} ($)</label>
-                  <input
-                    type='number' step='0.01' min='0'
-                    value={row.value}
-                    onChange={e => row.set(Number(e.target.value))}
-                    className='input-field'
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button
-            onClick={save}
-            disabled={saving}
-            style={{
-              padding: '12px', borderRadius: '10px', border: 'none',
-              background: saving ? '#93c5fd' : '#2563eb',
-              color: 'white', fontSize: '14px', fontWeight: 600,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-            }}
-          >
-            {saving ? 'Saving…' : <><CheckCircle size={16} />Save Settings</>}
+      <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b', margin: 0 }}>
+            ⚙️ Platform Settings
+          </h1>
+          <button onClick={save} disabled={saving}
+            style={{ padding: '9px 20px', background: '#2563eb', border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Save size={14} /> {saving ? 'Saving...' : 'Save All'}
           </button>
         </div>
-      )}
+
+        {loading ? (
+          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '32px', color: '#64748b', fontSize: '14px' }}>
+            Loading settings...
+          </div>
+        ) : (
+          <>
+            {section('💳 OxaPay Integration', <DollarSign size={16} color="#2563eb" />, <>
+              {field('Merchant API Key', secretInput(oxapayMerchantKey, setOxapayMerchantKey, showMerchantKey, setShowMerchantKey, 'OxaPay Merchant API Key'), 'Used for receiving deposits and creating payment links')}
+              {field('Secret Key', secretInput(oxapaySecretKey, setOxapaySecretKey, showSecretKey, setShowSecretKey, 'OxaPay Secret Key'), 'Used to verify webhook callbacks')}
+            </>)}
+
+            {section('📢 Ad System Settings', <Megaphone size={16} color="#8b5cf6" />, <>
+              {field('Minimum Campaign Budget (USD)',
+                <input type="number" min="5" value={minCampaignBudget} onChange={e => setMinCampaignBudget(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                'Minimum budget an advertiser must set for a campaign')}
+              {field('Ad Dispatch Interval (hours)',
+                <input type="number" min="1" value={adIntervalHours} onChange={e => setAdIntervalHours(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                'How often the ad cron runs (default: 5 hours)')}
+              {field('CPM Rate - 24h Window',
+                <input type="number" min="0" step="0.001" value={cpmRate24h} onChange={e => setCpmRate24h(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
+              {field('CPM Rate - 48h Window',
+                <input type="number" min="0" step="0.001" value={cpmRate48h} onChange={e => setCpmRate48h(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
+              {field('CPM Rate - 72h Window',
+                <input type="number" min="0" step="0.001" value={cpmRate72h} onChange={e => setCpmRate72h(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
+              {field('CPM Rate - 7d Window',
+                <input type="number" min="0" step="0.001" value={cpmRate7d} onChange={e => setCpmRate7d(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
+            </>)}
+
+            {section('💰 Platform Revenue', <Settings size={16} color="#059669" />, <>
+              {field('Platform Fee on Withdrawals (%)',
+                <input type="number" min="0" max="50" value={platformFeePercent} onChange={e => setPlatformFeePercent(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                'Percentage cut taken from each bot withdrawal')}
+              {field('Pro Plan Price (USD/month)',
+                <input type="number" min="1" value={proPlanPrice} onChange={e => setProPlanPrice(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                'Monthly price for Pro plan charged from advertiser balance')}
+            </>)}
+          </>
+        )}
+      </div>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Bot, LayoutDashboard, Megaphone,
-  Settings, LogOut, Menu, X, ChevronRight, Zap
+  Settings, LogOut, Menu, X, ChevronRight, Zap, Shield
 } from 'lucide-react'
 
 const NAV = [
@@ -15,10 +15,13 @@ const NAV = [
   { icon: Settings,        label: 'Settings',  href: '/dashboard/settings' },
 ]
 
+const ADMIN_NAV = { icon: Shield, label: 'Admin', href: '/dashboard/admin' }
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [open, setOpen]       = useState(false)
   const [mobile, setMobile]   = useState(false)
   const [email, setEmail]     = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const pathname              = usePathname()
   const supabase              = createClient()
 
@@ -30,9 +33,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user?.email) setEmail(data.user.email)
+    let cancelled = false
+    const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@1-touchbot.com').toLowerCase()
+
+    supabase.auth.getUser().then(async ({ data }) => {
+      const user = data?.user
+      const userEmail = user?.email || ''
+      if (cancelled) return
+      if (userEmail) setEmail(userEmail)
+
+      if (!user?.id) {
+        setIsAdmin(false)
+        return
+      }
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role, email')
+        .eq('id', user.id)
+        .single()
+
+      if (cancelled) return
+      const profileEmail = String(profile?.email || userEmail).toLowerCase()
+      setIsAdmin(profile?.role === 'admin' || profileEmail === adminEmail)
     })
+
+    return () => { cancelled = true }
   }, [])
 
   function isActive(href: string) {
@@ -82,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
-        {NAV.map(item => {
+        {[...NAV, ...(isAdmin ? [ADMIN_NAV] : [])].map(item => {
           const Icon = item.icon
           const active = isActive(item.href)
           return (
