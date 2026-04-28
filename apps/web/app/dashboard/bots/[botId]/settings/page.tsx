@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, Zap, Hand, Eye, EyeOff, AlertTriangle } from 'lucide-react'
+import { AlertCircle, Zap, Hand, Eye, EyeOff, AlertTriangle, MessageSquare, Shield, Coins, Radio, ArrowUpFromLine, CheckCircle, XCircle } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 function ToggleRow({ label, desc, enabled, onToggle }: {
@@ -322,8 +322,8 @@ export default function BotSettingsPage() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {webhookStatus
-                ? <i className="fa-solid fa-circle-check" style={{ color: '#10B981', fontSize: '14px' }}></i>
-                : <i className="fa-solid fa-circle-xmark" style={{ color: '#EF4444', fontSize: '14px' }}></i>
+                ? <CheckCircle size={16} style={{color:'#10B981'}} />
+                : <XCircle size={16} style={{color:'#EF4444'}} />
               }
               <span style={{ fontSize: '13px', fontWeight: 500, color: webhookStatus ? '#10B981' : '#FCA5A5' }}>
                 {webhookStatus ? 'Webhook active — bot is receiving messages' : 'Webhook not set — bot cannot receive messages'}
@@ -341,7 +341,7 @@ export default function BotSettingsPage() {
 
           {/* Welcome */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}><i className="fa-solid fa-comment-dots" style={{ marginRight: '8px', color: '#3B82F6' }}></i>Welcome Message</h3>
+            <h3 style={sectionTitle}><MessageSquare size={16} style={{marginRight:'8px',color:'#3B82F6'}} />Welcome Message</h3>
             <ToggleRow
               label="Send welcome message"
               desc="Show a message when users first start the bot"
@@ -364,7 +364,7 @@ export default function BotSettingsPage() {
 
           {/* Security */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}><i className="fa-solid fa-shield-halved" style={{ marginRight: '8px', color: '#3B82F6' }}></i>Security</h3>
+            <h3 style={sectionTitle}><Shield size={16} style={{marginRight:'8px',color:'#3B82F6'}} />Security</h3>
             <ToggleRow
               label="Captcha verification"
               desc="New users must solve a math challenge before accessing the bot"
@@ -375,7 +375,7 @@ export default function BotSettingsPage() {
 
           {/* Currency */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}><i className="fa-solid fa-coins" style={{ marginRight: '8px', color: '#F59E0B' }}></i>Currency</h3>
+            <h3 style={sectionTitle}><Coins size={16} style={{marginRight:'8px',color:'#F59E0B'}} />Currency</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={labelStyle}>Currency name</label>
@@ -417,7 +417,7 @@ export default function BotSettingsPage() {
 
           {/* Channels */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}><i className="fa-solid fa-bullhorn" style={{ marginRight: '8px', color: '#10B981' }}></i>Channels</h3>
+            <h3 style={sectionTitle}><Radio size={16} style={{marginRight:'8px',color:'#10B981'}} />Channels</h3>
             <ToggleRow
               label="Require channel join"
               desc="Users must join all listed channels before using the bot"
@@ -496,7 +496,7 @@ export default function BotSettingsPage() {
 
           {/* Withdrawal Settings */}
           <div style={sectionCardStyle}>
-            <h3 style={sectionTitle}><i className="fa-solid fa-money-bill-transfer" style={{ marginRight: '8px', color: '#8B5CF6' }}></i>Withdrawal Settings</h3>
+            <h3 style={sectionTitle}><ArrowUpFromLine size={16} style={{marginRight:'8px',color:'#8B5CF6'}} />Withdrawal Settings</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
               <div>

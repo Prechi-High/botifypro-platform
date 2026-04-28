@@ -16,6 +16,21 @@ const ACTIVITY_WINDOWS = [
 
 const MIN_BUDGET = 20
 
+const AD_BUTTON_TYPES = [
+  { value: '', label: 'Select button type...' },
+  { value: 'url', label: '🔗 Open URL / Website' },
+  { value: 'join_channel', label: '📢 Join Channel' },
+  { value: 'learn_more', label: '📖 Learn More' },
+  { value: 'get_started', label: '🚀 Get Started' },
+  { value: 'shop_now', label: '🛒 Shop Now' },
+  { value: 'download', label: '⬇️ Download' },
+  { value: 'contact_us', label: '📞 Contact Us' },
+  { value: 'watch_video', label: '▶️ Watch Video' },
+  { value: 'claim_offer', label: '🎁 Claim Offer' },
+  { value: 'subscribe', label: '🔔 Subscribe' },
+  { value: 'view_more', label: '👀 View More' },
+]
+
 const sectionStyle: React.CSSProperties = {
   background: 'rgba(255,255,255,0.03)',
   border: '1px solid var(--border)',
@@ -70,6 +85,9 @@ export default function NewCampaignPage() {
   })
 
   const [done, setDone] = useState(false)
+  const [adImagePreview, setAdImagePreview] = useState('')
+  const [uploadingAdImage, setUploadingAdImage] = useState(false)
+  const [adBtnType, setAdBtnType] = useState('')
 
   useEffect(() => {
     async function loadMeta() {
@@ -121,6 +139,15 @@ export default function NewCampaignPage() {
 
   async function create() {
     if (!canCreate) return
+    if (!imageUrl || !imageUrl.startsWith('https://')) {
+      toast.error('Valid image URL required (must start with https://)'); return
+    }
+    if (!title?.trim()) { toast.error('Title is required'); return }
+    if (!messageText?.trim()) { toast.error('Message text is required'); return }
+    if (!adBtnType) { toast.error('Button type is required'); return }
+    if (!buttonUrl || !buttonUrl.startsWith('https://')) {
+      toast.error('Valid button URL required (must start with https://)'); return
+    }
     setCreating(true)
     try {
       const { data: auth } = await supabase.auth.getUser()
@@ -138,6 +165,7 @@ export default function NewCampaignPage() {
       const { error: cErr } = await supabase
         .from('ad_campaigns')
         .insert({
+          id: crypto.randomUUID(),
           advertiser_id: advertiserId,
           title: title.trim(),
           message_text: messageText.trim(),
@@ -242,20 +270,90 @@ export default function NewCampaignPage() {
           <Field label='Message text'>
             <textarea value={messageText} onChange={e => setMessageText(e.target.value)} className='input-field' style={{ minHeight: '100px' }} placeholder='Your sponsored message shown to users…' />
           </Field>
-          <Field label='Image URL (optional)'>
-            <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} className='input-field' placeholder='https://…' />
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Field label='Button text (optional)'>
-              <input value={buttonText} onChange={e => setButtonText(e.target.value)} className='input-field' placeholder='Learn more' />
-            </Field>
-            <Field label={buttonText ? 'Button URL *' : 'Button URL (optional)'}>
-              <input value={buttonUrl} onChange={e => setButtonUrl(e.target.value)} className='input-field' placeholder='https://…' />
-            </Field>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Image <span style={{color:'#EF4444'}}>*</span></label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <input
+                value={imageUrl}
+                onChange={e => { setImageUrl(e.target.value); setAdImagePreview(e.target.value) }}
+                className="input-field"
+                placeholder="https://example.com/image.jpg"
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ height: '1px', flex: 1, background: 'rgba(255,255,255,0.08)' }} />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>or</span>
+                <div style={{ height: '1px', flex: 1, background: 'rgba(255,255,255,0.08)' }} />
+              </div>
+              <label style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                border: '1px dashed rgba(255,255,255,0.15)',
+                background: 'rgba(255,255,255,0.02)',
+                color: 'var(--text-secondary)', fontSize: '13px'
+              }}>
+                {uploadingAdImage ? '⏳ Uploading...' : '📁 Upload Image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    if (file.size > 5000000) { toast.error('Image too large. Max 5MB.'); return }
+                    setUploadingAdImage(true)
+                    try {
+                      const fileExt = file.name.split('.').pop()
+                      const fileName = `ad-${Date.now()}.${fileExt}`
+                      const { error } = await supabase.storage
+                        .from('broadcast-images')
+                        .upload(fileName, file, { upsert: true })
+                      if (error) throw error
+                      const { data: urlData } = supabase.storage
+                        .from('broadcast-images')
+                        .getPublicUrl(fileName)
+                      setImageUrl(urlData.publicUrl)
+                      setAdImagePreview(urlData.publicUrl)
+                      toast.success('Image uploaded ✓')
+                    } catch (err: any) {
+                      toast.error('Upload failed: ' + err.message)
+                    }
+                    setUploadingAdImage(false)
+                  }}
+                />
+              </label>
+              {adImagePreview && (
+                <div style={{ position: 'relative' }}>
+                  <img src={adImagePreview} alt="Preview"
+                    style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '8px' }}
+                    onError={() => setAdImagePreview('')}
+                  />
+                  <button onClick={() => { setImageUrl(''); setAdImagePreview('') }}
+                    style={{ position: 'absolute', top: '6px', right: '6px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', color: 'white', fontSize: '14px' }}>
+                    ×
+                  </button>
+                </div>
+              )}
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Must start with https://</div>
+            </div>
           </div>
-          {buttonText.trim() && !buttonUrl.trim() && (
-            <div style={warnStyle}><AlertCircle size={13} />Button URL is required when button text is set</div>
-          )}
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Button Type <span style={{color:'#EF4444'}}>*</span></label>
+            <select
+              value={adBtnType}
+              onChange={e => { setAdBtnType(e.target.value); setButtonText(AD_BUTTON_TYPES.find(t => t.value === e.target.value)?.label.replace(/^[^\w]+/, '') || '') }}
+              className="input-field"
+              style={{ color: '#1e293b', background: 'white' }}
+            >
+              {AD_BUTTON_TYPES.map(t => <option key={t.value} value={t.value} style={{color:'#1e293b'}}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>Button URL *</label>
+            <input value={buttonUrl} onChange={e => setButtonUrl(e.target.value)} className='input-field' placeholder='https://…' />
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              Must start with https://
+            </div>
+          </div>
         </section>
 
         {/* Targeting */}
@@ -263,7 +361,7 @@ export default function NewCampaignPage() {
           <h3 style={sectionHead}><Target size={16} /> Targeting</h3>
           <Field label='Target category'>
             <div style={{ position: 'relative' }}>
-              <select value={targetCategory} onChange={e => setTargetCategory(e.target.value)} className='input-field' style={{ appearance: 'none', paddingRight: '32px', cursor: 'pointer' }}>
+              <select value={targetCategory} onChange={e => setTargetCategory(e.target.value)} className='input-field' style={{ appearance: 'none', paddingRight: '32px', cursor: 'pointer', color: '#1e293b', background: 'white' }}>
                 {categories.map(c => (
                   <option key={c} value={c}>{c === 'all' ? 'All categories' : c.charAt(0).toUpperCase() + c.slice(1)}</option>
                 ))}
@@ -273,7 +371,7 @@ export default function NewCampaignPage() {
           </Field>
           <Field label='Activity window'>
             <div style={{ position: 'relative' }}>
-              <select value={activityWindow} onChange={e => setActivityWindow(e.target.value)} className='input-field' style={{ appearance: 'none', paddingRight: '32px', cursor: 'pointer' }}>
+              <select value={activityWindow} onChange={e => setActivityWindow(e.target.value)} className='input-field' style={{ appearance: 'none', paddingRight: '32px', cursor: 'pointer', color: '#1e293b', background: 'white' }}>
                 {ACTIVITY_WINDOWS.map(w => (
                   <option key={w.value} value={w.value}>
                     {w.label} (${(cpmRates[w.value] ?? w.defaultCpm).toFixed(2)} CPM)

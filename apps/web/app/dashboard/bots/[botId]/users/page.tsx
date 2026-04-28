@@ -252,7 +252,14 @@ export default function UsersPage() {
 
   async function sendBroadcast() {
     if (!broadcastText.trim()) { notify('Message text is required', false); return }
-    if (broadcastBtnLink && !broadcastBtnLink.startsWith('https://')) { notify('Please enter a valid button link starting with https://', false); return }
+    if (broadcastBtnLink && !broadcastBtnLink.startsWith('https://') && !broadcastBtnLink.startsWith('http://')) {
+      notify('Button link must start with https://', false)
+      return
+    }
+    if (broadcastImage && !broadcastImage.startsWith('https://') && !broadcastImage.startsWith('http://') && !broadcastImage.startsWith('data:')) {
+      notify('Image URL must start with https://', false)
+      return
+    }
     if (!confirm(`Send broadcast to all ${users.length} users?`)) return
     setBroadcasting(true)
     setBroadcastProgress(0)
@@ -794,6 +801,9 @@ export default function UsersPage() {
                       </button>
                     </div>
                   )}
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Must start with https://
+                  </div>
                 </div>
               </div>
 
@@ -831,6 +841,9 @@ export default function UsersPage() {
                     <AlertCircle size={14} /> {broadcastBtnLinkError}
                   </p>
                 )}
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Must start with https://
+                </div>
               </div>
 
               <button
