@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { PREBUILT_COMMANDS, COMMAND_CATEGORIES } from '@/lib/prebuiltCommands'
 import { useToast, ToastContainer } from '@/components/ui/Toast'
 import Button from '@/components/ui/Button'
+import { Book, PenLine, AlertTriangle } from 'lucide-react'
 
 export default function CommandsPage({ params }: { params: { botId: string } }) {
   const botId = params.botId
@@ -179,7 +180,9 @@ export default function CommandsPage({ params }: { params: { botId: string } }) 
               transition:'all 0.15s'
             }}
           >
-            {tab === 'library' ? '📚 Command Library' : '✏️ Custom Commands'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+              {tab === 'library' ? <><Book size={16} /> Command Library</> : <><PenLine size={16} /> Custom Commands</>}
+            </div>
           </button>
         ))}
       </div>
@@ -270,8 +273,9 @@ export default function CommandsPage({ params }: { params: { botId: string } }) 
                       </div>
                       <p style={{color:'#64748b',fontSize:'0.8rem',margin:0}}>{cmd.description}</p>
                       {cmd.needsSetup && cmd.setupInstructions && (
-                        <p style={{color:'#d97706',fontSize:'0.75rem',margin:'4px 0 0',fontStyle:'italic'}}>
-                          ⚠️ {cmd.setupInstructions}
+                        <p style={{color:'#d97706',fontSize:'0.75rem',margin:'4px 0 0',fontStyle:'italic', display: 'flex', gap: '4px'}}>
+                          <AlertTriangle size={12} style={{ marginTop: '2px', flexShrink: 0 }} />
+                          <span>{cmd.setupInstructions}</span>
                         </p>
                       )}
                     </div>

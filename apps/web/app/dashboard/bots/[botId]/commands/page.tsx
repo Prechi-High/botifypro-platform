@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, Lock, Plus, ThumbsUp, Zap } from 'lucide-react'
+import { Loader2, Lock, Plus, ThumbsUp, Zap, Trophy, Medal, Gift, ExternalLink, Info } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 const sectionCard: React.CSSProperties = {
@@ -241,7 +241,7 @@ export default function CommandsPage() {
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)' }}>🏆 Leaderboard</code>
+                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Trophy size={14} /> Leaderboard</code>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Top referrers board with period rewards</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -265,15 +265,15 @@ export default function CommandsPage() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                     <div>
-                      <label style={labelStyle}>🥇 1st place bonus</label>
+                      <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: '4px' }}><Medal size={14} color="#FBBF24" /> 1st place bonus</label>
                       <input type="number" value={leaderboardBonus1} onChange={e => setLeaderboardBonus1(Number(e.target.value))} className="input-field" />
                     </div>
                     <div>
-                      <label style={labelStyle}>🥈 2nd place bonus</label>
+                      <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: '4px' }}><Medal size={14} color="#9CA3AF" /> 2nd place bonus</label>
                       <input type="number" value={leaderboardBonus2} onChange={e => setLeaderboardBonus2(Number(e.target.value))} className="input-field" />
                     </div>
                     <div>
-                      <label style={labelStyle}>🥉 3rd place bonus</label>
+                      <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: '4px' }}><Medal size={14} color="#D97706" /> 3rd place bonus</label>
                       <input type="number" value={leaderboardBonus3} onChange={e => setLeaderboardBonus3(Number(e.target.value))} className="input-field" />
                     </div>
                   </div>
@@ -288,7 +288,7 @@ export default function CommandsPage() {
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)' }}>🎁 Daily Bonus</code>
+                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Gift size={14} /> Daily Bonus</code>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Users claim free {currencyName.toLowerCase()} once every 24 hours</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -311,7 +311,7 @@ export default function CommandsPage() {
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)' }}>📤 Withdraw</code>
+                  <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><ExternalLink size={14} /> Withdraw</code>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Users submit withdrawal requests</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -322,9 +322,12 @@ export default function CommandsPage() {
                 </div>
               </div>
               {withdrawEnabled && (
-                <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,170,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px', fontSize: '12px', color: '#FBBF24' }}>
-                  ℹ️ Configure payout API keys in Bot Settings → Withdrawal Settings first.<br />
-                  OxaPay: USDT/TRX payouts · Invalid TRX addresses are automatically rejected.
+                <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,170,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px', fontSize: '12px', color: '#FBBF24', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <Info size={14} style={{ marginTop: '2px', flexShrink: 0 }} /> 
+                  <div>
+                    Configure payout API keys in Bot Settings → Withdrawal Settings first.<br />
+                    OxaPay: USDT/TRX payouts · Invalid TRX addresses are automatically rejected.
+                  </div>
                 </div>
               )}
             </div>

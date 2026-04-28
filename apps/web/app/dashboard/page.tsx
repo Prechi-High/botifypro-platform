@@ -234,8 +234,8 @@ export default function DashboardHome() {
             <Megaphone size={20} color='white'/>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              📣 Advertise on 1-TouchBot
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Megaphone size={16} /> Advertise on 1-TouchBot
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
               Reach thousands of active bot users across the network

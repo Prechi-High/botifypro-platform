@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle, CheckCircle, ChevronDown, Megaphone, Plus, Wallet } from 'lucide-react'
+import { AlertCircle, CheckCircle, ChevronDown, Megaphone, Plus, Wallet, Edit3, Target } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 const ACTIVITY_WINDOWS = [
@@ -25,7 +25,7 @@ const sectionStyle: React.CSSProperties = {
   flexDirection: 'column',
   gap: '12px',
 }
-const sectionHead: React.CSSProperties = { fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }
+const sectionHead: React.CSSProperties = { fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }
 const warnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: '6px',
   fontSize: '12px', color: '#FBBF24',
@@ -235,7 +235,7 @@ export default function NewCampaignPage() {
 
         {/* Ad content */}
         <section style={sectionStyle}>
-          <h3 style={sectionHead}>📝 Ad Content</h3>
+          <h3 style={sectionHead}><Edit3 size={16} /> Ad Content</h3>
           <Field label='Campaign title'>
             <input value={title} onChange={e => setTitle(e.target.value)} className='input-field' placeholder='e.g. Summer sale — 50% off' />
           </Field>
@@ -260,7 +260,7 @@ export default function NewCampaignPage() {
 
         {/* Targeting */}
         <section style={sectionStyle}>
-          <h3 style={sectionHead}>🎯 Targeting</h3>
+          <h3 style={sectionHead}><Target size={16} /> Targeting</h3>
           <Field label='Target category'>
             <div style={{ position: 'relative' }}>
               <select value={targetCategory} onChange={e => setTargetCategory(e.target.value)} className='input-field' style={{ appearance: 'none', paddingRight: '32px', cursor: 'pointer' }}>
@@ -287,7 +287,7 @@ export default function NewCampaignPage() {
 
         {/* Budget & calculator */}
         <section style={sectionStyle}>
-          <h3 style={sectionHead}>💰 Budget</h3>
+          <h3 style={sectionHead}><Wallet size={16} /> Budget</h3>
           <Field label={`Budget (USD) — minimum $${MIN_BUDGET}`}>
             <input value={budgetUsd} onChange={e => setBudgetUsd(Math.max(0, Number(e.target.value)))} type='number' min={MIN_BUDGET} step='1' className='input-field' />
           </Field>

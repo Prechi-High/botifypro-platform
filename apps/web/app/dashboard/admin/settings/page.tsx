@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, Settings, ShieldAlert } from 'lucide-react'
+import { CheckCircle, Settings, ShieldAlert, Banknote } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function AdminSettingsPage() {
@@ -128,7 +128,7 @@ export default function AdminSettingsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
           <div style={sectionStyle}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 16px' }}>⚙️ General</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '6px' }}><Settings size={16} /> General</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={labelStyle}>Min campaign budget (USD)</label>
@@ -155,7 +155,7 @@ export default function AdminSettingsPage() {
           </div>
 
           <div style={sectionStyle}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 16px' }}>💵 CPM Rates (USD per 1,000 users)</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '6px' }}><Banknote size={16} /> CPM Rates (USD per 1,000 users)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {cpmRows.map(row => (
                 <div key={row.label}>

@@ -2,9 +2,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import {
   Users, Search, Download, Eye, Ban, Trash2,
-  RefreshCw, CheckCircle, AlertCircle, Loader2, X
+  RefreshCw, CheckCircle, AlertCircle, Loader2, X,
+  Banknote, Megaphone, Hourglass, FolderUp, XCircle, Lock
 } from 'lucide-react'
 
 function fmt(v: any): string {
@@ -49,17 +49,17 @@ const REJECT_REASONS = [
 ]
 
 const BUTTON_TYPES = [
-  { value: 'url', label: '🔗 Open URL / Website' },
-  { value: 'join_channel', label: '📢 Join Channel' },
-  { value: 'learn_more', label: '📖 Learn More' },
-  { value: 'get_started', label: '🚀 Get Started' },
-  { value: 'shop_now', label: '🛒 Shop Now' },
-  { value: 'download', label: '⬇️ Download' },
-  { value: 'contact_us', label: '📞 Contact Us' },
-  { value: 'watch_video', label: '▶️ Watch Video' },
-  { value: 'claim_offer', label: '🎁 Claim Offer' },
-  { value: 'subscribe', label: '🔔 Subscribe' },
-  { value: 'view_more', label: '👀 View More' },
+  { value: 'url', label: 'Open URL / Website' },
+  { value: 'join_channel', label: 'Join Channel' },
+  { value: 'learn_more', label: 'Learn More' },
+  { value: 'get_started', label: 'Get Started' },
+  { value: 'shop_now', label: 'Shop Now' },
+  { value: 'download', label: 'Download' },
+  { value: 'contact_us', label: 'Contact Us' },
+  { value: 'watch_video', label: 'Watch Video' },
+  { value: 'claim_offer', label: 'Claim Offer' },
+  { value: 'subscribe', label: 'Subscribe' },
+  { value: 'view_more', label: 'View More' },
 ]
 
 export default function UsersPage() {
@@ -403,9 +403,9 @@ export default function UsersPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '4px' }}>
         {[
-          { key: 'users', label: '👥 Users', badge: newUsersCount },
-          { key: 'withdrawals', label: '💸 Withdrawals', badge: pendingWithdrawalsCount },
-          { key: 'broadcast', label: '📣 Broadcast', badge: 0 }
+          { key: 'users', label: <><Users size={14}/> Users</>, badge: newUsersCount },
+          { key: 'withdrawals', label: <><Banknote size={14}/> Withdrawals</>, badge: pendingWithdrawalsCount },
+          { key: 'broadcast', label: <><Megaphone size={14}/> Broadcast</>, badge: 0 }
         ].map(tab => (
           <button
             key={tab.key}
@@ -573,8 +573,8 @@ export default function UsersPage() {
             <div style={{ color: 'var(--text-secondary)', padding: '20px' }}>Loading...</div>
           ) : (
             <>
-              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
-                ⏳ Pending Withdrawals
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Hourglass size={16} /> Pending Withdrawals
               </h3>
 
               {selectedWithdrawals.length > 0 && (
@@ -582,9 +582,9 @@ export default function UsersPage() {
                   <span style={{ fontSize: '13px', color: '#60A5FA' }}>{selectedWithdrawals.length} selected</span>
                   <button
                     onClick={() => { setPendingApprovalIds(selectedWithdrawals); setShowPassphraseModal(true) }}
-                    style={{ padding: '7px 14px', background: '#10B981', border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+                    style={{ padding: '7px 14px', background: '#10B981', border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
-                    ✅ Pay Selected
+                    <CheckCircle size={14} /> Pay Selected
                   </button>
                   <button onClick={() => setSelectedWithdrawals([])} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
                     Cancel
@@ -622,15 +622,15 @@ export default function UsersPage() {
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button
                           onClick={() => { setPendingApprovalIds([w.id]); setShowPassphraseModal(true) }}
-                          style={{ padding: '6px 12px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '7px', color: '#10B981', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
+                          style={{ padding: '6px 12px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '7px', color: '#10B981', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                         >
-                          ✅ Approve
+                          <CheckCircle size={13} /> Approve
                         </button>
                         <button
                           onClick={() => setRejectingId(w.id)}
-                          style={{ padding: '6px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', color: '#FCA5A5', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
+                          style={{ padding: '6px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '7px', color: '#FCA5A5', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                         >
-                          ❌ Reject
+                          <XCircle size={13} /> Reject
                         </button>
                       </div>
 
@@ -674,8 +674,8 @@ export default function UsersPage() {
                 </div>
               )}
 
-              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
-                ✅ Completed Transactions
+              <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle size={16} /> Completed Transactions
               </h3>
               {withdrawals.filter(w => w.status === 'completed' || w.status === 'failed').length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '32px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px' }}>
@@ -705,9 +705,9 @@ export default function UsersPage() {
                       <span style={{
                         padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 500,
                         background: w.status === 'completed' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                        color: w.status === 'completed' ? '#10B981' : '#FCA5A5'
+                        color: w.status === 'completed' ? '#10B981' : '#FCA5A5', display: 'flex', alignItems: 'center', gap: '4px'
                       }}>
-                        {w.status === 'completed' ? '✅ Paid' : '❌ Rejected'}
+                        {w.status === 'completed' ? <><CheckCircle size={12}/> Paid</> : <><XCircle size={12}/> Rejected</>}
                       </span>
                     </div>
                   ))}
@@ -722,8 +722,8 @@ export default function UsersPage() {
       {activeTab === 'broadcast' && (
         <div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '600px' }}>
-              <div style={{ padding: '16px 20px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '10px', fontSize: '13px', color: '#60A5FA' }}>
-                📣 This message will be sent to all <b>{users.filter(u => !u.is_banned).length}</b> active users of this bot.
+              <div style={{ padding: '16px 20px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '10px', fontSize: '13px', color: '#60A5FA', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Megaphone size={16} /> <span>This message will be sent to all <b>{users.filter(u => !u.is_banned).length}</b> active users of this bot.</span>
               </div>
 
               <div>
@@ -747,7 +747,7 @@ export default function UsersPage() {
                     background: 'rgba(255,255,255,0.02)',
                     color: 'var(--text-secondary)', fontSize: '13px'
                   }}>
-                    📁 Upload Image
+                    <FolderUp size={16} /> Upload Image
                     <input
                       type="file"
                       accept="image/*"
@@ -828,7 +828,7 @@ export default function UsersPage() {
                 />
                 {broadcastBtnLinkError && (
                   <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#EF4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    ⚠️ {broadcastBtnLinkError}
+                    <AlertCircle size={14} /> {broadcastBtnLinkError}
                   </p>
                 )}
               </div>
@@ -838,7 +838,7 @@ export default function UsersPage() {
                 disabled={broadcasting || !broadcastText.trim() || !!broadcastBtnLinkError}
                 style={{ padding: '12px', background: 'var(--blue-gradient)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '15px', fontWeight: 600, cursor: broadcasting || !broadcastText.trim() || !!broadcastBtnLinkError ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: !!broadcastBtnLinkError ? 0.6 : 1 }}
               >
-                {broadcasting ? 'Sending...' : `📣 Send Broadcast to ${users.filter(u => !u.is_banned).length} Users`}
+                {broadcasting ? 'Sending...' : <><Megaphone size={16} /> Send Broadcast to {users.filter(u => !u.is_banned).length} Users</>}
               </button>
             </div>
         </div>
@@ -848,8 +848,8 @@ export default function UsersPage() {
       {showPassphraseModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '380px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px' }}>
-              🔐 Confirm Payment
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Lock size={18} /> Confirm Payment
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
               Enter your withdrawal passphrase to approve {pendingApprovalIds.length} payment(s)
@@ -902,8 +902,8 @@ export default function UsersPage() {
                 {[
                   ['Telegram ID', String(selected.telegram_user_id || 'N/A')],
                   ['Total Balance', Number(selected.balance || 0).toLocaleString() + ' ' + sym],
-                  ['Channel Verified', selected.channel_verified ? '✅ Yes' : '❌ No'],
-                  ['Status', selected.is_banned ? '🚫 Banned' : '✅ Active'],
+                  ['Channel Verified', selected.channel_verified ? <span style={{display: 'flex', alignItems: 'center', gap: '4px'}}><CheckCircle size={14} color="#10B981" /> Yes</span> : <span style={{display: 'flex', alignItems: 'center', gap: '4px'}}><XCircle size={14} color="#EF4444" /> No</span>],
+                  ['Status', selected.is_banned ? <span style={{display: 'flex', alignItems: 'center', gap: '4px'}}><Ban size={14} color="#EF4444" /> Banned</span> : <span style={{display: 'flex', alignItems: 'center', gap: '4px'}}><CheckCircle size={14} color="#10B981" /> Active</span>],
                   ['Joined', fmt(selected.joined_at)],
                   ['Last Active', ago(selected.last_active)],
                 ].map(([l, v]) => (

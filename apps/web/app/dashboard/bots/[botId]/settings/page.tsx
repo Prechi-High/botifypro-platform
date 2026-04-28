@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Zap, Hand, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 function ToggleRow({ label, desc, enabled, onToggle }: {
@@ -487,8 +487,8 @@ export default function BotSettingsPage() {
                   </button>
                 </div>
 
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px' }}>
-                  ⚠️ Make sure @{botUsername} is admin in each channel before adding it.
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertTriangle size={14} /> Make sure @{botUsername} is admin in each channel before adding it.
                 </div>
               </div>
             )}
@@ -531,7 +531,7 @@ export default function BotSettingsPage() {
                     color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, textAlign: 'center' as const
                   }}
                 >
-                  ⚡ Automatic
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Zap size={16} /> Automatic</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 400 }}>
                     Paid instantly via API key
                   </div>
@@ -545,20 +545,20 @@ export default function BotSettingsPage() {
                     color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, textAlign: 'center' as const
                   }}
                 >
-                  ✋ Manual
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Hand size={16} /> Manual</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 400 }}>
                     You approve each request
                   </div>
                 </button>
               </div>
               {withdrawMode === 'automatic' && (
-                <div style={{ marginTop: '10px', fontSize: '12px', color: '#60A5FA', padding: '10px 14px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '8px' }}>
-                  ⚡ Withdrawals will be processed automatically using your API key. Make sure your key is valid.
+                <div style={{ marginTop: '10px', fontSize: '12px', color: '#60A5FA', padding: '10px 14px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <Zap size={14} style={{ marginTop: '1px' }} /> Withdrawals will be processed automatically using your API key. Make sure your key is valid.
                 </div>
               )}
               {withdrawMode === 'manual' && (
-                <div style={{ marginTop: '10px', fontSize: '12px', color: '#FBBF24', padding: '10px 14px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '8px' }}>
-                  ✋ Users submit withdrawal requests. You approve them manually from the dashboard.
+                <div style={{ marginTop: '10px', fontSize: '12px', color: '#FBBF24', padding: '10px 14px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                  <Hand size={14} style={{ marginTop: '1px' }} /> Users submit withdrawal requests. You approve them manually from the dashboard.
                 </div>
               )}
               {withdrawMode === 'manual' && (
@@ -587,16 +587,17 @@ export default function BotSettingsPage() {
                         fontSize: '16px'
                       }}
                     >
-                      {showPassphrase ? '🙈' : '👁️'}
+                      {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#FBBF24', marginTop: '6px' }}>
-                    ⚠️ This passphrase is required when approving withdrawals manually.
-                    Keep it safe — it cannot be recovered if lost.
+                  <div style={{ fontSize: '12px', color: '#FBBF24', marginTop: '6px', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                    <AlertTriangle size={13} style={{ marginTop: '2px', flexShrink: 0 }} /> 
+                    <span>This passphrase is required when approving withdrawals manually. Keep it safe — it cannot be recovered if lost.</span>
                   </div>
                   {!withdrawalPassphrase && (
-                    <div style={{ fontSize: '12px', color: '#FCA5A5', marginTop: '4px' }}>
-                      ⚠️ Passphrase is required for manual withdrawal mode
+                    <div style={{ fontSize: '12px', color: '#FCA5A5', marginTop: '6px', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                      <AlertTriangle size={13} style={{ marginTop: '1px' }} />
+                      Passphrase is required for manual withdrawal mode
                     </div>
                   )}
                 </div>
