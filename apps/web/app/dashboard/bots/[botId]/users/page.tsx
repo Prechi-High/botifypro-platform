@@ -756,14 +756,22 @@ export default function UsersPage() {
                         if (file.size > 5000000) { notify('Image too large. Max 5MB.', false); return }
                         setUploadingImage(true)
                         try {
-                          const reader = new FileReader()
-                          reader.onload = (ev) => {
-                            const dataUrl = ev.target?.result as string
-                            setBroadcastImage(dataUrl)
-                            setBroadcastImagePreview(dataUrl)
-                          }
-                          reader.readAsDataURL(file)
-                        } catch { notify('Failed to load image', false) }
+                          const fileExt = file.name.split('.').pop()
+                          const fileName = `broadcast-${Date.now()}.${fileExt}`
+                          const { data, error } = await supabase.storage
+                            .from('broadcast-images')
+                            .upload(fileName, file, { upsert: true })
+                          if (error) throw error
+                          const { data: urlData } = supabase.storage
+                            .from('broadcast-images')
+                            .getPublicUrl(fileName)
+                          const publicUrl = urlData.publicUrl
+                          setBroadcastImage(publicUrl)
+                          setBroadcastImagePreview(publicUrl)
+                          notify('Image uploaded ✓')
+                        } catch (err: any) {
+                          notify('Upload failed: ' + err.message + '. Use an image URL instead.', false)
+                        }
                         setUploadingImage(false)
                       }}
                     />
