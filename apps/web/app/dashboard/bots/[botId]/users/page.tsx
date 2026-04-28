@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import {
   Users, Search, Download, Eye, Ban, Trash2,
   RefreshCw, CheckCircle, AlertCircle, Loader2, X,
-  Banknote, Megaphone, Hourglass, FolderUp, XCircle, Lock
+  Banknote, Megaphone, Clock, Upload, XCircle, Lock
 } from 'lucide-react'
 
 function fmt(v: any): string {
@@ -581,7 +582,7 @@ export default function UsersPage() {
           ) : (
             <>
               <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Hourglass size={16} /> Pending Withdrawals
+                <Clock size={16} /> Pending Withdrawals
               </h3>
 
               {selectedWithdrawals.length > 0 && (
@@ -754,7 +755,7 @@ export default function UsersPage() {
                     background: 'rgba(255,255,255,0.02)',
                     color: 'var(--text-secondary)', fontSize: '13px'
                   }}>
-                    <FolderUp size={16} /> Upload Image
+                    <Upload size={16} /> Upload Image
                     <input
                       type="file"
                       accept="image/*"
