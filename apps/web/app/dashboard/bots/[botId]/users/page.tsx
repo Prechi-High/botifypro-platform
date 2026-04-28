@@ -921,7 +921,7 @@ export default function UsersPage() {
                   ['Joined', fmt(selected.joined_at)],
                   ['Last Active', ago(selected.last_active)],
                 ].map(([l, v]) => (
-                  <div key={l} style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px 12px' }}>
+                  <div key={String(l)} style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px 12px' }}>
                     <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500', marginBottom: '2px' }}>{l}</div>
                     <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: '500' }}>{v}</div>
                   </div>
