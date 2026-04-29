@@ -6,14 +6,6 @@ import { ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, Bot, Zap, Gift, Megaph
 
 type AuthMode = 'signup' | 'login'
 
-const ONBOARDING_LINES = [
-  'Build Telegram Bots in Seconds',
-  'No Coding Required',
-  'Plug. Play. Profit.',
-  'Automate Rewards, Referrals & Payments',
-  'Broadcast to Thousands Instantly',
-]
-
 const PREVIEW_ITEMS = [
   { icon: <Bot size={16} />, title: 'Launch Fast', text: 'Create reward bots, referral systems, and auto flows in minutes.' },
   { icon: <Gift size={16} />, title: 'Monetize', text: 'Handle campaigns, deposits, upgrades, and user engagement from one place.' },
@@ -21,12 +13,21 @@ const PREVIEW_ITEMS = [
   { icon: <Zap size={16} />, title: 'Automate', text: 'Plug in payments, referrals, and retention mechanics without coding.' },
 ]
 
+const INTRO_PRIMARY_TEXT = 'Build fully automated Telegram bots in minutes'
+const INTRO_FIRST_SECONDARY = 'No coding required'
+const INTRO_SECOND_SECONDARY = 'Plug and Play'
+
 export default function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
   const supabase = useMemo(() => createClient(), [])
 
   const [mode, setMode] = useState<AuthMode>(initialMode)
-  const [showOnboarding, setShowOnboarding] = useState(true)
-  const [stepIndex, setStepIndex] = useState(0)
+  const [entryVisible, setEntryVisible] = useState(true)
+  const [entryReady, setEntryReady] = useState(false)
+  const [primaryVisible, setPrimaryVisible] = useState(false)
+  const [secondaryText, setSecondaryText] = useState('')
+  const [transitionVisible, setTransitionVisible] = useState(false)
+  const [transitionLabel, setTransitionLabel] = useState('Initializing workspace')
+  const [focusedField, setFocusedField] = useState<string | null>(null)
 
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -43,32 +44,108 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
   const [signupLoading, setSignupLoading] = useState(false)
   const [signupError, setSignupError] = useState('')
 
+  const starDots = useMemo(
+    () =>
+      Array.from({ length: 44 }, (_, index) => ({
+        id: index,
+        left: `${(index * 17) % 100}%`,
+        top: `${(index * 11 + 7) % 100}%`,
+        size: 1 + (index % 3),
+        delay: `${(index % 9) * 0.45}s`,
+        duration: `${5 + (index % 5)}s`,
+        opacity: 0.25 + ((index % 6) * 0.1),
+      })),
+    []
+  )
+
+  const nebulaParticles = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, index) => ({
+        id: index,
+        left: `${8 + (index * 8) % 86}%`,
+        top: `${12 + (index * 13) % 78}%`,
+        size: 80 + (index % 4) * 36,
+        delay: `${index * 0.3}s`,
+        duration: `${14 + (index % 4) * 3}s`,
+      })),
+    []
+  )
+
   useEffect(() => {
     setMode(initialMode)
   }, [initialMode])
 
   useEffect(() => {
-    if (!showOnboarding) return
+    let cancelled = false
+    const timers: number[] = []
 
-    const interval = window.setInterval(() => {
-      setStepIndex((current) => {
-        if (current >= ONBOARDING_LINES.length - 1) {
+    function schedule(delay: number, fn: () => void) {
+      const timer = window.setTimeout(() => {
+        if (!cancelled) fn()
+      }, delay)
+      timers.push(timer)
+    }
+
+    function typeSequence(text: string, onDone?: () => void) {
+      let index = 0
+      const interval = window.setInterval(() => {
+        if (cancelled) {
           window.clearInterval(interval)
-          return current
+          return
         }
-        return current + 1
-      })
-    }, 650)
+        index += 1
+        setSecondaryText(text.slice(0, index))
+        if (index >= text.length) {
+          window.clearInterval(interval)
+          onDone?.()
+        }
+      }, 52)
+    }
 
-    const timeout = window.setTimeout(() => {
-      setShowOnboarding(false)
-    }, 3600)
+    function deleteSequence(length: number, onDone?: () => void) {
+      let index = length
+      const interval = window.setInterval(() => {
+        if (cancelled) {
+          window.clearInterval(interval)
+          return
+        }
+        index -= 1
+        setSecondaryText(INTRO_FIRST_SECONDARY.slice(0, Math.max(0, index)))
+        if (index <= 0) {
+          window.clearInterval(interval)
+          onDone?.()
+        }
+      }, 34)
+    }
+
+    schedule(180, () => setEntryReady(true))
+    schedule(900, () => setPrimaryVisible(true))
+    schedule(1600, () => {
+      typeSequence(INTRO_FIRST_SECONDARY, () => {
+        schedule(600, () => {
+          deleteSequence(INTRO_FIRST_SECONDARY.length, () => {
+            schedule(180, () => {
+              typeSequence(INTRO_SECOND_SECONDARY)
+            })
+          })
+        })
+      })
+    })
+    schedule(6000, () => setEntryVisible(false))
 
     return () => {
-      window.clearInterval(interval)
-      window.clearTimeout(timeout)
+      cancelled = true
+      timers.forEach((timer) => window.clearTimeout(timer))
     }
-  }, [showOnboarding])
+  }, [])
+
+  function beginSuccessTransition(label: string) {
+    setTransitionLabel(label)
+    setTransitionVisible(true)
+    window.setTimeout(() => {
+      window.location.href = '/dashboard'
+    }, 2200)
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -82,7 +159,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         return
       }
       if (data?.user) {
-        window.location.href = '/dashboard'
+        beginSuccessTransition('Preparing your dashboard')
       }
     } catch {
       setLoginError('Something went wrong')
@@ -134,7 +211,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         }
       }
 
-      window.location.href = '/dashboard'
+      beginSuccessTransition('Launching your bot workspace')
     } catch {
       setSignupError('Something went wrong. Please try again.')
       setSignupLoading(false)
@@ -149,7 +226,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         minHeight: '100vh',
         position: 'relative',
         overflow: 'hidden',
-        background: '#050816',
+        background: '#030712',
         display: 'flex',
         alignItems: 'stretch',
         justifyContent: 'center',
@@ -161,37 +238,69 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
           position: 'absolute',
           inset: 0,
           overflow: 'hidden',
+          background: 'radial-gradient(circle at 50% 20%, rgba(37,99,235,0.18), transparent 24%), radial-gradient(circle at 15% 80%, rgba(59,130,246,0.12), transparent 26%), radial-gradient(circle at 88% 18%, rgba(99,102,241,0.16), transparent 28%), linear-gradient(180deg, #020617 0%, #030712 50%, #020617 100%)',
         }}
       >
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          poster="/platform-logo.png"
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            filter: 'blur(10px) brightness(0.34) saturate(0.7)',
-            transform: 'scale(1.08)',
-          }}
-        >
-          <source src="https://videos.pexels.com/video-files/8052381/8052381-hd_1920_1080_30fps.mp4" type="video/mp4" />
-        </video>
         <div
           style={{
             position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(180deg, rgba(3,7,18,0.46) 0%, rgba(3,7,18,0.78) 45%, rgba(3,7,18,0.92) 100%)',
+            inset: '-8%',
+            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.14) 0, rgba(255,255,255,0.08) 1px, transparent 1.4px)',
+            backgroundSize: '180px 180px',
+            opacity: 0.18,
+            animation: 'starDrift 26s linear infinite',
           }}
         />
         <div
           style={{
             position: 'absolute',
+            inset: '-10%',
+            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0, rgba(255,255,255,0.04) 1px, transparent 1.2px)',
+            backgroundSize: '110px 110px',
+            opacity: 0.14,
+            animation: 'starDriftSlow 38s linear infinite',
+          }}
+        />
+        {starDots.map((star) => (
+          <span
+            key={star.id}
+            style={{
+              position: 'absolute',
+              left: star.left,
+              top: star.top,
+              width: `${star.size}px`,
+              height: `${star.size}px`,
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.95)',
+              opacity: star.opacity,
+              boxShadow: '0 0 8px rgba(255,255,255,0.6)',
+              animation: `starPulse ${star.duration} ease-in-out ${star.delay} infinite`,
+            }}
+          />
+        ))}
+        {nebulaParticles.map((particle) => (
+          <span
+            key={particle.id}
+            style={{
+              position: 'absolute',
+              left: particle.left,
+              top: particle.top,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              borderRadius: '50%',
+              background: particle.id % 2 === 0
+                ? 'radial-gradient(circle, rgba(96,165,250,0.12), transparent 68%)'
+                : 'radial-gradient(circle, rgba(129,140,248,0.1), transparent 70%)',
+              filter: 'blur(10px)',
+              animation: `nebulaFloat ${particle.duration} ease-in-out ${particle.delay} infinite`,
+            }}
+          />
+        ))}
+        <div
+          style={{
+            position: 'absolute',
             inset: 0,
-            background: 'radial-gradient(circle at 20% 20%, rgba(59,130,246,0.18), transparent 28%), radial-gradient(circle at 80% 14%, rgba(99,102,241,0.16), transparent 26%), radial-gradient(circle at 50% 80%, rgba(14,165,233,0.12), transparent 30%)',
+            background: 'linear-gradient(180deg, rgba(2,6,23,0.2) 0%, rgba(2,6,23,0.62) 40%, rgba(2,6,23,0.9) 100%)',
           }}
         />
       </div>
@@ -258,7 +367,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                 }}
               >
                 <Sparkles size={14} color="#60a5fa" />
-                Cinematic Telegram bot onboarding
+                Space-powered Telegram bot onboarding
               </div>
 
               <h1
@@ -320,8 +429,8 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                 width: '100%',
                 maxWidth: '460px',
                 position: 'relative',
-                opacity: showOnboarding ? 0.18 : 1,
-                transform: showOnboarding ? 'translateY(18px) scale(0.985)' : 'translateY(0) scale(1)',
+                opacity: entryVisible ? 0.1 : 1,
+                transform: entryVisible ? 'translateY(18px) scale(0.985)' : 'translateY(0) scale(1)',
                 transition: 'opacity 0.45s ease, transform 0.55s ease',
               }}
             >
@@ -483,36 +592,42 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                   <div key={mode} style={{ animation: 'authSwap 0.34s ease' }}>
                     {mode === 'signup' ? (
                       <form onSubmit={handleSignup}>
-                        <Field label="Full Name" active={!!fullName}>
+                        <Field label="Full Name" active={!!fullName || focusedField === 'signup-name'}>
                           <input
                             type="text"
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
+                            onFocus={() => setFocusedField('signup-name')}
+                            onBlur={() => setFocusedField(null)}
                             required
-                            placeholder="Your full name"
+                            placeholder=""
                             className="input-field auth-input"
                           />
                         </Field>
 
-                        <Field label="Email address" active={!!signupEmail}>
+                        <Field label="Email address" active={!!signupEmail || focusedField === 'signup-email'}>
                           <input
                             type="email"
                             value={signupEmail}
                             onChange={(e) => setSignupEmail(e.target.value)}
+                            onFocus={() => setFocusedField('signup-email')}
+                            onBlur={() => setFocusedField(null)}
                             required
-                            placeholder="you@example.com"
+                            placeholder=""
                             className="input-field auth-input"
                           />
                         </Field>
 
-                        <Field label="Password" active={!!signupPassword}>
+                        <Field label="Password" active={!!signupPassword || focusedField === 'signup-password'}>
                           <div style={{ position: 'relative' }}>
                             <input
                               type={showSignupPass ? 'text' : 'password'}
                               value={signupPassword}
                               onChange={(e) => setSignupPassword(e.target.value)}
+                              onFocus={() => setFocusedField('signup-password')}
+                              onBlur={() => setFocusedField(null)}
                               required
-                              placeholder="Your password"
+                              placeholder=""
                               className="input-field auth-input"
                               style={{ paddingRight: '46px' }}
                             />
@@ -526,14 +641,16 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                           </div>
                         </Field>
 
-                        <Field label="Confirm Password" active={!!confirmPassword}>
+                        <Field label="Confirm Password" active={!!confirmPassword || focusedField === 'signup-confirm'}>
                           <div style={{ position: 'relative' }}>
                             <input
                               type={showConfirmPass ? 'text' : 'password'}
                               value={confirmPassword}
                               onChange={(e) => setConfirmPassword(e.target.value)}
+                              onFocus={() => setFocusedField('signup-confirm')}
+                              onBlur={() => setFocusedField(null)}
                               required
-                              placeholder="Confirm password"
+                              placeholder=""
                               className="input-field auth-input"
                               style={{ paddingRight: '46px' }}
                             />
@@ -568,25 +685,29 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                       </form>
                     ) : (
                       <form onSubmit={handleLogin}>
-                        <Field label="Email address" active={!!loginEmail}>
+                        <Field label="Email address" active={!!loginEmail || focusedField === 'login-email'}>
                           <input
                             type="email"
                             value={loginEmail}
                             onChange={(e) => setLoginEmail(e.target.value)}
+                            onFocus={() => setFocusedField('login-email')}
+                            onBlur={() => setFocusedField(null)}
                             required
-                            placeholder="you@example.com"
+                            placeholder=""
                             className="input-field auth-input"
                           />
                         </Field>
 
-                        <Field label="Password" active={!!loginPassword}>
+                        <Field label="Password" active={!!loginPassword || focusedField === 'login-password'}>
                           <div style={{ position: 'relative' }}>
                             <input
                               type={loginShowPass ? 'text' : 'password'}
                               value={loginPassword}
                               onChange={(e) => setLoginPassword(e.target.value)}
+                              onFocus={() => setFocusedField('login-password')}
+                              onBlur={() => setFocusedField(null)}
                               required
-                              placeholder="Your password"
+                              placeholder=""
                               className="input-field auth-input"
                               style={{ paddingRight: '46px' }}
                             />
@@ -687,7 +808,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         </div>
       </div>
 
-      {showOnboarding && (
+      {entryVisible && (
         <div
           style={{
             position: 'fixed',
@@ -697,45 +818,98 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
             alignItems: 'center',
             justifyContent: 'center',
             padding: '24px',
-            background: 'linear-gradient(180deg, rgba(2,6,23,0.28), rgba(2,6,23,0.66))',
+            background: 'linear-gradient(180deg, rgba(2,6,23,0.18), rgba(2,6,23,0.72))',
             backdropFilter: 'blur(6px)',
+            opacity: entryVisible ? 1 : 0,
+            transition: 'opacity 0.7s ease',
           }}
         >
-          <button
-            type="button"
-            onClick={() => setShowOnboarding(false)}
-            style={{
-              position: 'absolute',
-              top: '18px',
-              right: '18px',
-              borderRadius: '999px',
-              padding: '10px 14px',
-              border: '1px solid rgba(255,255,255,0.14)',
-              background: 'rgba(255,255,255,0.08)',
-              color: '#e2e8f0',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 700,
-              letterSpacing: '0.04em',
-            }}
-          >
-            SKIP
-          </button>
-
-          <div style={{ maxWidth: '720px', textAlign: 'center' }}>
+          <div style={{ maxWidth: '760px', textAlign: 'center' }}>
             <div
-              key={stepIndex}
               style={{
-                animation: 'onboardStep 0.58s ease',
-                fontSize: 'clamp(26px, 6vw, 54px)',
-                lineHeight: 1.08,
-                fontWeight: 800,
-                letterSpacing: '-0.04em',
-                color: '#f8fafc',
-                textShadow: '0 12px 44px rgba(15,23,42,0.45)',
+                width: 'fit-content',
+                margin: '0 auto 18px',
+                transform: entryReady ? 'scale(1)' : 'scale(0.8)',
+                opacity: entryReady ? 1 : 0,
+                transition: 'transform 0.8s cubic-bezier(0.22,1,0.36,1), opacity 0.8s ease',
+                animation: 'logoFloat 4.6s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 34px rgba(56,189,248,0.28))',
               }}
             >
-              {ONBOARDING_LINES[stepIndex]}
+              <img
+                src="/platform-logo.png"
+                alt="1-TouchBot"
+                style={{ width: '220px', maxWidth: '70vw', height: 'auto', display: 'block' }}
+              />
+            </div>
+
+            <div
+              style={{
+                fontSize: 'clamp(28px, 4.8vw, 54px)',
+                lineHeight: 1.04,
+                fontWeight: 800,
+                letterSpacing: '-0.045em',
+                color: '#f8fafc',
+                textShadow: '0 12px 44px rgba(15,23,42,0.45)',
+                opacity: primaryVisible ? 1 : 0,
+                transform: primaryVisible ? 'translateY(0)' : 'translateY(16px)',
+                transition: 'opacity 0.6s ease, transform 0.6s ease',
+              }}
+            >
+              {INTRO_PRIMARY_TEXT}
+            </div>
+
+            <div
+              style={{
+                minHeight: '36px',
+                marginTop: '16px',
+                fontSize: 'clamp(18px, 2.6vw, 28px)',
+                color: '#93c5fd',
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {secondaryText}
+              <span style={{ opacity: 0.8, marginLeft: '2px' }}>|</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {transitionVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 6,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            background: 'linear-gradient(180deg, rgba(2,6,23,0.48), rgba(2,6,23,0.86))',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ textAlign: 'center' }}>
+            <div
+              style={{
+                width: 'fit-content',
+                margin: '0 auto 18px',
+                animation: 'logoFloat 3.6s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 34px rgba(56,189,248,0.28))',
+              }}
+            >
+              <img
+                src="/platform-logo.png"
+                alt="1-TouchBot"
+                style={{ width: '200px', maxWidth: '70vw', height: 'auto', display: 'block' }}
+              />
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: '#f8fafc', marginBottom: '8px', letterSpacing: '-0.03em' }}>
+              {transitionLabel}
+            </div>
+            <div style={{ fontSize: '13px', color: '#93c5fd' }}>
+              Securing session and opening your dashboard...
             </div>
           </div>
         </div>
@@ -743,23 +917,24 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
 
       <style>{`
         .auth-input {
-          background: rgba(255,255,255,0.04);
-          border-color: rgba(255,255,255,0.1);
+          background: rgba(255,255,255,0.035);
+          border-color: rgba(255,255,255,0.12);
           padding: 18px 14px 10px;
           border-radius: 16px;
           font-size: 14px;
+          transform: scale(1);
+        }
+        .auth-input:hover {
+          border-color: rgba(148,163,184,0.24);
         }
         .auth-input:focus {
           border-color: rgba(96,165,250,0.9);
           box-shadow: 0 0 0 4px rgba(59,130,246,0.14), 0 0 24px rgba(59,130,246,0.16);
+          transform: scale(1.01);
         }
         .auth-cta {
           background-size: 200% 200%;
           animation: ctaFlow 5s ease infinite, ctaPulse 2.6s ease-in-out infinite;
-        }
-        @keyframes onboardStep {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes authSwap {
           from { opacity: 0; transform: translateY(10px); }
@@ -778,6 +953,22 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-8px); }
         }
+        @keyframes starDrift {
+          from { transform: translate3d(0, 0, 0); }
+          to { transform: translate3d(-22px, 16px, 0); }
+        }
+        @keyframes starDriftSlow {
+          from { transform: translate3d(0, 0, 0) scale(1.02); }
+          to { transform: translate3d(18px, -20px, 0) scale(1.06); }
+        }
+        @keyframes starPulse {
+          0%, 100% { opacity: 0.35; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+        @keyframes nebulaFloat {
+          0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.72; }
+          50% { transform: translate3d(12px, -16px, 0); opacity: 1; }
+        }
         @media (min-width: 980px) {
           .auth-shell {
             grid-template-columns: minmax(0, 1.08fr) minmax(420px, 470px);
@@ -794,6 +985,15 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         @media (max-width: 640px) {
           .desktop-feature-grid {
             display: none !important;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .auth-cta,
+          .auth-input,
+          .desktop-feature-grid,
+          .trust-pill {
+            animation: none !important;
+            transition: none !important;
           }
         }
       `}</style>
