@@ -84,9 +84,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <img
-            src="/logo-mark.svg"
+            src="/platform-logo.png"
             alt="1-TouchBot"
-            style={{ height: '42px', width: '42px', display: 'block' }}
+            style={{ width: '150px', maxWidth: '100%', height: 'auto', display: 'block' }}
           />
         </div>
         {mobile && (
@@ -261,9 +261,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <img
-                src="/logo-mark.svg"
+                src="/platform-logo.png"
                 alt="1-TouchBot"
-                style={{ height: '30px', width: '30px', display: 'block' }}
+                style={{ width: '140px', maxWidth: '100%', height: 'auto', display: 'block' }}
               />
             </div>
             <div />
