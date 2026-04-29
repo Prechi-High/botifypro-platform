@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, Bot, Zap, Gift, Megaphone } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, Bot, Zap, Gift, Megaphone, Send } from 'lucide-react'
 
 type AuthMode = 'signup' | 'login'
 
@@ -14,8 +14,8 @@ const PREVIEW_ITEMS = [
 ]
 
 const INTRO_PRIMARY_TEXT = 'Build fully automated Telegram bots in minutes'
-const INTRO_FIRST_SECONDARY = 'No coding required'
-const INTRO_SECOND_SECONDARY = 'Plug and Play'
+const INTRO_FIRST_SECONDARY = 'Plug and play'
+const INTRO_SECOND_SECONDARY = 'No coding Required'
 
 export default function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
   const supabase = useMemo(() => createClient(), [])
@@ -68,6 +68,16 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         delay: `${index * 0.3}s`,
         duration: `${14 + (index % 4) * 3}s`,
       })),
+    []
+  )
+
+  const shootingLogos = useMemo(
+    () => [
+      { id: 1, top: '12%', left: '-14%', duration: '18s', delay: '1.5s', scale: 0.9 },
+      { id: 2, top: '28%', left: '-20%', duration: '22s', delay: '7s', scale: 1.05 },
+      { id: 3, top: '46%', left: '-18%', duration: '20s', delay: '12s', scale: 0.82 },
+      { id: 4, top: '66%', left: '-24%', duration: '24s', delay: '16s', scale: 1.12 },
+    ],
     []
   )
 
@@ -295,6 +305,56 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
               animation: `nebulaFloat ${particle.duration} ease-in-out ${particle.delay} infinite`,
             }}
           />
+        ))}
+        {shootingLogos.map((logo) => (
+          <div
+            key={logo.id}
+            style={{
+              position: 'absolute',
+              left: logo.left,
+              top: logo.top,
+              width: '230px',
+              height: '84px',
+              opacity: 0,
+              transform: `scale(${logo.scale}) rotate(-20deg)`,
+              animation: `telegramShoot ${logo.duration} cubic-bezier(0.22,1,0.36,1) ${logo.delay} infinite`,
+              willChange: 'transform, opacity',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                left: '0',
+                top: '50%',
+                width: '165px',
+                height: '3px',
+                transform: 'translateY(-50%)',
+                background: 'linear-gradient(90deg, rgba(56,189,248,0), rgba(56,189,248,0.18) 28%, rgba(125,211,252,0.55) 78%, rgba(255,255,255,0.9) 100%)',
+                filter: 'blur(1px)',
+                borderRadius: '999px',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                right: '18px',
+                top: '50%',
+                width: '42px',
+                height: '42px',
+                transform: 'translateY(-50%)',
+                borderRadius: '999px',
+                background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.28), rgba(56,189,248,0.16) 58%, rgba(2,132,199,0.12) 100%)',
+                border: '1px solid rgba(125,211,252,0.3)',
+                boxShadow: '0 0 24px rgba(56,189,248,0.22), 0 0 46px rgba(14,165,233,0.12)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backdropFilter: 'blur(6px)',
+              }}
+            >
+              <Send size={18} color="#e0f2fe" style={{ transform: 'rotate(-18deg)' }} />
+            </div>
+          </div>
         ))}
         <div
           style={{
@@ -968,6 +1028,29 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         @keyframes nebulaFloat {
           0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.72; }
           50% { transform: translate3d(12px, -16px, 0); opacity: 1; }
+        }
+        @keyframes telegramShoot {
+          0% {
+            opacity: 0;
+            transform: translate3d(-8vw, -8vh, 0) scale(0.72) rotate(-20deg);
+          }
+          8% {
+            opacity: 0.15;
+          }
+          14% {
+            opacity: 0.95;
+          }
+          26% {
+            opacity: 0.85;
+          }
+          36% {
+            opacity: 0;
+            transform: translate3d(110vw, 46vh, 0) scale(1) rotate(-20deg);
+          }
+          100% {
+            opacity: 0;
+            transform: translate3d(110vw, 46vh, 0) scale(1) rotate(-20deg);
+          }
         }
         @media (min-width: 980px) {
           .auth-shell {
