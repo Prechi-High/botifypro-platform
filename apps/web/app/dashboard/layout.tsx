@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Bot, LayoutDashboard, Megaphone,
-  Settings, LogOut, Menu, X, ChevronRight, Zap, Shield
+  LogOut, Menu, X, ChevronRight, Zap, Shield
 } from 'lucide-react'
 
 const NAV = [
@@ -12,7 +12,6 @@ const NAV = [
   { icon: Bot,             label: 'My Bots',   href: '/dashboard/bots' },
   { icon: Megaphone,       label: 'Advertise', href: '/dashboard/advertise' },
   { icon: Zap,             label: 'PRO',       href: '/dashboard/upgrade' },
-  { icon: Settings,        label: 'Settings',  href: '/dashboard/settings' },
 ]
 
 const ADMIN_NAV = { icon: Shield, label: 'Admin', href: '/dashboard/admin' }

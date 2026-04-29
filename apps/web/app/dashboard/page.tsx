@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Users, DollarSign, TrendingUp, ArrowUpRight, Zap, Megaphone } from 'lucide-react'
+import { Bot, Users, ArrowUpRight, Zap, Megaphone, Send, CircleHelp } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -82,20 +82,6 @@ export default function DashboardHome() {
       icon: Users,
       iconColor: '#6366F1',
       iconBg: 'rgba(99,102,241,0.15)'
-    },
-    {
-      title: 'Deposits',
-      value: stats.deposits,
-      icon: DollarSign,
-      iconColor: '#10B981',
-      iconBg: 'rgba(16,185,129,0.15)'
-    },
-    {
-      title: 'Withdrawals',
-      value: stats.withdrawals,
-      icon: TrendingUp,
-      iconColor: '#8B5CF6',
-      iconBg: 'rgba(139,92,246,0.15)'
     }
   ]
 
@@ -245,10 +231,73 @@ export default function DashboardHome() {
         </div>
       </Link>
 
+      <div>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '14px' }}>
+          Help & Support
+        </h2>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+          {[
+            {
+              title: 'Telegram Community',
+              description: 'Join our group for help & updates',
+              icon: Send,
+              iconColor: '#38BDF8',
+              iconBg: 'rgba(14,165,233,0.12)',
+            },
+            {
+              title: 'Get Support',
+              description: 'Ask questions & get help',
+              icon: CircleHelp,
+              iconColor: '#34D399',
+              iconBg: 'rgba(16,185,129,0.12)',
+            },
+          ].map((item) => {
+            const Icon = item.icon
+            return (
+              <div
+                key={item.title}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '16px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '16px',
+                  padding: '20px 18px',
+                }}
+              >
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '14px',
+                  background: item.iconBg,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <Icon size={20} color={item.iconColor} />
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    {item.title}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    {item.description}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       <style>{`
         @media (min-width: 1024px) {
           .dashboard-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
       `}</style>
