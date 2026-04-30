@@ -16,8 +16,8 @@ interface ButtonProps {
 }
 
 const variants = {
-  primary: { bg: 'var(--button-primary-bg)', hover: 'var(--button-primary-bg)', text: 'var(--button-primary-text)' },
-  secondary: { bg: 'var(--bg-elevated)', hover: 'var(--surface-hover)', text: 'var(--text-primary)' },
+  primary: { bg: '#2563eb', hover: '#1d4ed8', text: 'white' },
+  secondary: { bg: '#f1f5f9', hover: '#e2e8f0', text: '#374151' },
   danger: { bg: '#dc2626', hover: '#b91c1c', text: 'white' },
   success: { bg: '#16a34a', hover: '#15803d', text: 'white' }
 }
@@ -53,17 +53,16 @@ export default function Button({
         alignItems: 'center',
         justifyContent: 'center',
         padding: s.padding,
-        background: isDisabled ? 'color-mix(in srgb, var(--text-secondary) 35%, transparent)' : v.bg,
+        background: isDisabled ? '#93c5fd' : v.bg,
         color: v.text,
-        border: variant === 'secondary' ? '1px solid var(--border)' : 'none',
+        border: 'none',
         borderRadius: '8px',
         fontSize: s.fontSize,
         fontWeight: '500',
         cursor: isDisabled ? 'not-allowed' : 'pointer',
         width: fullWidth ? '100%' : 'auto',
-        transition: 'background 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease',
-        transform: 'scale(1)',
-        boxShadow: variant === 'primary' && !isDisabled ? '0 0 18px rgba(74,222,128,0.2)' : 'none'
+        transition: 'background 0.15s ease, transform 0.1s ease',
+        transform: 'scale(1)'
       }}
       onMouseEnter={(e) => {
         if (!isDisabled) (e.target as HTMLButtonElement).style.background = v.hover

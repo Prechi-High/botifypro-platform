@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, Bot, Zap, Gift, Megaphone, Send } from 'lucide-react'
-import ThemeToggle from '@/components/theme/ThemeToggle'
-import { useTheme } from '@/components/theme/ThemeProvider'
 
 type AuthMode = 'signup' | 'login'
 
@@ -21,8 +19,6 @@ const INTRO_SECOND_SECONDARY = 'No coding Required'
 
 export default function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
   const supabase = useMemo(() => createClient(), [])
-  const { theme } = useTheme()
-  const isLight = theme === 'light'
 
   const [mode, setMode] = useState<AuthMode>(initialMode)
   const [entryVisible, setEntryVisible] = useState(true)
@@ -240,24 +236,19 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         minHeight: '100vh',
         position: 'relative',
         overflow: 'hidden',
-        background: 'var(--auth-bg)',
+        background: '#030712',
         display: 'flex',
         alignItems: 'stretch',
         justifyContent: 'center',
       }}
     >
-      <div style={{ position: 'fixed', top: '18px', right: '18px', zIndex: 30 }}>
-        <ThemeToggle />
-      </div>
       <div
         aria-hidden
         style={{
           position: 'absolute',
           inset: 0,
           overflow: 'hidden',
-          background: isLight
-            ? 'radial-gradient(circle at 50% 20%, rgba(34,197,94,0.18), transparent 24%), radial-gradient(circle at 15% 80%, rgba(56,189,248,0.14), transparent 26%), radial-gradient(circle at 88% 18%, rgba(14,165,233,0.14), transparent 28%), linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 50%, #ecfeff 100%)'
-            : 'radial-gradient(circle at 50% 20%, rgba(37,99,235,0.18), transparent 24%), radial-gradient(circle at 15% 80%, rgba(59,130,246,0.12), transparent 26%), radial-gradient(circle at 88% 18%, rgba(99,102,241,0.16), transparent 28%), linear-gradient(180deg, #020617 0%, #030712 50%, #020617 100%)',
+          background: 'radial-gradient(circle at 50% 20%, rgba(37,99,235,0.18), transparent 24%), radial-gradient(circle at 15% 80%, rgba(59,130,246,0.12), transparent 26%), radial-gradient(circle at 88% 18%, rgba(99,102,241,0.16), transparent 28%), linear-gradient(180deg, #020617 0%, #030712 50%, #020617 100%)',
         }}
       >
         <div
@@ -290,9 +281,9 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
               width: `${star.size}px`,
               height: `${star.size}px`,
               borderRadius: '50%',
-              background: isLight ? 'rgba(15,23,42,0.2)' : 'rgba(255,255,255,0.95)',
+              background: 'rgba(255,255,255,0.95)',
               opacity: star.opacity,
-              boxShadow: isLight ? '0 0 10px rgba(14,165,233,0.18)' : '0 0 8px rgba(255,255,255,0.6)',
+              boxShadow: '0 0 8px rgba(255,255,255,0.6)',
               animation: `starPulse ${star.duration} ease-in-out ${star.delay} infinite`,
             }}
           />
@@ -308,12 +299,8 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
               height: `${particle.size}px`,
               borderRadius: '50%',
               background: particle.id % 2 === 0
-                ? (isLight
-                  ? 'radial-gradient(circle, rgba(34,197,94,0.12), transparent 68%)'
-                  : 'radial-gradient(circle, rgba(96,165,250,0.12), transparent 68%)')
-                : (isLight
-                  ? 'radial-gradient(circle, rgba(14,165,233,0.1), transparent 70%)'
-                  : 'radial-gradient(circle, rgba(129,140,248,0.1), transparent 70%)'),
+                ? 'radial-gradient(circle, rgba(96,165,250,0.12), transparent 68%)'
+                : 'radial-gradient(circle, rgba(129,140,248,0.1), transparent 70%)',
               filter: 'blur(10px)',
               animation: `nebulaFloat ${particle.duration} ease-in-out ${particle.delay} infinite`,
             }}
@@ -342,9 +329,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                 width: '165px',
                 height: '3px',
                 transform: 'translateY(-50%)',
-                background: isLight
-                  ? 'linear-gradient(90deg, rgba(34,197,94,0), rgba(34,197,94,0.18) 28%, rgba(14,165,233,0.45) 78%, rgba(15,23,42,0.35) 100%)'
-                  : 'linear-gradient(90deg, rgba(56,189,248,0), rgba(56,189,248,0.18) 28%, rgba(125,211,252,0.55) 78%, rgba(255,255,255,0.9) 100%)',
+                background: 'linear-gradient(90deg, rgba(56,189,248,0), rgba(56,189,248,0.18) 28%, rgba(125,211,252,0.55) 78%, rgba(255,255,255,0.9) 100%)',
                 filter: 'blur(1px)',
                 borderRadius: '999px',
               }}
@@ -358,18 +343,16 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                 height: '42px',
                 transform: 'translateY(-50%)',
                 borderRadius: '999px',
-                background: isLight
-                  ? 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.72), rgba(34,197,94,0.16) 58%, rgba(14,165,233,0.12) 100%)'
-                  : 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.28), rgba(56,189,248,0.16) 58%, rgba(2,132,199,0.12) 100%)',
-                border: isLight ? '1px solid rgba(34,197,94,0.26)' : '1px solid rgba(125,211,252,0.3)',
-                boxShadow: isLight ? '0 0 24px rgba(34,197,94,0.14), 0 0 32px rgba(14,165,233,0.08)' : '0 0 24px rgba(56,189,248,0.22), 0 0 46px rgba(14,165,233,0.12)',
+                background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.28), rgba(56,189,248,0.16) 58%, rgba(2,132,199,0.12) 100%)',
+                border: '1px solid rgba(125,211,252,0.3)',
+                boxShadow: '0 0 24px rgba(56,189,248,0.22), 0 0 46px rgba(14,165,233,0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 backdropFilter: 'blur(6px)',
               }}
             >
-              <Send size={18} color={isLight ? '#166534' : '#e0f2fe'} style={{ transform: 'rotate(-18deg)' }} />
+              <Send size={18} color="#e0f2fe" style={{ transform: 'rotate(-18deg)' }} />
             </div>
           </div>
         ))}
@@ -377,9 +360,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
           style={{
             position: 'absolute',
             inset: 0,
-            background: isLight
-              ? 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(240,249,255,0.7) 40%, rgba(236,254,255,0.92) 100%)'
-              : 'linear-gradient(180deg, rgba(2,6,23,0.2) 0%, rgba(2,6,23,0.62) 40%, rgba(2,6,23,0.9) 100%)',
+            background: 'linear-gradient(180deg, rgba(2,6,23,0.2) 0%, rgba(2,6,23,0.62) 40%, rgba(2,6,23,0.9) 100%)',
           }}
         />
       </div>
@@ -437,15 +418,15 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                   gap: '8px',
                   padding: '8px 14px',
                   borderRadius: '999px',
-                  border: '1px solid var(--auth-chip-border)',
-                  background: 'var(--auth-chip-bg)',
-                  color: 'var(--auth-text-secondary)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#cbd5e1',
                   fontSize: '12px',
                   width: 'fit-content',
                   backdropFilter: 'blur(12px)',
                 }}
               >
-                <Sparkles size={14} color="var(--auth-accent)" />
+                <Sparkles size={14} color="#60a5fa" />
                 Space-powered Telegram bot onboarding
               </div>
 
@@ -455,13 +436,13 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                   lineHeight: 1.02,
                   letterSpacing: '-0.04em',
                   fontWeight: 800,
-                  color: 'var(--auth-text-primary)',
+                  color: '#f8fafc',
                 }}
               >
                 Build, automate, and monetize your Telegram bots faster.
               </h1>
 
-              <p style={{ fontSize: '16px', lineHeight: 1.7, color: 'var(--auth-text-secondary)', maxWidth: '480px' }}>
+              <p style={{ fontSize: '16px', lineHeight: 1.7, color: 'rgba(226,232,240,0.8)', maxWidth: '480px' }}>
                 1-TouchBot gives creators a polished control center for referrals, rewards, payments, campaigns, and broadcasts without the engineering overhead.
               </p>
             </div>
@@ -481,15 +462,15 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                   style={{
                     padding: '16px',
                     borderRadius: '18px',
-                    border: '1px solid var(--auth-chip-border)',
-                    background: 'var(--auth-chip-bg)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(255,255,255,0.05)',
                     backdropFilter: 'blur(16px)',
-                    boxShadow: isLight ? '0 10px 32px rgba(15,23,42,0.08)' : '0 10px 40px rgba(2,6,23,0.22)',
+                    boxShadow: '0 10px 40px rgba(2,6,23,0.22)',
                   }}
                 >
-                  <div style={{ color: 'var(--auth-accent)', marginBottom: '10px' }}>{item.icon}</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--auth-text-primary)', marginBottom: '6px' }}>{item.title}</div>
-                  <div style={{ fontSize: '12px', lineHeight: 1.55, color: 'var(--auth-text-secondary)' }}>{item.text}</div>
+                  <div style={{ color: '#60a5fa', marginBottom: '10px' }}>{item.icon}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#f8fafc', marginBottom: '6px' }}>{item.title}</div>
+                  <div style={{ fontSize: '12px', lineHeight: 1.55, color: 'rgba(203,213,225,0.78)' }}>{item.text}</div>
                 </div>
               ))}
             </div>
@@ -518,10 +499,10 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                   position: 'relative',
                   borderRadius: '30px',
                   overflow: 'hidden',
-                  border: '1px solid var(--auth-card-border)',
-                  background: 'var(--auth-card-bg)',
+                  border: '1px solid rgba(255,255,255,0.14)',
+                  background: 'linear-gradient(180deg, rgba(15,23,42,0.7), rgba(15,23,42,0.56))',
                   backdropFilter: 'blur(24px)',
-                  boxShadow: isLight ? '0 24px 72px rgba(15,23,42,0.12)' : '0 24px 100px rgba(2,6,23,0.55)',
+                  boxShadow: '0 24px 100px rgba(2,6,23,0.55)',
                 }}
               >
                 <div
@@ -557,8 +538,8 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                       gridTemplateColumns: '1fr 1fr',
                       padding: '5px',
                       borderRadius: '999px',
-                      background: 'var(--auth-segment-bg)',
-                      border: '1px solid var(--auth-segment-border)',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.08)',
                       marginBottom: '22px',
                     }}
                   >
@@ -570,8 +551,8 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                         left: mode === 'signup' ? '5px' : 'calc(50% + 1px)',
                         width: 'calc(50% - 6px)',
                         borderRadius: '999px',
-                        background: 'var(--auth-segment-active)',
-                        boxShadow: 'var(--auth-segment-active-shadow)',
+                        background: 'linear-gradient(135deg, rgba(59,130,246,0.95), rgba(99,102,241,0.95))',
+                        boxShadow: '0 10px 28px rgba(37,99,235,0.28)',
                         transition: 'left 0.32s cubic-bezier(0.4,0,0.2,1)',
                       }}
                     />
@@ -583,7 +564,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                         zIndex: 1,
                         border: 'none',
                         background: 'transparent',
-                        color: mode === 'signup' ? '#ffffff' : 'var(--auth-segment-inactive)',
+                        color: mode === 'signup' ? '#ffffff' : '#94a3b8',
                         fontWeight: 700,
                         fontSize: '13px',
                         padding: '12px 14px',
@@ -601,7 +582,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                         zIndex: 1,
                         border: 'none',
                         background: 'transparent',
-                        color: mode === 'login' ? '#ffffff' : 'var(--auth-segment-inactive)',
+                        color: mode === 'login' ? '#ffffff' : '#94a3b8',
                         fontWeight: 700,
                         fontSize: '13px',
                         padding: '12px 14px',
@@ -623,10 +604,10 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
                     }}
                   >
                     <div>
-                      <h2 style={{ fontSize: '26px', fontWeight: 800, color: 'var(--auth-text-primary)', marginBottom: '6px', letterSpacing: '-0.03em' }}>
+                      <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#f8fafc', marginBottom: '6px', letterSpacing: '-0.03em' }}>
                         {mode === 'signup' ? 'Create account' : 'Welcome back'}
                       </h2>
-                      <p style={{ fontSize: '14px', color: 'var(--auth-text-secondary)', lineHeight: 1.55 }}>
+                      <p style={{ fontSize: '14px', color: 'rgba(203,213,225,0.78)', lineHeight: 1.55 }}>
                         {mode === 'signup'
                           ? 'Create your workspace and start building Telegram bot automations.'
                           : 'Sign in to continue managing campaigns, wallets, and bot growth.'}
