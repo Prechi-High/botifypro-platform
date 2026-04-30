@@ -1,14 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
-function withSupabaseCookies(source: NextResponse, target: NextResponse) {
-  source.cookies.getAll().forEach((cookie) => {
-    target.cookies.set(cookie)
-  })
-
-  return target
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isApiBotRoute = pathname.startsWith('/api/bots/')
@@ -24,15 +16,15 @@ export async function middleware(request: NextRequest) {
 
   if ((isDashboard || isApiBotRoute) && !user) {
     if (isApiBotRoute) {
-      return withSupabaseCookies(response, NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const loginUrl = new URL('/login', request.url)
-    return withSupabaseCookies(response, NextResponse.redirect(loginUrl))
+    return NextResponse.redirect(loginUrl)
   }
 
   if (isAuthPage && user) {
     const dashboardUrl = new URL('/dashboard', request.url)
-    return withSupabaseCookies(response, NextResponse.redirect(dashboardUrl))
+    return NextResponse.redirect(dashboardUrl)
   }
 
   return response
