@@ -13,7 +13,7 @@
     "@supabase/supabase-js": "^2.39.0",
     "@supabase/ssr": "^0.1.0",
     "axios": "^1.6.0",
-    "@1-touchbot/database": "*",
+    "@botifypro/database": "*",
     "lucide-react": "^0.383.0"
   },
   "devDependencies": {

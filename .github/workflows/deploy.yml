@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - 'apps/bot-engine/**'
+      - 'apps/bot-engine/package.json'
       - 'packages/database/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
@@ -20,10 +22,14 @@ jobs:
           script: |
             cd /var/www/botifypro
             git pull origin main
-            npm install
-            sed -i 's|"main": "./index.ts"|"main": "./dist/index.js"|' packages/database/package.json
             cd packages/database
+            sed -i 's|"main": "./index.ts"|"main": "./dist/index.js"|' package.json
+            sed -i 's|"name": "@1-touchbot/database"|"name": "@botifypro/database"|' package.json
+            npx prisma db push
+            npx prisma generate
             npx tsc
+            cd /var/www/botifypro
+            npm install
             cd /var/www/botifypro/apps/bot-engine
             npm run build
             pm2 restart botifypro-engine --update-env

@@ -8,7 +8,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@1-touchbot/database": "*",
+    "@botifypro/database": "*",
     "@types/bcryptjs": "^2.4.0",
     "@types/cors": "^2.8.0",
     "@types/express": "^4.17.0",
