@@ -62,12 +62,20 @@ export default function BotSettingsPage() {
 
   // Withdrawal
   const [withdrawMode, setWithdrawMode] = useState<'manual' | 'automatic' | null>(null)
-  const [oxapayPayoutKey, setOxapayPayoutKey] = useState('')
-  const [faucetpayKey, setFaucetpayKey] = useState('')
+  const [withdrawProvider, setWithdrawProvider] = useState<'faucetpay' | 'oxapay'>('faucetpay')
   const [minWithdrawUsd, setMinWithdrawUsd] = useState(0.5)
   const [withdrawFeePercent, setWithdrawFeePercent] = useState(0)
   const [withdrawalPassphrase, setWithdrawalPassphrase] = useState('')
   const [showPassphrase, setShowPassphrase] = useState(false)
+  const [faucetpayConfigured, setFaucetpayConfigured] = useState(false)
+  const [faucetpayMaskedKey, setFaucetpayMaskedKey] = useState('')
+  const [faucetpayPayoutCurrency, setFaucetpayPayoutCurrency] = useState('USDT')
+  const [oxapayConfigured, setOxapayConfigured] = useState(false)
+  const [oxapayMaskedKey, setOxapayMaskedKey] = useState('')
+  const [keyDialog, setKeyDialog] = useState<null | { provider: 'faucetpay' | 'oxapay'; mode: 'set' | 'replace' | 'remove' }>(null)
+  const [paymentKeyInput, setPaymentKeyInput] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [submittingPaymentKey, setSubmittingPaymentKey] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -75,47 +83,40 @@ export default function BotSettingsPage() {
       setLoading(true)
       setError(null)
       try {
-        const { data: botRow, error: botErr } = await supabase
-          .from('bots').select('bot_token, webhook_set, bot_username').eq('id', botId).single()
-        if (botErr) throw botErr
-
-        const { data, error: settingsErr } = await supabase
-          .from('bot_settings').select('*').eq('bot_id', botId).single()
-        if (settingsErr) throw settingsErr
+        const res = await fetch(`/api/bots/${botId}/settings`, { cache: 'no-store' })
+        const payload = await res.json()
+        if (!res.ok) throw new Error(payload.error || 'Failed to load settings')
         if (cancelled) return
 
-        setBotToken(botRow?.bot_token || '')
-        setBotUsername(botRow?.bot_username || 'your bot')
-        setWebhookStatus(botRow?.webhook_set || false)
+        setBotToken(payload.botToken || '')
+        setBotUsername(payload.botUsername || 'your bot')
+        setWebhookStatus(Boolean(payload.webhookStatus))
+        setUserPlan(payload.userPlan === 'pro' ? 'pro' : 'free')
 
-        const { data: auth } = await supabase.auth.getUser()
-        const uid = auth.user?.id
-        if (uid) {
-          const { data: userRow } = await supabase
-            .from('users').select('plan').eq('id', uid).single()
-          setUserPlan(userRow?.plan === 'pro' ? 'pro' : 'free')
-        }
-
-        const msg = data.welcome_message || ''
+        const data = payload.settings || {}
+        const msg = data.welcomeMessage || ''
         setWelcomeMessage(msg)
         setWelcomeEnabled(!!msg)
 
-        setCaptchaEnabled(data.captcha_enabled ?? true)
+        setCaptchaEnabled(data.captchaEnabled ?? true)
 
-        setCurrencyName(data.currency_name || 'Coins')
-        setCurrencySymbol(data.currency_symbol || '🪙')
-        setUsdToCurrencyRate(Number(data.usd_to_currency_rate) || 1000)
+        setCurrencyName(data.currencyName || 'Coins')
+        setCurrencySymbol(data.currencySymbol || '🪙')
+        setUsdToCurrencyRate(Number(data.usdToCurrencyRate) || 1000)
 
-        const channels = data.required_channels
+        const channels = data.requiredChannels
         setRequiredChannels(Array.isArray(channels) ? channels : [])
-        setRequireChannelJoin(Boolean(data.require_channel_join))
-
-        setOxapayPayoutKey(data.faucetpay_withdrawal_key || '')
-        setFaucetpayKey(data.faucetpay_api_key || '')
-        setMinWithdrawUsd(Number(data.min_withdraw_usd) || 0.5)
-        setWithdrawFeePercent(Number(data.withdraw_fee_percent) || 0)
-        setWithdrawMode(data.manual_withdrawal ? 'manual' : data.withdraw_enabled ? 'automatic' : null)
-        setWithdrawalPassphrase(data.withdrawal_passphrase || '')
+        setRequireChannelJoin(Boolean(data.requireChannelJoin))
+        setMinWithdrawUsd(Number(data.minWithdrawUsd) || 0.5)
+        setWithdrawFeePercent(Number(data.withdrawFeePercent) || 0)
+        setWithdrawMode(data.manualWithdrawal ? 'manual' : data.withdrawEnabled ? 'automatic' : null)
+        setWithdrawProvider(data.withdrawProvider === 'oxapay' ? 'oxapay' : 'faucetpay')
+        setWithdrawalPassphrase(data.withdrawalPassphrase || '')
+        setFaucetpayConfigured(Boolean(data.faucetpayConfigured))
+        setFaucetpayMaskedKey(data.faucetpayMaskedKey || '')
+        setFaucetpayPayoutCurrency(data.faucetpayPayoutCurrency || 'USDT')
+        setOxapayConfigured(Boolean(data.oxapayConfigured))
+        setOxapayMaskedKey(data.oxapayMaskedKey || '')
       } catch (e: any) {
         if (cancelled) return
         const message = e?.message || 'Failed to load settings'
@@ -240,26 +241,27 @@ export default function BotSettingsPage() {
     setSaving(true)
     setError(null)
     try {
-      const { error: upErr } = await supabase
-        .from('bot_settings')
-        .update({
-          welcome_message: welcomeEnabled ? welcomeMessage : '',
-          captcha_enabled: captchaEnabled,
-          currency_name: currencyName,
-          currency_symbol: currencySymbol,
-          usd_to_currency_rate: usdToCurrencyRate,
-          require_channel_join: requireChannelJoin,
-          required_channels: requiredChannels,
-          faucetpay_withdrawal_key: oxapayPayoutKey || null,
-          faucetpay_api_key: faucetpayKey || null,
-          min_withdraw_usd: minWithdrawUsd,
-          withdraw_fee_percent: withdrawFeePercent,
-          manual_withdrawal: withdrawMode === 'manual',
-          withdraw_enabled: withdrawMode !== null,
-          withdrawal_passphrase: withdrawalPassphrase || null
-        })
-        .eq('bot_id', botId)
-      if (upErr) throw upErr
+      const res = await fetch(`/api/bots/${botId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          welcomeEnabled,
+          welcomeMessage,
+          captchaEnabled,
+          currencyName,
+          currencySymbol,
+          usdToCurrencyRate,
+          requireChannelJoin,
+          requiredChannels,
+          minWithdrawUsd,
+          withdrawFeePercent,
+          withdrawMode,
+          withdrawProvider,
+          withdrawalPassphrase,
+        }),
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload.error || 'Failed to save')
       toast.success('Settings saved!')
     } catch (e: any) {
       const message = e?.message || 'Failed to save'
@@ -267,6 +269,67 @@ export default function BotSettingsPage() {
       toast.error(message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  function openKeyDialog(provider: 'faucetpay' | 'oxapay', mode: 'set' | 'replace' | 'remove') {
+    setKeyDialog({ provider, mode })
+    setPaymentKeyInput('')
+    setCurrentPassword('')
+  }
+
+  function closeKeyDialog() {
+    setKeyDialog(null)
+    setPaymentKeyInput('')
+    setCurrentPassword('')
+    setSubmittingPaymentKey(false)
+  }
+
+  async function submitPaymentKey() {
+    if (!keyDialog) return
+    if (keyDialog.mode !== 'remove' && !paymentKeyInput.trim()) {
+      toast.error('Enter the API key first')
+      return
+    }
+
+    setSubmittingPaymentKey(true)
+    try {
+      const res = await fetch(`/api/bots/${botId}/payment-key`, {
+        method: keyDialog.mode === 'remove' ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: keyDialog.provider,
+          apiKey: paymentKeyInput,
+          currentPassword,
+        }),
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload.error || 'Failed to update payment key')
+
+      if (keyDialog.provider === 'faucetpay') {
+        setFaucetpayConfigured(Boolean(payload.configured))
+        setFaucetpayMaskedKey(payload.maskedKey || '')
+        if (!payload.configured && withdrawProvider === 'faucetpay' && withdrawMode === 'automatic') {
+          setWithdrawMode(null)
+        }
+      } else {
+        setOxapayConfigured(Boolean(payload.configured))
+        setOxapayMaskedKey(payload.maskedKey || '')
+        if (!payload.configured && withdrawProvider === 'oxapay' && withdrawMode === 'automatic') {
+          setWithdrawProvider('faucetpay')
+          if (!faucetpayConfigured) setWithdrawMode(null)
+        }
+      }
+
+      toast.success(
+        keyDialog.mode === 'remove'
+          ? `${keyDialog.provider === 'oxapay' ? 'OxaPay' : 'FaucetPay'} key removed`
+          : `${keyDialog.provider === 'oxapay' ? 'OxaPay' : 'FaucetPay'} key saved`
+      )
+      closeKeyDialog()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update payment key')
+      setSubmittingPaymentKey(false)
     }
   }
 
@@ -499,14 +562,99 @@ export default function BotSettingsPage() {
             <h3 style={sectionTitle}><ArrowUpFromLine size={16} style={{marginRight:'8px',color:'#8B5CF6'}} />Withdrawal Settings</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-              <div>
-                <label style={labelStyle}>OxaPay Payout API Key</label>
-                <input value={oxapayPayoutKey} onChange={e => setOxapayPayoutKey(e.target.value)} className="input-field" placeholder="For USDT/TRX automatic payouts" />
+              <div style={{
+                fontSize: '12px',
+                color: userPlan === 'pro' ? '#93C5FD' : '#FBBF24',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: `1px solid ${userPlan === 'pro' ? 'rgba(59,130,246,0.2)' : 'rgba(245,158,11,0.2)'}`,
+                background: userPlan === 'pro' ? 'rgba(59,130,246,0.08)' : 'rgba(245,158,11,0.08)',
+              }}>
+                {userPlan === 'pro'
+                  ? 'Pro creators can use FaucetPay or OxaPay for automatic withdrawals.'
+                  : 'Free creators can use FaucetPay only. Upgrade to Pro to unlock OxaPay payouts.'}
               </div>
-              <div>
-                <label style={labelStyle}>FaucetPay API Key</label>
-                <input value={faucetpayKey} onChange={e => setFaucetpayKey(e.target.value)} className="input-field" placeholder="For FaucetPay withdrawals" />
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr',
+                gap: '12px',
+              }}>
+                <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>FaucetPay API Key</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        Used for free-plan automatic payouts. Current payout currency: {faucetpayPayoutCurrency}.
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      color: faucetpayConfigured ? '#86EFAC' : 'var(--text-muted)',
+                      border: `1px solid ${faucetpayConfigured ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)'}`,
+                      background: faucetpayConfigured ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
+                      borderRadius: '999px',
+                      padding: '5px 10px',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {faucetpayConfigured ? `Configured ${faucetpayMaskedKey}` : 'Not configured'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="btn-ghost" type="button" onClick={() => openKeyDialog('faucetpay', faucetpayConfigured ? 'replace' : 'set')}>
+                      {faucetpayConfigured ? 'Replace key' : 'Set key'}
+                    </button>
+                    {faucetpayConfigured && (
+                      <button className="btn-ghost" type="button" onClick={() => openKeyDialog('faucetpay', 'remove')}>
+                        Remove key
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{
+                  border: `1px solid ${userPlan === 'pro' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.05)'}`,
+                  borderRadius: '12px',
+                  padding: '14px',
+                  opacity: userPlan === 'pro' ? 1 : 0.6,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>OxaPay Payout API Key</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        Pro only. OxaPay payouts are sent in USDT on TRC20.
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      color: oxapayConfigured ? '#86EFAC' : 'var(--text-muted)',
+                      border: `1px solid ${oxapayConfigured ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)'}`,
+                      background: oxapayConfigured ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
+                      borderRadius: '999px',
+                      padding: '5px 10px',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {oxapayConfigured ? `Configured ${oxapayMaskedKey}` : 'Not configured'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn-ghost"
+                      type="button"
+                      disabled={userPlan !== 'pro'}
+                      onClick={() => userPlan === 'pro' && openKeyDialog('oxapay', oxapayConfigured ? 'replace' : 'set')}
+                    >
+                      {oxapayConfigured ? 'Replace key' : 'Set key'}
+                    </button>
+                    {oxapayConfigured && userPlan === 'pro' && (
+                      <button className="btn-ghost" type="button" onClick={() => openKeyDialog('oxapay', 'remove')}>
+                        Remove key
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={labelStyle}>Min withdrawal (USD)</label>
@@ -552,8 +700,58 @@ export default function BotSettingsPage() {
                 </button>
               </div>
               {withdrawMode === 'automatic' && (
+                <div style={{ marginTop: '14px' }}>
+                  <label style={labelStyle}>Automatic payout provider</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawProvider('faucetpay')}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        border: `1px solid ${withdrawProvider === 'faucetpay' ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                        background: withdrawProvider === 'faucetpay' ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
+                        color: 'var(--text-primary)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div style={{ fontSize: '13px', fontWeight: 600 }}>FaucetPay</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        {faucetpayConfigured ? `Configured for ${faucetpayPayoutCurrency}` : 'Set a FaucetPay key first'}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={userPlan !== 'pro'}
+                      onClick={() => userPlan === 'pro' && setWithdrawProvider('oxapay')}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '10px',
+                        cursor: userPlan === 'pro' ? 'pointer' : 'not-allowed',
+                        border: `1px solid ${withdrawProvider === 'oxapay' ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                        background: withdrawProvider === 'oxapay' ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
+                        color: 'var(--text-primary)',
+                        textAlign: 'left',
+                        opacity: userPlan === 'pro' ? 1 : 0.6,
+                      }}
+                    >
+                      <div style={{ fontSize: '13px', fontWeight: 600 }}>OxaPay</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        {userPlan === 'pro'
+                          ? (oxapayConfigured ? 'Configured for USDT (TRC20)' : 'Set an OxaPay payout key first')
+                          : 'Pro only'}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+              {withdrawMode === 'automatic' && (
                 <div style={{ marginTop: '10px', fontSize: '12px', color: '#60A5FA', padding: '10px 14px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                  <Zap size={14} style={{ marginTop: '1px' }} /> Withdrawals will be processed automatically using your API key. Make sure your key is valid.
+                  <Zap size={14} style={{ marginTop: '1px' }} />
+                  {withdrawProvider === 'oxapay'
+                    ? 'Withdrawals will be sent automatically with OxaPay in USDT on TRC20.'
+                    : `Withdrawals will be sent automatically with FaucetPay in ${faucetpayPayoutCurrency}. Users can submit a FaucetPay email or a linked payout address.`}
                 </div>
               )}
               {withdrawMode === 'manual' && (
@@ -604,6 +802,81 @@ export default function BotSettingsPage() {
               )}
             </div>
           </div>
+
+          {keyDialog && (
+            <div style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(2,6,23,0.72)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+              zIndex: 1000,
+            }}>
+              <div style={{
+                width: '100%',
+                maxWidth: '440px',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '16px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {keyDialog.mode === 'remove'
+                      ? `Remove ${keyDialog.provider === 'oxapay' ? 'OxaPay' : 'FaucetPay'} key`
+                      : `${keyDialog.mode === 'replace' ? 'Replace' : 'Set'} ${keyDialog.provider === 'oxapay' ? 'OxaPay' : 'FaucetPay'} key`}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
+                    Stored keys stay encrypted on the server and are never shown again in the browser.
+                    {keyDialog.mode !== 'set' && ' Enter your login password to continue.'}
+                  </div>
+                </div>
+
+                {keyDialog.mode !== 'remove' && (
+                  <div>
+                    <label style={labelStyle}>API key</label>
+                    <input
+                      value={paymentKeyInput}
+                      onChange={e => setPaymentKeyInput(e.target.value)}
+                      className="input-field"
+                      placeholder={keyDialog.provider === 'oxapay' ? 'Paste OxaPay payout API key' : 'Paste FaucetPay API key'}
+                    />
+                  </div>
+                )}
+
+                {keyDialog.mode !== 'set' && (
+                  <div>
+                    <label style={labelStyle}>Current login password</label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      className="input-field"
+                      placeholder="Enter your password"
+                    />
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn-ghost" onClick={closeKeyDialog} disabled={submittingPaymentKey}>
+                    Cancel
+                  </button>
+                  <button type="button" className="btn-primary" onClick={submitPaymentKey} disabled={submittingPaymentKey}>
+                    {submittingPaymentKey
+                      ? 'Please wait...'
+                      : keyDialog.mode === 'remove'
+                        ? 'Confirm remove'
+                        : 'Save key'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Save */}
           <div>

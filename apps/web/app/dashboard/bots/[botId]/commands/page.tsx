@@ -326,7 +326,7 @@ export default function CommandsPage() {
                   <Info size={14} style={{ marginTop: '2px', flexShrink: 0 }} /> 
                   <div>
                     Configure payout API keys in Bot Settings → Withdrawal Settings first.<br />
-                    OxaPay: USDT/TRX payouts · Invalid TRX addresses are automatically rejected.
+                    Free creators use FaucetPay payouts. Pro creators can also enable OxaPay USDT (TRC20) payouts.
                   </div>
                 </div>
               )}

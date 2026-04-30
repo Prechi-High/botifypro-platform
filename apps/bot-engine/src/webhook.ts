@@ -8,6 +8,12 @@ import {
 } from './commands'
 import { maybeServeAd } from './ads'
 import { handleReferral } from './referral'
+import {
+  executeFaucetPayPayout,
+  executeOxapayPayout,
+  getWithdrawProvider,
+  validateWithdrawalDestination,
+} from './payments/payouts'
 
 export async function getOrCreateBotUser(botId: string, telegramUser: any) {
   try {
@@ -64,18 +70,10 @@ export async function checkChannelMembership(
 }
 
 export async function processWithdrawal(bot: any, botUser: any, address: string, chatId: number) {
-  if (!bot.settings?.manualWithdrawal) {
-    if (!address || !address.startsWith('T') || address.length !== 34 || !/^[A-Za-z0-9]{34}$/.test(address)) {
-      await sendMessage(bot.botToken, chatId,
-        '❌ Invalid TRC20 address.\n\nA valid address starts with T and is exactly 34 characters.\n\nPlease try again with a valid TRX address.'
-      )
-      return
-    }
-  } else {
-    if (!address || address.length < 10) {
-      await sendMessage(bot.botToken, chatId, '❌ Invalid address. Please try again.')
-      return
-    }
+  const validationError = validateWithdrawalDestination(bot.settings, address)
+  if (validationError) {
+    await sendMessage(bot.botToken, chatId, validationError)
+    return
   }
 
   const usdAmount = Number(botUser.balance) / Number(bot.settings.usdToCurrencyRate)
@@ -92,9 +90,9 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
   const currencyAmount = Number(botUser.balance)
   const sym = bot.settings.currencySymbol || '🪙'
   const currencyName = bot.settings.currencyName || 'coins'
-  const gateway = bot.settings.manualWithdrawal ? 'manual' : 'oxapay'
+  const gateway = getWithdrawProvider(bot.settings)
 
-  await prisma.$transaction([
+  const [tx] = await prisma.$transaction([
     prisma.transaction.create({
       data: {
         botId: bot.id, botUserId: botUser.id, type: 'withdrawal',
@@ -109,16 +107,62 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
     })
   ])
 
-  const note = bot.settings.manualWithdrawal
-    ? '⏳ Will be processed manually by bot owner within 24-48 hours.'
-    : '⏳ Processing automatically. You will be notified when complete.'
+  if (gateway === 'manual') {
+    await sendMessage(bot.botToken, chatId,
+      `✅ <b>Withdrawal Submitted</b>\n\n` +
+      `Amount: ${currencyAmount} ${sym} ${currencyName}\n` +
+      `≈ $${netUsd.toFixed(4)} USD\n` +
+      `Address: <code>${address}</code>\n\n⏳ Will be processed manually by bot owner within 24-48 hours.`
+    )
+    return
+  }
 
-  await sendMessage(bot.botToken, chatId,
-    `✅ <b>Withdrawal Submitted</b>\n\n` +
-    `Amount: ${currencyAmount} ${sym} ${currencyName}\n` +
-    `≈ $${netUsd.toFixed(4)} USD\n` +
-    `Address: <code>${address}</code>\n\n${note}`
-  )
+  try {
+    const payout = gateway === 'oxapay'
+      ? await executeOxapayPayout(bot.settings, address, netUsd)
+      : await executeFaucetPayPayout(bot.settings, address, netUsd)
+
+    await prisma.transaction.update({
+      where: { id: tx.id },
+      data: {
+        gateway: payout.gateway,
+        gatewayTxId: payout.gatewayTxId,
+        status: payout.status,
+      },
+    })
+
+    const statusLine = payout.status === 'completed'
+      ? '✅ Payout sent successfully.'
+      : '⏳ Payout is being processed.'
+
+    await sendMessage(bot.botToken, chatId,
+      `✅ <b>Withdrawal Submitted</b>\n\n` +
+      `Amount: ${currencyAmount} ${sym} ${currencyName}\n` +
+      `≈ $${netUsd.toFixed(4)} USD\n` +
+      `Payout: <b>${payout.payoutAmount.toFixed(4)} ${payout.payoutCurrency}</b>\n` +
+      `Destination: <code>${address}</code>\n\n${statusLine}`
+    )
+  } catch (error: any) {
+    await prisma.$transaction([
+      prisma.transaction.update({
+        where: { id: tx.id },
+        data: {
+          status: 'failed',
+          gatewayTxId: `failed:${String(error?.message || 'unknown').slice(0, 120)}`,
+        },
+      }),
+      prisma.botUser.update({
+        where: { id: botUser.id },
+        data: { balance: { increment: currencyAmount } },
+      }),
+    ])
+
+    await sendMessage(bot.botToken, chatId,
+      `❌ <b>Withdrawal failed</b>\n\n` +
+      `We could not send your payout right now, so your ${sym} balance has been restored.\n\n` +
+      `Reason: ${error?.message || 'Unknown error'}`
+    )
+  }
 }
 
 async function getChannels(bot: any): Promise<Array<{ id: string; username?: string; title?: string }>> {

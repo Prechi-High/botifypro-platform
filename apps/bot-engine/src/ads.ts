@@ -19,12 +19,7 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
     const campaigns = await prisma.adCampaign.findMany({
       where: {
         status: 'active',
-        budgetUsd: { gt: 0 },
-        startDate: { lte: now },
-        OR: [
-          { endDate: null },
-          { endDate: { gte: now } }
-        ]
+        budgetUsd: { gt: 0 }
       },
       orderBy: { createdAt: 'asc' }
     })
@@ -56,7 +51,7 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
         {
           chat_id: chatId,
           photo: campaign.imageUrl,
-          caption: `📢 <b>${campaign.title}</b>\n\n${campaign.messageText}`,
+          caption: `📢 <b>${campaign.title}</b>\n\n${campaign.message}`,
           parse_mode: 'HTML',
           reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
         }
@@ -66,7 +61,7 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
         `https://api.telegram.org/bot${bot.botToken}/sendMessage`,
         {
           chat_id: chatId,
-          text: `📢 <b>${campaign.title}</b>\n\n${campaign.messageText}`,
+          text: `📢 <b>${campaign.title}</b>\n\n${campaign.message}`,
           parse_mode: 'HTML',
           reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
         }
@@ -80,7 +75,7 @@ export async function maybeServeAd(bot: any, botUser: any, chatId: number) {
         campaignId: campaign.id,
         botUserId: botUser.id,
         botId: bot.id,
-        sentAt: new Date()
+        servedAt: new Date()
       }
     })
 

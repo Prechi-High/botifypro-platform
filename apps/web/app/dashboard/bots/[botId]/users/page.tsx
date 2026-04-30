@@ -141,7 +141,7 @@ export default function UsersPage() {
     // Load bot settings for withdrawal passphrase
     const { data: bs } = await supabase
       .from('bot_settings')
-      .select('manual_withdrawal, withdrawal_passphrase, faucetpay_withdrawal_key, faucetpay_api_key')
+      .select('manual_withdrawal, withdrawal_passphrase')
       .eq('bot_id', botId).single()
     setBotSettings(bs)
 

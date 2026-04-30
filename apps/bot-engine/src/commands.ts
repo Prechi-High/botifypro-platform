@@ -2,6 +2,7 @@ import { prisma } from '@botifypro/database'
 import axios from 'axios'
 import { logger } from './logger'
 import { redisGet, redisSet, redisTtl } from './redis'
+import { getWithdrawalDestinationHint, getWithdrawProvider, hasAutomaticPayoutKey } from './payments/payouts'
 
 export async function sendMessage(
   botToken: string,
@@ -245,8 +246,7 @@ export async function handleDeposit(bot: any, botUser: any, chatId: number) {
 
 export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
   const settings = bot.settings
-  const hasKey = settings?.faucetpayWithdrawalKey || settings?.faucetpayApiKey || settings?.oxapayMerchantKey
-  if (!hasKey && !settings?.manualWithdrawal) {
+  if (!hasAutomaticPayoutKey(settings) && !settings?.manualWithdrawal) {
     await sendMessage(bot.botToken, chatId, '💳 Withdrawals not configured. Contact bot owner.')
     return
   }
@@ -269,12 +269,16 @@ export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
 
   await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
 
-  const note = settings?.manualWithdrawal
-    ? 'Send your wallet address (bot owner will process manually).'
-    : 'Reply with your USDT TRC20 wallet address (starts with T, 34 characters).'
+  const provider = getWithdrawProvider(settings)
+  const note = getWithdrawalDestinationHint(settings)
+  const providerLabel = provider === 'manual'
+    ? 'Manual review'
+    : provider === 'oxapay'
+      ? 'OxaPay payout (USDT TRC20)'
+      : `FaucetPay payout (${settings?.faucetpayPayoutCurrency || 'USDT'})`
 
   await sendMessage(
     bot.botToken, chatId,
-    `📤 <b>Withdraw</b>\n\n${note}\n\n⏱ You have 10 minutes.`
+    `📤 <b>Withdraw</b>\n\nProvider: <b>${providerLabel}</b>\n\n${note}\n\n⏱ You have 10 minutes.`
   )
 }

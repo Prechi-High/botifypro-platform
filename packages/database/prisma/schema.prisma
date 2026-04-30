@@ -99,6 +99,14 @@ model BotSettings {
   leaderboardBonus1       Float   @default(1000) @map("leaderboard_bonus_1")
   leaderboardBonus2       Float   @default(500) @map("leaderboard_bonus_2")
   leaderboardBonus3       Float   @default(250) @map("leaderboard_bonus_3")
+  withdrawProvider        String? @map("withdraw_provider")
+  faucetpayConfigured     Boolean @default(false) @map("faucetpay_configured")
+  faucetpayApiKeyEncrypted String? @map("faucetpay_api_key_encrypted")
+  faucetpayApiKeyLast4    String? @map("faucetpay_api_key_last4")
+  faucetpayPayoutCurrency String  @default("USDT") @map("faucetpay_payout_currency")
+  oxapayPayoutConfigured  Boolean @default(false) @map("oxapay_payout_configured")
+  oxapayPayoutApiKeyEncrypted String? @map("oxapay_payout_api_key_encrypted")
+  oxapayPayoutApiKeyLast4 String? @map("oxapay_payout_api_key_last4")
   @@map("bot_settings")
 }
 
