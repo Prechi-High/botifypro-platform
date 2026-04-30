@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, Bot, Zap, Gift, Megaphone, Send } from 'lucide-react'
 import ThemeToggle from '@/components/theme/ThemeToggle'
@@ -20,6 +21,7 @@ const INTRO_FIRST_SECONDARY = 'Plug and play'
 const INTRO_SECOND_SECONDARY = 'No coding Required'
 
 export default function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
+  const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { theme } = useTheme()
   const isLight = theme === 'light'
@@ -153,11 +155,28 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     }
   }, [])
 
+  async function waitForConfirmedSession() {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (session) {
+        return session
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 200))
+    }
+
+    return null
+  }
+
   function beginSuccessTransition(label: string) {
     setTransitionLabel(label)
     setTransitionVisible(true)
     window.setTimeout(() => {
-      window.location.href = '/dashboard'
+      router.replace('/dashboard')
+      router.refresh()
     }, 2200)
   }
 
@@ -172,9 +191,20 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         setLoginLoading(false)
         return
       }
-      if (data?.user) {
-        beginSuccessTransition('Preparing your dashboard')
+      if (!data?.user) {
+        setLoginError('We could not complete your login. Please try again.')
+        setLoginLoading(false)
+        return
       }
+
+      const session = await waitForConfirmedSession()
+      if (!session) {
+        setLoginError('Login succeeded, but your session was not ready yet. Please try again.')
+        setLoginLoading(false)
+        return
+      }
+
+      beginSuccessTransition('Preparing your dashboard')
     } catch {
       setLoginError('Something went wrong')
       setLoginLoading(false)
@@ -223,6 +253,13 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
           setSignupLoading(false)
           return
         }
+      }
+
+      const session = await waitForConfirmedSession()
+      if (!session) {
+        setSignupError('Signup succeeded, but your session was not ready yet. Please try logging in.')
+        setSignupLoading(false)
+        return
       }
 
       beginSuccessTransition('Launching your bot workspace')
