@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import ThemeToggle from '@/components/theme/ThemeToggle'
 import {
   Bot, LayoutDashboard, Megaphone,
   LogOut, Menu, X, ChevronRight, Zap, Shield
@@ -136,6 +137,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </nav>
 
       <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'flex-start' }}>
+          <ThemeToggle />
+        </div>
         <div style={{
           fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
@@ -246,7 +250,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)',
             padding: '12px 16px',
             display: 'grid',
-            gridTemplateColumns: '32px 1fr 32px',
+            gridTemplateColumns: '32px 1fr 40px',
             alignItems: 'center'
           }}>
             <button
@@ -265,7 +269,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 style={{ width: '140px', maxWidth: '100%', height: 'auto', display: 'block' }}
               />
             </div>
-            <div />
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <ThemeToggle compact />
+            </div>
           </div>
         )}
 

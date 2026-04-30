@@ -1,43 +1,39 @@
 import { type NextRequest, NextResponse } from 'next/server'
+import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const isApiBotRoute = pathname.startsWith('/api/bots/')
 
   const isDashboard = pathname.startsWith('/dashboard')
   const isAuthPage = pathname === '/login' || pathname === '/signup'
 
-  if (!isDashboard && !isAuthPage) {
+  if (!isDashboard && !isAuthPage && !isApiBotRoute) {
     return NextResponse.next()
   }
 
-  const cookies = request.cookies
+  const { response, user } = await updateSession(request)
 
-  let hasSession = false
-
-  cookies.getAll().forEach((cookie) => {
-    if (cookie.name.includes('auth-token') || cookie.name.includes('supabase')) {
-      if (cookie.value && cookie.value.length > 50) {
-        hasSession = true
-      }
+  if ((isDashboard || isApiBotRoute) && !user) {
+    if (isApiBotRoute) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-  })
-
-  if (isDashboard && !hasSession) {
     const loginUrl = new URL('/login', request.url)
     return NextResponse.redirect(loginUrl)
   }
 
-  if (isAuthPage && hasSession) {
+  if (isAuthPage && user) {
     const dashboardUrl = new URL('/dashboard', request.url)
     return NextResponse.redirect(dashboardUrl)
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {
   matcher: [
     '/dashboard/:path*',
+    '/api/bots/:path*',
     '/login',
     '/signup',
   ],

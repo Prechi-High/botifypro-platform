@@ -15,16 +15,16 @@ export default function Toggle({ enabled, onChange, label, description, disabled
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '12px 16px',
-      background: enabled ? '#eff6ff' : 'var(--color-background-secondary, #f8fafc)',
-      border: `1px solid ${enabled ? '#bfdbfe' : '#e2e8f0'}`,
+      background: enabled ? 'var(--blue-glow)' : 'color-mix(in srgb, var(--bg-surface) 88%, transparent)',
+      border: `1px solid ${enabled ? 'var(--border-active)' : 'var(--border)'}`,
       borderRadius: '10px',
       marginBottom: '8px',
       transition: 'all 0.2s ease'
     }}>
       <div>
-        <div style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b' }}>{label}</div>
+        <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)' }}>{label}</div>
         {description && (
-          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{description}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{description}</div>
         )}
       </div>
       <div
@@ -33,7 +33,7 @@ export default function Toggle({ enabled, onChange, label, description, disabled
           width: '44px',
           height: '24px',
           borderRadius: '12px',
-          background: enabled ? '#2563eb' : '#cbd5e1',
+          background: enabled ? 'var(--blue-primary)' : 'color-mix(in srgb, var(--text-secondary) 40%, transparent)',
           position: 'relative',
           cursor: disabled ? 'not-allowed' : 'pointer',
           transition: 'background 0.2s ease',
