@@ -28,6 +28,10 @@ export default function DashboardHome() {
       try {
         const { data: auth } = await supabase.auth.getUser()
         const userId = auth.user?.id
+        // #region agent log
+        console.log('[auth-debug] dashboard auth checked', { hasUser: Boolean(userId) })
+        fetch('http://127.0.0.1:7640/ingest/f8d22ce6-9d74-4edb-bee6-4fc8cfd0ca00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'93c4ff'},body:JSON.stringify({sessionId:'93c4ff',runId:'login-debug',hypothesisId:'H5',location:'dashboard/page.tsx:31',message:'Dashboard client auth checked',data:{hasUser:Boolean(userId)},timestamp:Date.now()})}).catch(()=>{})
+        // #endregion
         if (!userId) throw new Error('Not authenticated')
 
         const botsRes = await supabase.from('bots').select('id', { count: 'exact', head: true }).eq('creator_id', userId)

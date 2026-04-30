@@ -162,12 +162,20 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
       } = await supabase.auth.getSession()
 
       if (session) {
+        // #region agent log
+        console.log('[auth-debug] session confirmed', { attempt, hasSession: true })
+        fetch('http://127.0.0.1:7640/ingest/f8d22ce6-9d74-4edb-bee6-4fc8cfd0ca00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'93c4ff'},body:JSON.stringify({sessionId:'93c4ff',runId:'login-debug',hypothesisId:'H1',location:'AuthExperience.tsx:164',message:'Session confirmed after login/signup',data:{attempt,hasSession:true},timestamp:Date.now()})}).catch(()=>{})
+        // #endregion
         return session
       }
 
       await new Promise((resolve) => window.setTimeout(resolve, 200))
     }
 
+    // #region agent log
+    console.warn('[auth-debug] session polling exhausted', { attempts: 12, hasSession: false })
+    fetch('http://127.0.0.1:7640/ingest/f8d22ce6-9d74-4edb-bee6-4fc8cfd0ca00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'93c4ff'},body:JSON.stringify({sessionId:'93c4ff',runId:'login-debug',hypothesisId:'H1',location:'AuthExperience.tsx:171',message:'Session polling exhausted',data:{attempts:12,hasSession:false},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
     return null
   }
 
@@ -175,6 +183,10 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     setTransitionLabel(label)
     setTransitionVisible(true)
     window.setTimeout(() => {
+      // #region agent log
+      console.log('[auth-debug] success transition timer fired', { label, currentPath: window.location.pathname })
+      fetch('http://127.0.0.1:7640/ingest/f8d22ce6-9d74-4edb-bee6-4fc8cfd0ca00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'93c4ff'},body:JSON.stringify({sessionId:'93c4ff',runId:'login-debug',hypothesisId:'H2',location:'AuthExperience.tsx:179',message:'Success transition timer fired',data:{label,currentPath:window.location.pathname},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
       router.replace('/dashboard')
       router.refresh()
     }, 2200)
@@ -185,7 +197,14 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     setLoginLoading(true)
     setLoginError('')
     try {
+      // #region agent log
+      console.log('[auth-debug] handleLogin submit', { hasEmail: Boolean(loginEmail), passwordLength: loginPassword.length })
+      // #endregion
       const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
+      // #region agent log
+      console.log('[auth-debug] login response received', { hasUser: Boolean(data?.user), hasSession: Boolean(data?.session), hasError: Boolean(error), errorMessage: error?.message || null })
+      fetch('http://127.0.0.1:7640/ingest/f8d22ce6-9d74-4edb-bee6-4fc8cfd0ca00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'93c4ff'},body:JSON.stringify({sessionId:'93c4ff',runId:'login-debug',hypothesisId:'H1',location:'AuthExperience.tsx:189',message:'Login response received',data:{hasUser:Boolean(data?.user),hasSession:Boolean(data?.session),hasError:Boolean(error),errorMessage:error?.message || null},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
       if (error) {
         setLoginError(error.message)
         setLoginLoading(false)
@@ -205,7 +224,10 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
       }
 
       beginSuccessTransition('Preparing your dashboard')
-    } catch {
+    } catch (error: any) {
+      // #region agent log
+      console.error('[auth-debug] handleLogin exception', { message: error?.message || 'Unknown error', name: error?.name || null })
+      // #endregion
       setLoginError('Something went wrong')
       setLoginLoading(false)
     }
