@@ -394,6 +394,40 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           await redisDel('withdraw_state:' + botUser.id)
           await redisDel('withdraw_amount:' + botUser.id)
           // Fall through to handle the button normally below
+        } else if (withdrawState === 'awaiting_amount') {
+          // Extract any number from the user's free text
+          const match = text.match(/[\d,]+(\.\d+)?/)
+          const parsed = match ? parseFloat(match[0].replace(/,/g, '')) : NaN
+
+          if (isNaN(parsed) || parsed <= 0) {
+            await sendMessage(bot.botToken, chatId,
+              `❌ Couldn't find a valid number in your message.\n\nPlease type the amount, e.g. <code>500</code> or <code>50 coins</code>.`
+            )
+            return
+          }
+
+          const balance = Number(botUser.balance)
+          const rate = Number(bot.settings?.usdToCurrencyRate || 1000)
+          const minWithdrawUsd = Number(bot.settings?.minWithdrawUsd || 0.5)
+          const minWithdrawCurrency = minWithdrawUsd * rate
+          const sym = bot.settings?.currencySymbol || '🪙'
+
+          if (parsed > balance) {
+            await sendMessage(bot.botToken, chatId,
+              `❌ Insufficient balance.\n\nYou entered: <b>${parsed.toLocaleString()} ${sym}</b>\nYour balance: <b>${balance.toFixed(0)} ${sym}</b>\n\nPlease enter a smaller amount.`
+            )
+            return
+          }
+
+          if (parsed < minWithdrawCurrency) {
+            await sendMessage(bot.botToken, chatId,
+              `❌ Amount too low.\n\nMinimum withdrawal: <b>${minWithdrawCurrency.toFixed(0)} ${sym}</b>\nYou entered: <b>${parsed.toLocaleString()} ${sym}</b>`
+            )
+            return
+          }
+
+          await handleWithdrawAmountSelected(bot, botUser, chatId, Math.floor(parsed))
+          return
         } else if (withdrawState === 'awaiting_address') {
           await redisDel('withdraw_state:' + botUser.id)
           const savedAmount = await redisGet('withdraw_amount:' + botUser.id)
@@ -502,13 +536,8 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       else if (data === 'cmd_leaderboard') { await handleLeaderboard(bot, botUser, cbChatId) }
       else if (data === 'cmd_start') { await handleStart(bot, botUser, cbChatId) }
       else if (data === 'cmd_help' || data === 'cmd_menu') { await handleHelp(bot, cbChatId) }
-      // Withdrawal amount selection
-      else if (data?.startsWith('withdraw_amount:')) {
-        const amount = Number(data.split(':')[1])
-        if (!isNaN(amount) && amount > 0) {
-          await handleWithdrawAmountSelected(bot, botUser, cbChatId, amount)
-        }
-      }
+      // Withdrawal amount selection — no longer used (amounts entered as free text)
+      // kept for backward compat with any in-flight sessions
       // Use saved address
       else if (data === 'withdraw_use_saved') {
         const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`)

@@ -243,9 +243,10 @@ export async function handleDeposit(bot: any, botUser: any, chatId: number) {
 }
 
 // ── WITHDRAWAL FLOW ───────────────────────────────────────────────────────────
-// Step 1: User taps Withdraw → show amount selection
-// Step 2: User picks amount → if saved address exists, ask to reuse or enter new
-// Step 3: User confirms address → process withdrawal
+// Step 1: User taps Withdraw → asked to type an amount
+// Step 2: Bot extracts number from free text, validates balance
+// Step 3: If saved address exists, ask to reuse or enter new
+// Step 4: User provides address → process withdrawal
 
 export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
   const settings = bot.settings
@@ -279,38 +280,19 @@ export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
       ? 'OxaPay (USDT TRC20)'
       : `FaucetPay (${settings?.faucetpayPayoutCurrency || 'USDT'})`
 
-  // Build amount options: 25%, 50%, 75%, 100% of balance
-  const options = [0.25, 0.5, 0.75, 1.0]
-    .map(pct => Math.floor(balance * pct))
-    .filter(amt => amt >= minWithdrawCurrency)
-
-  if (options.length === 0) {
-    await sendMessage(bot.botToken, chatId, `❌ Balance too low to withdraw. Minimum is ${minWithdrawCurrency.toFixed(0)} ${sym}.`)
-    return
-  }
-
   // Set state to awaiting_amount
   await redisSet('withdraw_state:' + botUser.id, 'awaiting_amount', 600)
-
-  const amountButtons = options.map(amt => ({
-    text: `${amt.toLocaleString()} ${sym}`,
-    callback_data: `withdraw_amount:${amt}`
-  }))
-
-  // Group into rows of 2
-  const rows: any[][] = []
-  for (let i = 0; i < amountButtons.length; i += 2) {
-    rows.push(amountButtons.slice(i, i + 2))
-  }
-  rows.push([{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }])
 
   await sendMessage(
     bot.botToken, chatId,
     `📤 <b>Withdraw</b>\n\n` +
     `Provider: <b>${providerLabel}</b>\n` +
-    `Balance: <b>${balance.toFixed(0)} ${sym}</b>\n\n` +
-    `Select the amount to withdraw:`,
-    { inline_keyboard: rows }
+    `Balance: <b>${balance.toFixed(0)} ${sym} ${currencyName}</b>\n` +
+    `Minimum: <b>${minWithdrawCurrency.toFixed(0)} ${sym}</b>\n\n` +
+    `How much do you want to withdraw?\n` +
+    `Just type the amount — e.g. <code>500</code> or <code>50 ${sym}</code>\n\n` +
+    `⏱ You have 10 minutes.`,
+    { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
   )
 }
 
@@ -333,7 +315,6 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
   const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`) || null
 
   if (savedAddress) {
-    // Ask if they want to use saved address
     await sendMessage(
       bot.botToken, chatId,
       `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n` +
@@ -349,7 +330,6 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
       }
     )
   } else {
-    // No saved address — ask for address directly
     const hint = getWithdrawalDestinationHint(settings)
     const addressLabel = provider === 'faucetpay'
       ? '📧 Enter your <b>FaucetPay email address</b> or FaucetPay-linked wallet:'
