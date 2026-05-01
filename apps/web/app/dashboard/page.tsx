@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Users, Terminal, CheckSquare, Copy, ArrowLeftRight, RefreshCw, Send, BookOpen, CircleHelp } from 'lucide-react'
+import { Bot, Users, Terminal, CheckSquare, RefreshCw, Send, CircleHelp } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -11,21 +11,18 @@ type Stats = {
   activeUsers: number
   commands: number
   workingBots: number
-  clonedBots: number
-  transferred: number
 }
 
 type HourlyData = { hour: string; users: number }
-
 type TopBot = { name: string; username: string; users: number }
 
-const HOURS = ['00:00','06:00','11:00','16:00','23:00']
-
-function generateHourlyData(): HourlyData[] {
-  return Array.from({ length: 24 }, (_, i) => ({
-    hour: `${String(i).padStart(2, '0')}:00`,
-    users: 0,
-  }))
+// Build 6 hourly slots ending at current hour
+function buildSixHourSlots(): HourlyData[] {
+  const now = new Date()
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getTime() - (5 - i) * 60 * 60 * 1000)
+    return { hour: `${String(d.getHours()).padStart(2, '0')}:00`, users: 0 }
+  })
 }
 
 function MiniLineChart({ data }: { data: HourlyData[] }) {
@@ -37,36 +34,32 @@ function MiniLineChart({ data }: { data: HourlyData[] }) {
   const innerH = h - pad.top - pad.bottom
 
   const points = data.map((d, i) => {
-    const x = pad.left + (i / (data.length - 1)) * innerW
+    const x = pad.left + (i / Math.max(data.length - 1, 1)) * innerW
     const y = pad.top + innerH - (d.users / max) * innerH
     return `${x},${y}`
   }).join(' ')
 
-  const yLabels = [0, 1, 2, 3, 4].filter(v => v <= max)
+  const yLabels = Array.from({ length: 5 }, (_, i) => Math.round((max / 4) * i)).filter((v, i, a) => a.indexOf(v) === i)
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: '140px' }}>
-      {/* Y grid lines */}
       {yLabels.map(v => {
         const y = pad.top + innerH - (v / max) * innerH
         return (
           <g key={v}>
             <line x1={pad.left} y1={y} x2={w - pad.right} y2={y}
               stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="3,3" />
-            <text x={pad.left - 6} y={y + 4} fill="rgba(255,255,255,0.3)"
-              fontSize="9" textAnchor="end">{v}</text>
+            <text x={pad.left - 6} y={y + 4} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="end">{v}</text>
           </g>
         )
       })}
-      {/* Line */}
       <polyline points={points} fill="none" stroke="#7C3AED" strokeWidth="2" />
-      {/* X labels */}
-      {HOURS.map((label, i) => {
-        const idx = i === 0 ? 0 : i === 1 ? 6 : i === 2 ? 11 : i === 3 ? 16 : 23
-        const x = pad.left + (idx / (data.length - 1)) * innerW
+      {data.map((d, i) => {
+        const x = pad.left + (i / Math.max(data.length - 1, 1)) * innerW
         return (
-          <text key={label} x={x} y={h - 6} fill="rgba(255,255,255,0.3)"
-            fontSize="9" textAnchor="middle">{label}</text>
+          <text key={i} x={x} y={h - 6} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="middle">
+            {d.hour}
+          </text>
         )
       })}
     </svg>
@@ -77,11 +70,9 @@ export default function DashboardHome() {
   const supabase = useMemo(() => createClient(), [])
   const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<Stats>({
-    totalBots: 0, activeUsers: 0, commands: 0,
-    workingBots: 0, clonedBots: 0, transferred: 0,
-  })
-  const [hourlyData] = useState<HourlyData[]>(generateHourlyData())
+  const [stats, setStats] = useState<Stats>({ totalBots: 0, activeUsers: 0, commands: 0, workingBots: 0 })
+  const [hourlyData, setHourlyData] = useState<HourlyData[]>(buildSixHourSlots())
+  const [chartStats, setChartStats] = useState({ totalUsers: 0, peakHour: 0, avgPerHour: 0, activeHours: 0 })
   const [topBots, setTopBots] = useState<TopBot[]>([])
 
   async function load() {
@@ -91,25 +82,64 @@ export default function DashboardHome() {
       const userId = auth.user?.id
       if (!userId) return
 
-      const botsRes = await supabase.from('bots').select('id, bot_username, bot_name, is_active').eq('creator_id', userId)
+      const botsRes = await supabase
+        .from('bots')
+        .select('id, bot_username, bot_name, is_active')
+        .eq('creator_id', userId)
       const bots = botsRes.data || []
       const botIds = bots.map((b: any) => b.id)
       const totalBots = bots.length
       const workingBots = bots.filter((b: any) => b.is_active).length
 
       let activeUsers = 0
+      let commands = 0
       let topBotsData: TopBot[] = []
+      const slots = buildSixHourSlots()
 
       if (botIds.length > 0) {
-        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        // Active users in last 6h
+        const since6h = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const activeRes = await supabase
           .from('bot_users')
           .select('id', { count: 'exact', head: true })
           .in('bot_id', botIds)
-          .gte('last_active', since24h)
+          .gte('last_active', since6h)
         activeUsers = activeRes.count || 0
 
-        // Top bots by user count
+        // Total active commands across all bots
+        const cmdRes = await supabase
+          .from('bot_commands')
+          .select('id', { count: 'exact', head: true })
+          .in('bot_id', botIds)
+          .eq('is_active', true)
+        commands = cmdRes.count || 0
+
+        // Hourly activity for last 6h — fetch bot_users active per hour slot
+        for (let i = 0; i < slots.length; i++) {
+          const slotStart = new Date(Date.now() - (5 - i) * 60 * 60 * 1000)
+          const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000)
+          const res = await supabase
+            .from('bot_users')
+            .select('id', { count: 'exact', head: true })
+            .in('bot_id', botIds)
+            .gte('last_active', slotStart.toISOString())
+            .lt('last_active', slotEnd.toISOString())
+          slots[i].users = res.count || 0
+        }
+
+        // Chart summary stats
+        const totalUsersChart = slots.reduce((s, d) => s + d.users, 0)
+        const peakSlot = slots.reduce((best, d) => d.users > best.users ? d : best, slots[0])
+        const activeHoursCount = slots.filter(d => d.users > 0).length
+        const avgPerHour = activeHoursCount > 0 ? Math.round(totalUsersChart / activeHoursCount) : 0
+        setChartStats({
+          totalUsers: totalUsersChart,
+          peakHour: peakSlot.users,
+          avgPerHour,
+          activeHours: activeHoursCount,
+        })
+
+        // Top bots by total user count
         for (const bot of bots.slice(0, 5)) {
           const countRes = await supabase
             .from('bot_users')
@@ -124,14 +154,8 @@ export default function DashboardHome() {
         topBotsData.sort((a, b) => b.users - a.users)
       }
 
-      setStats({
-        totalBots,
-        activeUsers,
-        commands: 0,
-        workingBots,
-        clonedBots: 0,
-        transferred: 0,
-      })
+      setStats({ totalBots, activeUsers, commands, workingBots })
+      setHourlyData(slots)
       setTopBots(topBotsData)
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load dashboard')
@@ -154,7 +178,7 @@ export default function DashboardHome() {
     {
       label: 'ACTIVE USERS',
       value: stats.activeUsers,
-      sub: 'Active in last 24 hours',
+      sub: 'Active in last 6 hours',
       icon: Users,
       iconColor: '#34D399',
       iconBg: 'rgba(16,185,129,0.18)',
@@ -162,7 +186,7 @@ export default function DashboardHome() {
     {
       label: 'COMMANDS',
       value: stats.commands,
-      sub: 'Executed in last 24h',
+      sub: 'Total active commands',
       icon: Terminal,
       iconColor: '#60A5FA',
       iconBg: 'rgba(59,130,246,0.18)',
@@ -175,41 +199,18 @@ export default function DashboardHome() {
       iconColor: '#FBBF24',
       iconBg: 'rgba(245,158,11,0.18)',
     },
-    {
-      label: 'CLONED BOTS',
-      value: stats.clonedBots,
-      sub: 'Cloned from templates',
-      icon: Copy,
-      iconColor: '#2DD4BF',
-      iconBg: 'rgba(20,184,166,0.18)',
-    },
-    {
-      label: 'TRANSFERRED',
-      value: stats.transferred,
-      sub: 'From other accounts',
-      icon: ArrowLeftRight,
-      iconColor: '#F87171',
-      iconBg: 'rgba(239,68,68,0.18)',
-    },
   ]
-
-  const totalUsers = 0
-  const peakHour = 0
-  const avgPerHour = 0
-  const activeHours = 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-        <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Dashboard</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Welcome to your 1-TouchBot control center
-          </p>
-        </div>
+      <div>
+        <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Dashboard</h1>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          Welcome to your 1-TouchBot control center
+        </p>
       </div>
 
       {/* Action buttons */}
@@ -238,7 +239,7 @@ export default function DashboardHome() {
         </Link>
       </div>
 
-      {/* Stat cards grid */}
+      {/* Stat cards — 2x2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         {statCards.map((card) => {
           const Icon = card.icon
@@ -278,7 +279,7 @@ export default function DashboardHome() {
         })}
       </div>
 
-      {/* User Activity Chart */}
+      {/* User Activity Chart — last 6h */}
       <div style={{
         background: 'rgba(255,255,255,0.03)',
         border: '1px solid var(--border)',
@@ -286,7 +287,7 @@ export default function DashboardHome() {
         padding: '20px',
       }}>
         <div style={{ marginBottom: '4px', fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-          User Activity (24h)
+          User Activity (6h)
         </div>
         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
           Hourly user engagement overview
@@ -298,10 +299,10 @@ export default function DashboardHome() {
         <MiniLineChart data={hourlyData} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
           {[
-            { label: 'Total Users', value: totalUsers, color: 'var(--text-primary)' },
-            { label: 'Peak Hour', value: peakHour, color: '#34D399' },
-            { label: 'Avg/Hour', value: avgPerHour, color: '#818CF8' },
-            { label: 'Active Hours', value: activeHours, color: '#60A5FA' },
+            { label: 'Total Users', value: chartStats.totalUsers, color: 'var(--text-primary)' },
+            { label: 'Peak Hour', value: chartStats.peakHour, color: '#34D399' },
+            { label: 'Avg/Hour', value: chartStats.avgPerHour, color: '#818CF8' },
+            { label: 'Active Hours', value: chartStats.activeHours, color: '#60A5FA' },
           ].map(item => (
             <div key={item.label} style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '22px', fontWeight: 700, color: item.color }}>{item.value}</div>
@@ -317,9 +318,7 @@ export default function DashboardHome() {
           <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
             Top Active Bots
           </h2>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {topBots.length} bots
-          </span>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{topBots.length} bots</span>
         </div>
         <div style={{
           background: 'rgba(255,255,255,0.03)',
@@ -373,54 +372,50 @@ export default function DashboardHome() {
           Help &amp; Support
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {[
-            {
-              title: 'Telegram Community',
-              desc: 'Join our group for help & updates',
-              icon: Send,
-              iconColor: '#38BDF8',
-              iconBg: 'rgba(14,165,233,0.15)',
-            },
-            {
-              title: 'Learn to Make Bots',
-              desc: 'Tutorials & guides to get started',
-              icon: BookOpen,
-              iconColor: '#A78BFA',
-              iconBg: 'rgba(139,92,246,0.15)',
-            },
-            {
-              title: 'Get Support',
-              desc: 'Ask questions & get help',
-              icon: CircleHelp,
-              iconColor: '#34D399',
-              iconBg: 'rgba(16,185,129,0.15)',
-            },
-          ].map(item => {
-            const Icon = item.icon
-            return (
-              <div key={item.title} style={{
-                display: 'flex', alignItems: 'center', gap: '14px',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid var(--border)',
-                borderRadius: '14px',
-                padding: '16px',
-                cursor: 'pointer',
+          <a href="https://t.me/+xse0lboY9m03MjQ0" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '14px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid var(--border)',
+              borderRadius: '14px',
+              padding: '16px',
+              cursor: 'pointer',
+            }}>
+              <div style={{
+                width: '44px', height: '44px', borderRadius: '12px',
+                background: 'rgba(14,165,233,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
               }}>
-                <div style={{
-                  width: '44px', height: '44px', borderRadius: '12px',
-                  background: item.iconBg,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <Icon size={20} color={item.iconColor} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{item.title}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{item.desc}</div>
-                </div>
+                <Send size={20} color="#38BDF8" />
               </div>
-            )
-          })}
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Telegram Community</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Join our group for help &amp; updates</div>
+              </div>
+            </div>
+          </a>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '14px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid var(--border)',
+            borderRadius: '14px',
+            padding: '16px',
+            cursor: 'pointer',
+          }}>
+            <div style={{
+              width: '44px', height: '44px', borderRadius: '12px',
+              background: 'rgba(16,185,129,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <CircleHelp size={20} color="#34D399" />
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Get Support</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Ask questions &amp; get help</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
