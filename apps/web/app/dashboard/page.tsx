@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Users, Terminal, CheckSquare, RefreshCw, Send, CircleHelp } from 'lucide-react'
+import { Bot, Users, Terminal, CheckSquare, RefreshCw, Send, CircleHelp, Megaphone, X, ArrowRight, Zap } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -103,12 +104,16 @@ function MiniLineChart({ data }: { data: HourlyData[] }) {
 
 export default function DashboardHome() {
   const supabase = useMemo(() => createClient(), [])
+  const router = useRouter()
   const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<Stats>({ totalBots: 0, activeUsers: 0, commands: 0, workingBots: 0 })
   const [hourlyData, setHourlyData] = useState<HourlyData[]>(buildSixHourSlots())
   const [chartStats, setChartStats] = useState({ totalUsers: 0, peakHour: 0, avgPerHour: 0, activeHours: 0 })
   const [topBots, setTopBots] = useState<TopBot[]>([])
+  const [showAdvertiserModal, setShowAdvertiserModal] = useState(false)
+  const [isAdvertiser, setIsAdvertiser] = useState(false)
+  const [registeringAdvertiser, setRegisteringAdvertiser] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -116,6 +121,15 @@ export default function DashboardHome() {
       const { data: auth } = await supabase.auth.getUser()
       const userId = auth.user?.id
       if (!userId) return
+
+      // Check if user is already an advertiser (has advertiser_balance field set or campaigns)
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('advertiser_balance, role')
+        .eq('id', userId)
+        .single()
+      const hasAdvertiserAccess = (userProfile?.advertiser_balance !== null && userProfile?.advertiser_balance !== undefined) || userProfile?.role === 'advertiser' || userProfile?.role === 'admin'
+      setIsAdvertiser(hasAdvertiserAccess)
 
       const botsRes = await supabase
         .from('bots')
@@ -217,6 +231,29 @@ export default function DashboardHome() {
 
   useEffect(() => { load() }, [supabase])
 
+  async function registerAsAdvertiser() {
+    setRegisteringAdvertiser(true)
+    try {
+      const { data: auth } = await supabase.auth.getUser()
+      const userId = auth.user?.id
+      if (!userId) throw new Error('Not authenticated')
+      // Set advertiser_balance to 0 to mark as advertiser
+      const { error } = await supabase
+        .from('users')
+        .update({ advertiser_balance: 0 })
+        .eq('id', userId)
+      if (error) throw error
+      setIsAdvertiser(true)
+      setShowAdvertiserModal(false)
+      toast.success('You are now registered as an advertiser!')
+      router.push('/dashboard/advertise')
+    } catch (e: any) {
+      toast.error(e?.message || 'Registration failed')
+    } finally {
+      setRegisteringAdvertiser(false)
+    }
+  }
+
   const statCards = [
     {
       label: 'TOTAL BOTS',
@@ -276,7 +313,75 @@ export default function DashboardHome() {
         </Link>
       </div>
 
-      {/* Stat cards — 2x2 grid */}
+      {/* Advertising Banner */}
+      <div
+        onClick={() => isAdvertiser ? router.push('/dashboard/advertise') : setShowAdvertiserModal(true)}
+        style={{ cursor: 'pointer', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(57,255,20,0.08) 0%, rgba(57,255,20,0.04) 100%)', border: '1px solid rgba(57,255,20,0.2)', padding: '18px 20px', display: 'flex', alignItems: 'center', gap: '16px', transition: 'var(--transition)' }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(57,255,20,0.4)')}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(57,255,20,0.2)')}
+      >
+        <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'rgba(57,255,20,0.12)', border: '1px solid rgba(57,255,20,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Megaphone size={22} color="var(--accent)" />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif", marginBottom: '3px' }}>
+            Advertise on 1-TouchBot
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+            Reach thousands of active bot users across the network
+          </div>
+        </div>
+        <ArrowRight size={18} color="var(--accent)" />
+      </div>
+
+      {/* Advertiser Registration Modal */}
+      {showAdvertiserModal && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setShowAdvertiserModal(false) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+        >
+          <div style={{ width: '100%', maxWidth: '400px', background: '#0D110D', border: '1px solid rgba(57,255,20,0.2)', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 0 60px rgba(57,255,20,0.08)' }}>
+            <div style={{ height: '2px', background: 'linear-gradient(90deg, transparent, #39FF14, transparent)' }} />
+            <div style={{ padding: '28px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Megaphone size={20} color="var(--accent)" />
+                  </div>
+                  <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '18px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                    Become an Advertiser
+                  </h2>
+                </div>
+                <button onClick={() => setShowAdvertiserModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', display: 'flex' }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                {[
+                  { icon: <Zap size={16} color="var(--accent)" />, text: 'Reach thousands of active Telegram bot users' },
+                  { icon: <Users size={16} color="var(--accent)" />, text: 'Target by activity window — 24h, 48h, 72h, 7 days' },
+                  { icon: <Megaphone size={16} color="var(--accent)" />, text: 'Set your budget and we calculate your audience' },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(57,255,20,0.04)', border: '1px solid rgba(57,255,20,0.1)' }}>
+                    {item.icon}
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={registerAsAdvertiser}
+                disabled={registeringAdvertiser}
+                className="btn-primary"
+                style={{ width: '100%', padding: '13px', borderRadius: '10px', fontSize: '14px' }}
+              >
+                {registeringAdvertiser ? 'Registering...' : <><Megaphone size={16} /> Register as Advertiser</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         {statCards.map((card) => {
           const Icon = card.icon

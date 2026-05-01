@@ -11,7 +11,6 @@ import {
 const NAV = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: Bot,             label: 'My Bots',   href: '/dashboard/bots' },
-  { icon: Megaphone,       label: 'Advertise', href: '/dashboard/advertise' },
   { icon: Zap,             label: 'PRO',       href: '/dashboard/upgrade' },
 ]
 const ADMIN_NAV = { icon: Shield, label: 'Admin', href: '/dashboard/admin' }

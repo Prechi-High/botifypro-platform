@@ -152,18 +152,25 @@ export default function AdminSettingsPage() {
                 <input type="number" min="1" value={adIntervalHours} onChange={e => setAdIntervalHours(Number(e.target.value))}
                   style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
                 'How often the ad cron runs (default: 5 hours)')}
-              {field('CPM Rate - 24h Window',
-                <input type="number" min="0" step="0.001" value={cpmRate24h} onChange={e => setCpmRate24h(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
-              {field('CPM Rate - 48h Window',
-                <input type="number" min="0" step="0.001" value={cpmRate48h} onChange={e => setCpmRate48h(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
-              {field('CPM Rate - 72h Window',
-                <input type="number" min="0" step="0.001" value={cpmRate72h} onChange={e => setCpmRate72h(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
-              {field('CPM Rate - 7d Window',
-                <input type="number" min="0" step="0.001" value={cpmRate7d} onChange={e => setCpmRate7d(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />)}
+              {field('CPM Rate — 24h Window ($ per 1,000 impressions)',
+                <input type="number" min="0" step="0.01" value={cpmRate24h} onChange={e => setCpmRate24h(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate24h) * 1000).toLocaleString()} users`)}
+              {field('CPM Rate — 48h Window ($ per 1,000 impressions)',
+                <input type="number" min="0" step="0.01" value={cpmRate48h} onChange={e => setCpmRate48h(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate48h) * 1000).toLocaleString()} users`)}
+              {field('CPM Rate — 72h Window ($ per 1,000 impressions)',
+                <input type="number" min="0" step="0.01" value={cpmRate72h} onChange={e => setCpmRate72h(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate72h) * 1000).toLocaleString()} users`)}
+              {field('CPM Rate — 7d Window ($ per 1,000 impressions)',
+                <input type="number" min="0" step="0.01" value={cpmRate7d} onChange={e => setCpmRate7d(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate7d) * 1000).toLocaleString()} users`)}
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', fontSize: '12px', color: '#166534' }}>
+                💡 Formula: Audience = (Budget ÷ CPM) × 1,000. Example: $20 budget at $1.00 CPM = 20,000 users.
+              </div>
             </>)}
 
             {section('💰 Platform Revenue', <Settings size={16} color="#059669" />, <>
