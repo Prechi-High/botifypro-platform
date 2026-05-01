@@ -90,8 +90,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const Sidebar = () => (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: 'var(--bg-surface)',
-      borderRight: '1px solid var(--border)'
+      background: 'linear-gradient(180deg, #050A0E 0%, #071014 50%, #050A0E 100%)',
+      borderRight: '1px solid rgba(20,241,217,0.1)',
+      boxShadow: 'inset -1px 0 0 rgba(20,241,217,0.05)',
     }}>
       {/* Logo */}
       <div style={{

@@ -59,7 +59,7 @@ function MiniLineChart({ data }: { data: HourlyData[] }) {
             </g>
           )
         })}
-        <polyline points={polylinePoints} fill="none" stroke="#7C3AED" strokeWidth="2" />
+        <polyline points={polylinePoints} fill="none" stroke="var(--accent)" strokeWidth="2" />
         {/* Invisible hit areas for each data point */}
         {points.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r={8} fill="transparent"
@@ -68,7 +68,7 @@ function MiniLineChart({ data }: { data: HourlyData[] }) {
         ))}
         {/* Visible dot on hover */}
         {tooltip && (
-          <circle cx={tooltip.x} cy={tooltip.y} r={4} fill="#7C3AED" stroke="white" strokeWidth="1.5" />
+          <circle cx={tooltip.x} cy={tooltip.y} r={4} fill="var(--accent)" stroke="white" strokeWidth="1.5" />
         )}
         {data.map((d, i) => {
           const x = pad.left + (i / Math.max(data.length - 1, 1)) * innerW
@@ -273,8 +273,9 @@ export default function DashboardHome() {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             padding: '12px', borderRadius: '12px',
-            background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
             color: 'var(--text-primary)', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+            fontFamily: 'Inter, sans-serif',
           }}
         >
           <RefreshCw size={16} /> Refresh
@@ -284,8 +285,11 @@ export default function DashboardHome() {
             width: '100%',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             padding: '12px', borderRadius: '12px',
-            background: '#7C3AED', border: 'none',
-            color: 'white', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+            background: 'linear-gradient(135deg, #14F1D9, #0ea5e9)',
+            border: 'none',
+            color: '#0B0F14', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
+            fontFamily: 'Inter, sans-serif',
+            boxShadow: '0 0 20px rgba(20,241,217,0.25)',
           }}>
             <Bot size={16} /> My Bots
           </button>

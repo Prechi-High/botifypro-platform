@@ -3,22 +3,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, EyeOff, ArrowRight, ChevronRight } from 'lucide-react'
+import {
+  Eye, EyeOff, ArrowRight, ChevronRight,
+  Bot, Coins, Users, Trophy, ArrowDownToLine, ArrowUpFromLine, Megaphone, Rocket
+} from 'lucide-react'
 
 type AuthMode = 'signup' | 'login'
 
-// ── Onboarding slides ─────────────────────────────────────────────────────────
+// ── Onboarding slides — all icons from lucide-react ───────────────────────────
 const SLIDES = [
   {
     id: 0,
     headline: 'Build Telegram Bots in Seconds',
     sub: 'No coding. Just automation.',
-    visual: (
+    Visual: () => (
       <div style={{ position: 'relative', width: '100%', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'rgba(20,241,217,0.12)', border: '1.5px solid rgba(20,241,217,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(20,241,217,0.18)', animation: 'floatY 3s ease-in-out infinite' }}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.68 7.92c-.12.56-.44.7-.9.44l-2.48-1.83-1.2 1.15c-.13.13-.24.24-.5.24l.18-2.52 4.6-4.16c.2-.18-.04-.28-.3-.1L7.74 14.6l-2.44-.76c-.53-.17-.54-.53.11-.78l9.54-3.68c.44-.16.83.11.69.42z" fill="#14F1D9"/></svg>
+          <Bot size={36} color="#14F1D9" />
         </div>
-        {[...Array(6)].map((_, i) => (
+        {[0,1,2,3,4,5].map(i => (
           <div key={i} style={{ position: 'absolute', width: '4px', height: '4px', borderRadius: '50%', background: '#14F1D9', opacity: 0.4 + (i % 3) * 0.2, left: `${15 + i * 13}%`, top: `${20 + (i % 3) * 25}%`, animation: `starPulse ${2 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }} />
         ))}
       </div>
@@ -28,16 +31,18 @@ const SLIDES = [
     id: 1,
     headline: 'Automate Everything',
     sub: 'Rewards · Referrals · Leaderboards',
-    visual: (
+    Visual: () => (
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', padding: '16px 0' }}>
         {[
-          { icon: '🪙', label: 'Rewards', color: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.3)' },
-          { icon: '🔗', label: 'Referrals', color: 'rgba(20,241,217,0.12)', border: 'rgba(20,241,217,0.3)' },
-          { icon: '🏆', label: 'Leaderboard', color: 'rgba(139,92,246,0.15)', border: 'rgba(139,92,246,0.3)' },
-        ].map((item, i) => (
+          { Icon: Coins,  label: 'Rewards',     color: 'rgba(251,191,36,0.15)',  border: 'rgba(251,191,36,0.3)',  iconColor: '#FBBF24' },
+          { Icon: Users,  label: 'Referrals',   color: 'rgba(20,241,217,0.12)',  border: 'rgba(20,241,217,0.3)',  iconColor: '#14F1D9' },
+          { Icon: Trophy, label: 'Leaderboard', color: 'rgba(139,92,246,0.15)', border: 'rgba(139,92,246,0.3)', iconColor: '#A78BFA' },
+        ].map(({ Icon, label, color, border, iconColor }, i) => (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', animation: `floatY ${2.5 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }}>
-            <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: item.color, border: `1.5px solid ${item.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>{item.icon}</div>
-            <span style={{ fontSize: '11px', color: '#9CA3AF', fontFamily: 'Inter, sans-serif' }}>{item.label}</span>
+            <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: color, border: `1.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon size={24} color={iconColor} />
+            </div>
+            <span style={{ fontSize: '11px', color: '#9CA3AF', fontFamily: 'Inter, sans-serif' }}>{label}</span>
           </div>
         ))}
       </div>
@@ -47,10 +52,17 @@ const SLIDES = [
     id: 2,
     headline: 'Built-in Payments & Growth',
     sub: 'Deposit · Withdraw · Broadcast',
-    visual: (
-      <div style={{ position: 'relative', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-        {['📥 Deposit', '💸 Withdraw', '📢 Broadcast'].map((item, i) => (
-          <div key={i} style={{ padding: '8px 12px', borderRadius: '12px', background: 'rgba(20,241,217,0.08)', border: '1px solid rgba(20,241,217,0.2)', fontSize: '11px', color: '#14F1D9', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', animation: `floatY ${2.2 + i * 0.5}s ease-in-out ${i * 0.4}s infinite` }}>{item}</div>
+    Visual: () => (
+      <div style={{ position: 'relative', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+        {[
+          { Icon: ArrowDownToLine, label: 'Deposit',   color: '#14F1D9' },
+          { Icon: ArrowUpFromLine, label: 'Withdraw',  color: '#60A5FA' },
+          { Icon: Megaphone,       label: 'Broadcast', color: '#A78BFA' },
+        ].map(({ Icon, label, color }, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '10px 12px', borderRadius: '12px', background: 'rgba(20,241,217,0.06)', border: '1px solid rgba(20,241,217,0.15)', animation: `floatY ${2.2 + i * 0.5}s ease-in-out ${i * 0.4}s infinite` }}>
+            <Icon size={20} color={color} />
+            <span style={{ fontSize: '10px', color: '#9CA3AF', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>{label}</span>
+          </div>
         ))}
       </div>
     ),
@@ -59,10 +71,10 @@ const SLIDES = [
     id: 3,
     headline: 'Start Building Now',
     sub: 'Join thousands of bot creators',
-    visual: (
+    Visual: () => (
       <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
         <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(20,241,217,0.2), rgba(20,241,217,0.04))', border: '2px solid rgba(20,241,217,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 60px rgba(20,241,217,0.2)', animation: 'floatY 3s ease-in-out infinite' }}>
-          <span style={{ fontSize: '36px' }}>🚀</span>
+          <Rocket size={36} color="#14F1D9" />
         </div>
       </div>
     ),
@@ -229,7 +241,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
             key={slide}
             style={{ width: '100%', maxWidth: '360px', textAlign: 'center', animation: 'slideIn 0.28s ease' }}
           >
-            {currentSlide.visual}
+            {currentSlide.Visual && <currentSlide.Visual />}
 
             <h1 style={{ fontFamily: '"Sora", sans-serif', fontSize: '26px', fontWeight: 700, color: '#E5E7EB', lineHeight: 1.2, margin: '16px 0 8px', letterSpacing: '-0.02em' }}>
               {currentSlide.headline}
