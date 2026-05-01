@@ -26,6 +26,7 @@ function buildSixHourSlots(): HourlyData[] {
 }
 
 function MiniLineChart({ data }: { data: HourlyData[] }) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; hour: string; users: number } | null>(null)
   const max = Math.max(...data.map(d => d.users), 4)
   const w = 320
   const h = 120
@@ -36,33 +37,69 @@ function MiniLineChart({ data }: { data: HourlyData[] }) {
   const points = data.map((d, i) => {
     const x = pad.left + (i / Math.max(data.length - 1, 1)) * innerW
     const y = pad.top + innerH - (d.users / max) * innerH
-    return `${x},${y}`
-  }).join(' ')
+    return { x, y, ...d }
+  })
+
+  const polylinePoints = points.map(p => `${p.x},${p.y}`).join(' ')
 
   const yLabels = Array.from({ length: 5 }, (_, i) => Math.round((max / 4) * i)).filter((v, i, a) => a.indexOf(v) === i)
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: '140px' }}>
-      {yLabels.map(v => {
-        const y = pad.top + innerH - (v / max) * innerH
-        return (
-          <g key={v}>
-            <line x1={pad.left} y1={y} x2={w - pad.right} y2={y}
-              stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="3,3" />
-            <text x={pad.left - 6} y={y + 4} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="end">{v}</text>
-          </g>
-        )
-      })}
-      <polyline points={points} fill="none" stroke="#7C3AED" strokeWidth="2" />
-      {data.map((d, i) => {
-        const x = pad.left + (i / Math.max(data.length - 1, 1)) * innerW
-        return (
-          <text key={i} x={x} y={h - 6} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="middle">
-            {d.hour}
-          </text>
-        )
-      })}
-    </svg>
+    <div style={{ position: 'relative' }}>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: '140px' }}
+        onMouseLeave={() => setTooltip(null)}
+      >
+        {yLabels.map(v => {
+          const y = pad.top + innerH - (v / max) * innerH
+          return (
+            <g key={v}>
+              <line x1={pad.left} y1={y} x2={w - pad.right} y2={y}
+                stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="3,3" />
+              <text x={pad.left - 6} y={y + 4} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="end">{v}</text>
+            </g>
+          )
+        })}
+        <polyline points={polylinePoints} fill="none" stroke="#7C3AED" strokeWidth="2" />
+        {/* Invisible hit areas for each data point */}
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={8} fill="transparent"
+            onMouseEnter={() => setTooltip({ x: p.x, y: p.y, hour: p.hour, users: p.users })}
+          />
+        ))}
+        {/* Visible dot on hover */}
+        {tooltip && (
+          <circle cx={tooltip.x} cy={tooltip.y} r={4} fill="#7C3AED" stroke="white" strokeWidth="1.5" />
+        )}
+        {data.map((d, i) => {
+          const x = pad.left + (i / Math.max(data.length - 1, 1)) * innerW
+          return (
+            <text key={i} x={x} y={h - 6} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="middle">
+              {d.hour}
+            </text>
+          )
+        })}
+      </svg>
+      {tooltip && (
+        <div style={{
+          position: 'absolute',
+          left: `${(tooltip.x / 320) * 100}%`,
+          top: `${(tooltip.y / 120) * 100}%`,
+          transform: 'translate(-50%, -130%)',
+          background: 'rgba(30,20,50,0.95)',
+          border: '1px solid rgba(124,58,237,0.4)',
+          borderRadius: '8px',
+          padding: '6px 10px',
+          fontSize: '12px',
+          color: 'white',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+        }}>
+          <div style={{ fontWeight: 600, color: '#A78BFA' }}>{tooltip.hour}</div>
+          <div>{tooltip.users} active user{tooltip.users !== 1 ? 's' : ''}</div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -106,13 +143,29 @@ export default function DashboardHome() {
           .gte('last_active', since6h)
         activeUsers = activeRes.count || 0
 
-        // Total active commands across all bots
+        // Total active commands: DB commands + enabled built-in commands from settings
         const cmdRes = await supabase
           .from('bot_commands')
           .select('id', { count: 'exact', head: true })
           .in('bot_id', botIds)
           .eq('is_active', true)
-        commands = cmdRes.count || 0
+        const dbCommands = cmdRes.count || 0
+
+        // Count enabled built-in commands from settings
+        const settingsRes = await supabase
+          .from('bot_settings')
+          .select('withdraw_enabled, deposit_enabled, referral_enabled, balance_enabled, daily_bonus_enabled, bonus_enabled, leaderboard_enabled')
+          .in('bot_id', botIds)
+        const settingsRows = settingsRes.data || []
+        let builtinCount = 0
+        for (const s of settingsRows) {
+          builtinCount += 2 // Balance + Referral always on
+          if (s.withdraw_enabled) builtinCount++
+          if (s.deposit_enabled) builtinCount++
+          if (s.daily_bonus_enabled || s.bonus_enabled) builtinCount++
+          if (s.leaderboard_enabled) builtinCount++
+        }
+        commands = dbCommands + builtinCount
 
         // Hourly activity for last 6h — fetch bot_users active per hour slot
         for (let i = 0; i < slots.length; i++) {

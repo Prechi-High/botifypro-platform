@@ -211,10 +211,25 @@ export default function UsersPage() {
   }
 
   async function rejectWithdrawal(id: string, reason: string) {
+    // Only reject if still pending — prevents double-credit on multiple clicks
+    const { data: existing } = await supabase
+      .from('transactions')
+      .select('status, amount_currency, bot_user_id')
+      .eq('id', id)
+      .single()
+
+    if (!existing || existing.status !== 'pending') {
+      notify('This withdrawal has already been processed', false)
+      setRejectingId(null)
+      await loadWithdrawals()
+      return
+    }
+
     const { error } = await supabase
       .from('transactions')
       .update({ status: 'failed', gateway_tx_id: 'rejected: ' + reason })
       .eq('id', id)
+      .eq('status', 'pending') // extra guard: only update if still pending
     if (!error) {
       const w = withdrawals.find(w => w.id === id)
       if (w) {
@@ -229,16 +244,17 @@ export default function UsersPage() {
             })
           })
         } catch {}
-        if (w?.bot_user_id) {
+        // Credit balance back — safe because we only reach here if status was pending
+        if (existing.bot_user_id) {
           const { data: botUser } = await supabase
             .from('bot_users')
             .select('id, balance')
-            .eq('id', w.bot_user_id)
+            .eq('id', existing.bot_user_id)
             .single()
           if (botUser) {
             await supabase
               .from('bot_users')
-              .update({ balance: Number(botUser.balance) + Number(w.amount_currency || 0) })
+              .update({ balance: Number(botUser.balance) + Number(existing.amount_currency || 0) })
               .eq('id', botUser.id)
           }
         }

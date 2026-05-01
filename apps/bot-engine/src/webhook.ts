@@ -4,7 +4,7 @@ import { logger } from './logger'
 import { redisGet, redisSet, redisDel } from './redis'
 import {
   sendMessage, handleStart, handleBalance, handleDeposit,
-  handleWithdraw, handleHelp, handleBonus, handleReferralInfo, handleLeaderboard
+  handleWithdraw, handleWithdrawAmountSelected, handleHelp, handleBonus, handleReferralInfo, handleLeaderboard
 } from './commands'
 import { maybeServeAd } from './ads'
 import { handleReferral } from './referral'
@@ -69,25 +69,25 @@ export async function checkChannelMembership(
   }
 }
 
-export async function processWithdrawal(bot: any, botUser: any, address: string, chatId: number) {
+export async function processWithdrawal(bot: any, botUser: any, address: string, chatId: number, withdrawAmount?: number) {
   const validationError = validateWithdrawalDestination(bot.settings, address)
   if (validationError) {
     await sendMessage(bot.botToken, chatId, validationError)
     return
   }
 
-  const usdAmount = Number(botUser.balance) / Number(bot.settings.usdToCurrencyRate)
+  // Use the specified amount or fall back to full balance
+  const currencyAmount = withdrawAmount !== undefined ? withdrawAmount : Number(botUser.balance)
+  const usdAmount = currencyAmount / Number(bot.settings.usdToCurrencyRate)
+
   if (usdAmount < Number(bot.settings.minWithdrawUsd)) {
-    await sendMessage(bot.botToken, chatId,
-      '❌ Insufficient balance for withdrawal.'
-    )
+    await sendMessage(bot.botToken, chatId, '❌ Insufficient balance for withdrawal.')
     return
   }
 
   const feePercent = Number(bot.settings.withdrawFeePercent || 0)
   const feeUsd = usdAmount * (feePercent / 100)
   const netUsd = usdAmount - feeUsd
-  const currencyAmount = Number(botUser.balance)
   const sym = bot.settings.currencySymbol || '🪙'
   const currencyName = bot.settings.currencyName || 'coins'
   const gateway = getWithdrawProvider(bot.settings)
@@ -106,6 +106,10 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
       data: { balance: { decrement: currencyAmount } }
     })
   ])
+
+  // Save address for future withdrawals (stored in telegramUsername field is wrong — use a Redis key)
+  // We store it in Redis keyed by botUser.id so it persists across sessions
+  await import('./redis').then(r => r.redisSet(`withdraw_saved_address:${botUser.id}`, address, 60 * 60 * 24 * 90))
 
   if (gateway === 'manual') {
     await sendMessage(bot.botToken, chatId,
@@ -380,9 +384,22 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
 
       if (!text.startsWith('/')) {
         const withdrawState = await redisGet('withdraw_state:' + botUser.id)
-        if (withdrawState === 'awaiting_address') {
+
+        // If user is in withdrawal flow but sends a non-address message that looks like a command button
+        // (e.g. taps Balance, Referral etc.) — cancel the withdrawal
+        const isMenuButton = ['💰 Balance', '🔗 Referral', '📤 Withdraw', '🎁 Daily Bonus',
+          '🏆 Leaderboard', '📥 Deposit', '❓ Help', '📋 Menu'].includes(text)
+
+        if (withdrawState && isMenuButton) {
           await redisDel('withdraw_state:' + botUser.id)
-          await processWithdrawal(bot, botUser, text, chatId)
+          await redisDel('withdraw_amount:' + botUser.id)
+          // Fall through to handle the button normally below
+        } else if (withdrawState === 'awaiting_address') {
+          await redisDel('withdraw_state:' + botUser.id)
+          const savedAmount = await redisGet('withdraw_amount:' + botUser.id)
+          await redisDel('withdraw_amount:' + botUser.id)
+          const amount = savedAmount ? Number(savedAmount) : Number(botUser.balance)
+          await processWithdrawal(bot, botUser, text, chatId, amount)
           return
         }
 
@@ -392,6 +409,13 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           const { verifyAndCreditDeposit } = await import('./payments/trongrid')
           await verifyAndCreditDeposit(bot, botUser, text, chatId)
           return
+        }
+      } else {
+        // User sent a slash command while in withdrawal flow — cancel it
+        const withdrawState = await redisGet('withdraw_state:' + botUser.id)
+        if (withdrawState) {
+          await redisDel('withdraw_state:' + botUser.id)
+          await redisDel('withdraw_amount:' + botUser.id)
         }
       }
 
@@ -478,6 +502,51 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       else if (data === 'cmd_leaderboard') { await handleLeaderboard(bot, botUser, cbChatId) }
       else if (data === 'cmd_start') { await handleStart(bot, botUser, cbChatId) }
       else if (data === 'cmd_help' || data === 'cmd_menu') { await handleHelp(bot, cbChatId) }
+      // Withdrawal amount selection
+      else if (data?.startsWith('withdraw_amount:')) {
+        const amount = Number(data.split(':')[1])
+        if (!isNaN(amount) && amount > 0) {
+          await handleWithdrawAmountSelected(bot, botUser, cbChatId, amount)
+        }
+      }
+      // Use saved address
+      else if (data === 'withdraw_use_saved') {
+        const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`)
+        if (savedAddress) {
+          const savedAmount = await redisGet('withdraw_amount:' + botUser.id)
+          await redisDel('withdraw_state:' + botUser.id)
+          await redisDel('withdraw_amount:' + botUser.id)
+          const amount = savedAmount ? Number(savedAmount) : Number(botUser.balance)
+          await processWithdrawal(bot, botUser, savedAddress, cbChatId, amount)
+        } else {
+          await sendMessage(bot.botToken, cbChatId, '❌ No saved address found. Please enter your address.')
+        }
+      }
+      // Enter new address
+      else if (data === 'withdraw_new_address') {
+        const settings = bot.settings
+        const provider = getWithdrawProvider(settings)
+        const { getWithdrawalDestinationHint } = await import('./payments/payouts')
+        const hint = getWithdrawalDestinationHint(settings)
+        const addressLabel = provider === 'faucetpay'
+          ? '📧 Enter your <b>FaucetPay email address</b> or FaucetPay-linked wallet:'
+          : provider === 'oxapay'
+            ? '💳 Enter your <b>USDT TRC20 wallet address</b> (starts with T, 34 chars):'
+            : '📝 Enter your payout address or details:'
+        await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
+        await sendMessage(bot.botToken, cbChatId,
+          `${addressLabel}\n\n<i>${hint}</i>\n\n⏱ You have 10 minutes.`,
+          { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
+        )
+      }
+      // Cancel withdrawal
+      else if (data === 'cmd_cancel_withdraw') {
+        await redisDel('withdraw_state:' + botUser.id)
+        await redisDel('withdraw_amount:' + botUser.id)
+        await sendMessage(bot.botToken, cbChatId, '✅ Withdrawal cancelled.')
+        const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
+        await handleStart(bot, freshUser || botUser, cbChatId)
+      }
       else if (data === 'cmd_check_channel') {
         const channels = await getChannels(bot)
         const stillUnverified: typeof channels = []

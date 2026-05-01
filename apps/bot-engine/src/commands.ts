@@ -1,7 +1,7 @@
 import { prisma } from '@botifypro/database'
 import axios from 'axios'
 import { logger } from './logger'
-import { redisGet, redisSet, redisTtl } from './redis'
+import { redisGet, redisSet, redisTtl, redisDel } from './redis'
 import { getWithdrawalDestinationHint, getWithdrawProvider, hasAutomaticPayoutKey } from './payments/payouts'
 
 export async function sendMessage(
@@ -37,7 +37,10 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
     return
   }
 
-  // Build keyboard with ONLY activated commands
+  // Cancel any in-progress withdrawal when user goes back to start
+  await redisDel('withdraw_state:' + botUser.id)
+  await redisDel('withdraw_amount:' + botUser.id)
+
   const allButtons: any[] = []
   allButtons.push({ text: '💰 Balance' })
   allButtons.push({ text: '🔗 Referral' })
@@ -68,8 +71,7 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
     bot.botToken, chatId,
     `🏦 <b>Account Balance Overview</b>\n\n` +
     `• User ID: ${botUser.telegramUserId}\n` +
-    `• Balance: ${botUser.balance} ${sym} ${currencyName}\n` +
-    `• Wallet: ${(botUser as any).walletAddress || 'Not set'}\n\n` +
+    `• Balance: ${botUser.balance} ${sym} ${currencyName}\n\n` +
     `✅ Keep growing. Withdraw anytime!`,
     {
       inline_keyboard: [[
@@ -151,7 +153,7 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
   )
 }
 
-export async function handleReferralInfo(bot: any, botUser: any, chatId: number, messageId?: number) {
+export async function handleReferralInfo(bot: any, botUser: any, chatId: number) {
   const { getReferralStats } = await import('./referral')
   const stats = await getReferralStats(bot.id, botUser.id)
   const botUsername = bot.botUsername || 'yourbot'
@@ -166,7 +168,6 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number,
     subButtons.push([{ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' }])
   }
   subButtons.push([{ text: '📤 Share Referral Link', url: shareUrl }])
-  subButtons.push([{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }])
 
   await sendMessage(
     bot.botToken, chatId,
@@ -187,9 +188,6 @@ export async function handleLeaderboard(bot: any, botUser: any, chatId: number) 
     return
   }
 
-  const sym = bot.settings?.currencySymbol || '🪙'
-
-  // Leaderboard ranks by REFERRAL COUNT not balance
   const referralCounts = await prisma.referral.groupBy({
     by: ['referrerId'],
     where: { botId: bot.id },
@@ -244,6 +242,11 @@ export async function handleDeposit(bot: any, botUser: any, chatId: number) {
   )
 }
 
+// ── WITHDRAWAL FLOW ───────────────────────────────────────────────────────────
+// Step 1: User taps Withdraw → show amount selection
+// Step 2: User picks amount → if saved address exists, ask to reuse or enter new
+// Step 3: User confirms address → process withdrawal
+
 export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
   const settings = bot.settings
   if (!hasAutomaticPayoutKey(settings) && !settings?.manualWithdrawal) {
@@ -253,32 +256,113 @@ export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
 
   const sym = settings?.currencySymbol || '🪙'
   const currencyName = settings?.currencyName || 'coins'
-  const usdEquiv = Number(botUser.balance) / Number(settings?.usdToCurrencyRate || 1000)
-  const minWithdraw = Number(settings?.minWithdrawUsd || 0.5)
+  const rate = Number(settings?.usdToCurrencyRate || 1000)
+  const minWithdrawUsd = Number(settings?.minWithdrawUsd || 0.5)
+  const minWithdrawCurrency = minWithdrawUsd * rate
+  const balance = Number(botUser.balance)
 
-  if (usdEquiv < minWithdraw) {
+  if (balance < minWithdrawCurrency) {
     await sendMessage(
       bot.botToken, chatId,
       `❌ <b>Insufficient Balance</b>\n\n` +
-      `✅ You need at least\n\n` +
-      `<b>${(minWithdraw * Number(settings?.usdToCurrencyRate || 1000)).toFixed(2)} ${sym} ${currencyName}</b>\n\n` +
-      `👥 Share your referral link to increase your balance`
+      `Minimum withdrawal: <b>${minWithdrawCurrency.toFixed(0)} ${sym}</b>\n` +
+      `Your balance: <b>${balance.toFixed(0)} ${sym}</b>\n\n` +
+      `👥 Share your referral link to earn more!`
     )
     return
   }
 
-  await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
-
   const provider = getWithdrawProvider(settings)
-  const note = getWithdrawalDestinationHint(settings)
   const providerLabel = provider === 'manual'
     ? 'Manual review'
     : provider === 'oxapay'
-      ? 'OxaPay payout (USDT TRC20)'
-      : `FaucetPay payout (${settings?.faucetpayPayoutCurrency || 'USDT'})`
+      ? 'OxaPay (USDT TRC20)'
+      : `FaucetPay (${settings?.faucetpayPayoutCurrency || 'USDT'})`
+
+  // Build amount options: 25%, 50%, 75%, 100% of balance
+  const options = [0.25, 0.5, 0.75, 1.0]
+    .map(pct => Math.floor(balance * pct))
+    .filter(amt => amt >= minWithdrawCurrency)
+
+  if (options.length === 0) {
+    await sendMessage(bot.botToken, chatId, `❌ Balance too low to withdraw. Minimum is ${minWithdrawCurrency.toFixed(0)} ${sym}.`)
+    return
+  }
+
+  // Set state to awaiting_amount
+  await redisSet('withdraw_state:' + botUser.id, 'awaiting_amount', 600)
+
+  const amountButtons = options.map(amt => ({
+    text: `${amt.toLocaleString()} ${sym}`,
+    callback_data: `withdraw_amount:${amt}`
+  }))
+
+  // Group into rows of 2
+  const rows: any[][] = []
+  for (let i = 0; i < amountButtons.length; i += 2) {
+    rows.push(amountButtons.slice(i, i + 2))
+  }
+  rows.push([{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }])
 
   await sendMessage(
     bot.botToken, chatId,
-    `📤 <b>Withdraw</b>\n\nProvider: <b>${providerLabel}</b>\n\n${note}\n\n⏱ You have 10 minutes.`
+    `📤 <b>Withdraw</b>\n\n` +
+    `Provider: <b>${providerLabel}</b>\n` +
+    `Balance: <b>${balance.toFixed(0)} ${sym}</b>\n\n` +
+    `Select the amount to withdraw:`,
+    { inline_keyboard: rows }
   )
+}
+
+export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatId: number, amount: number) {
+  const settings = bot.settings
+  const sym = settings?.currencySymbol || '🪙'
+  const rate = Number(settings?.usdToCurrencyRate || 1000)
+  const usdEquiv = amount / rate
+  const feePercent = Number(settings?.withdrawFeePercent || 0)
+  const feeUsd = usdEquiv * (feePercent / 100)
+  const netUsd = usdEquiv - feeUsd
+
+  // Save chosen amount to Redis
+  await redisSet('withdraw_amount:' + botUser.id, String(amount), 600)
+  await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
+
+  const provider = getWithdrawProvider(settings)
+
+  // Check if user has a saved address (stored in Redis)
+  const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`) || null
+
+  if (savedAddress) {
+    // Ask if they want to use saved address
+    await sendMessage(
+      bot.botToken, chatId,
+      `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n` +
+      `≈ ${netUsd.toFixed(4)} USD after fees\n\n` +
+      `You have a saved address:\n<code>${savedAddress}</code>\n\n` +
+      `Use this address or enter a new one?`,
+      {
+        inline_keyboard: [
+          [{ text: '✅ Use Saved Address', callback_data: 'withdraw_use_saved' }],
+          [{ text: '✏️ Enter New Address', callback_data: 'withdraw_new_address' }],
+          [{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]
+        ]
+      }
+    )
+  } else {
+    // No saved address — ask for address directly
+    const hint = getWithdrawalDestinationHint(settings)
+    const addressLabel = provider === 'faucetpay'
+      ? '📧 Enter your <b>FaucetPay email address</b> or FaucetPay-linked wallet:'
+      : provider === 'oxapay'
+        ? '💳 Enter your <b>USDT TRC20 wallet address</b> (starts with T, 34 chars):'
+        : '📝 Enter your payout address or details:'
+
+    await sendMessage(
+      bot.botToken, chatId,
+      `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n` +
+      `≈ ${netUsd.toFixed(4)} USD after fees\n\n` +
+      `${addressLabel}\n\n<i>${hint}</i>\n\n⏱ You have 10 minutes.`,
+      { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
+    )
+  }
 }
