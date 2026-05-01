@@ -436,9 +436,9 @@ export default function UsersPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '4px' }}>
         {[
-          { key: 'users', label: <><Users size={14}/> Users</>, badge: newUsersCount },
-          { key: 'withdrawals', label: <><Banknote size={14}/> Withdrawals</>, badge: pendingWithdrawalsCount },
-          { key: 'broadcast', label: <><Megaphone size={14}/> Broadcast</>, badge: 0 }
+          { key: 'users', label: 'Users', icon: 'users', badge: newUsersCount },
+          { key: 'withdrawals', label: 'Withdrawals', icon: 'withdrawals', badge: pendingWithdrawalsCount },
+          { key: 'broadcast', label: 'Broadcast', icon: 'broadcast', badge: 0 }
         ].map(tab => (
           <button
             key={tab.key}
@@ -460,6 +460,9 @@ export default function UsersPage() {
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
             }}
           >
+            {tab.icon === 'users' && <Users size={14}/>}
+            {tab.icon === 'withdrawals' && <Banknote size={14}/>}
+            {tab.icon === 'broadcast' && <Megaphone size={14}/>}
             {tab.label}
             {tab.badge > 0 && (
               <span style={{
@@ -740,7 +743,7 @@ export default function UsersPage() {
                         background: w.status === 'completed' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
                         color: w.status === 'completed' ? '#10B981' : '#FCA5A5', display: 'flex', alignItems: 'center', gap: '4px'
                       }}>
-                        {w.status === 'completed' ? <><CheckCircle size={12}/> Paid</> : <><XCircle size={12}/> Rejected</>}
+                        {w.status === 'completed' ? 'Paid' : 'Rejected'}
                       </span>
                     </div>
                   ))}
@@ -877,11 +880,10 @@ export default function UsersPage() {
                 disabled={broadcasting || !broadcastText.trim() || !!broadcastBtnLinkError}
                 style={{ padding: '12px', background: 'var(--blue-gradient)', border: 'none', borderRadius: '10px', color: 'white', fontSize: '15px', fontWeight: 600, cursor: broadcasting || !broadcastText.trim() || !!broadcastBtnLinkError ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: !!broadcastBtnLinkError ? 0.6 : 1 }}
               >
-                {broadcasting ? 'Sending...' : <><Megaphone size={16} /> Send Broadcast to {users.filter(u => !u.is_banned).length} Users</>}
+                {broadcasting ? 'Sending...' : 'Send Broadcast to ' + users.filter(u => !u.is_banned).length + ' Users'}
               </button>
             </div>
           </div>
-        </div>
       )}
 
       {/* Passphrase modal */}
