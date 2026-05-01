@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, Bot, Zap, Gift, Megaphone, Send } from 'lucide-react'
 
@@ -18,6 +19,8 @@ const INTRO_FIRST_SECONDARY = 'Plug and play'
 const INTRO_SECOND_SECONDARY = 'No coding Required'
 
 export default function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
+  const router = useRouter()
+  const pathname = usePathname()
   const supabase = useMemo(() => createClient(), [])
 
   const [mode, setMode] = useState<AuthMode>(initialMode)
@@ -84,6 +87,34 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
   useEffect(() => {
     setMode(initialMode)
   }, [initialMode])
+
+  useEffect(() => {
+    // #region agent log
+    console.log('[auth-debug] auth screen pathname changed', {
+      pathname,
+      transitionVisible,
+      loginLoading,
+    })
+    // #endregion
+  }, [pathname, transitionVisible, loginLoading])
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // #region agent log
+      console.log('[auth-debug] auth state changed', {
+        event,
+        hasSession: Boolean(session),
+        pathname: window.location.pathname,
+      })
+      // #endregion
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase])
 
   useEffect(() => {
     let cancelled = false
@@ -153,7 +184,11 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     setTransitionLabel(label)
     setTransitionVisible(true)
     window.setTimeout(() => {
-      window.location.href = '/dashboard'
+      // #region agent log
+      console.log('[auth-debug] success transition timer fired', { label, currentPath: window.location.pathname })
+      fetch('http://127.0.0.1:7640/ingest/f8d22ce6-9d74-4edb-bee6-4fc8cfd0ca00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'93c4ff'},body:JSON.stringify({sessionId:'93c4ff',runId:'login-debug',hypothesisId:'H2',location:'AuthExperience.tsx:179',message:'Success transition timer fired',data:{label,currentPath:window.location.pathname},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
+      router.replace('/dashboard')
     }, 2200)
   }
 
