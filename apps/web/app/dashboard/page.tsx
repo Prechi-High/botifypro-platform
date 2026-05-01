@@ -60,15 +60,13 @@ function MiniLineChart({ data }: { data: HourlyData[] }) {
           )
         })}
         <polyline points={polylinePoints} fill="none" stroke="var(--accent)" strokeWidth="2" />
-        {/* Invisible hit areas for each data point */}
         {points.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r={8} fill="transparent"
             onMouseEnter={() => setTooltip({ x: p.x, y: p.y, hour: p.hour, users: p.users })}
           />
         ))}
-        {/* Visible dot on hover */}
         {tooltip && (
-          <circle cx={tooltip.x} cy={tooltip.y} r={4} fill="var(--accent)" stroke="white" strokeWidth="1.5" />
+          <circle cx={tooltip.x} cy={tooltip.y} r={4} fill="var(--accent)" stroke="var(--bg-base)" strokeWidth="1.5" />
         )}
         {data.map((d, i) => {
           const x = pad.left + (i / Math.max(data.length - 1, 1)) * innerW
@@ -260,38 +258,20 @@ export default function DashboardHome() {
 
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Dashboard</h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+        <h1 style={{ margin: 0 }}>Dashboard</h1>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', fontFamily: 'Inter, sans-serif' }}>
           Welcome to your 1-TouchBot control center
         </p>
       </div>
 
       {/* Action buttons */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        <button
-          onClick={load}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-            padding: '12px', borderRadius: '12px',
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
-            color: 'var(--text-primary)', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-            fontFamily: 'Inter, sans-serif',
-          }}
-        >
-          <RefreshCw size={16} /> Refresh
+        <button onClick={load} className="btn-ghost" style={{ padding: '11px', borderRadius: '10px', fontSize: '13px' }}>
+          <RefreshCw size={15} /> Refresh
         </button>
         <Link href="/dashboard/bots" style={{ textDecoration: 'none' }}>
-          <button style={{
-            width: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-            padding: '12px', borderRadius: '12px',
-            background: 'linear-gradient(135deg, #14F1D9, #0ea5e9)',
-            border: 'none',
-            color: '#0B0F14', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
-            fontFamily: 'Inter, sans-serif',
-            boxShadow: '0 0 20px rgba(20,241,217,0.25)',
-          }}>
-            <Bot size={16} /> My Bots
+          <button className="btn-primary" style={{ width: '100%', padding: '11px', borderRadius: '10px', fontSize: '13px' }}>
+            <Bot size={15} /> My Bots
           </button>
         </Link>
       </div>
@@ -301,32 +281,23 @@ export default function DashboardHome() {
         {statCards.map((card) => {
           const Icon = card.icon
           return (
-            <div key={card.label} style={{
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid var(--border)',
-              borderRadius: '16px',
-              padding: '16px',
-            }}>
+            <div key={card.label} className="stat-card">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif", textTransform: 'uppercase' }}>
                   {card.label}
                 </span>
-                <div style={{
-                  width: '32px', height: '32px', borderRadius: '8px',
-                  background: card.iconBg,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: card.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon size={16} color={card.iconColor} />
                 </div>
               </div>
               {loading ? (
-                <div className="skeleton" style={{ height: '40px', width: '60%', borderRadius: '8px' }} />
+                <div className="skeleton" style={{ height: '40px', width: '60%', borderRadius: '6px' }} />
               ) : (
                 <>
-                  <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                  <div style={{ fontSize: '30px', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1, fontFamily: "'Space Grotesk', sans-serif" }}>
                     {card.value}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', fontFamily: 'Inter, sans-serif' }}>
                     {card.sub}
                   </div>
                 </>
@@ -337,21 +308,16 @@ export default function DashboardHome() {
       </div>
 
       {/* User Activity Chart — last 6h */}
-      <div style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid var(--border)',
-        borderRadius: '16px',
-        padding: '20px',
-      }}>
-        <div style={{ marginBottom: '4px', fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-          User Activity (6h)
+      <div className="glass" style={{ padding: '20px' }}>
+        <div style={{ marginBottom: '4px', fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif" }}>
+          User Activity <span style={{ color: 'var(--accent)' }}>(6h)</span>
         </div>
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', fontFamily: 'Inter, sans-serif' }}>
           Hourly user engagement overview
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#7C3AED' }} />
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Active Users</span>
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent-glow)' }} />
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>Active Users</span>
         </div>
         <MiniLineChart data={hourlyData} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
@@ -372,24 +338,13 @@ export default function DashboardHome() {
       {/* Top Active Bots */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-            Top Active Bots
-          </h2>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{topBots.length} bots</span>
+          <h2 style={{ fontSize: '16px', margin: 0 }}>Top Active Bots</h2>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>{topBots.length} bots</span>
         </div>
-        <div style={{
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid var(--border)',
-          borderRadius: '16px',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr',
-            padding: '10px 16px',
-            borderBottom: '1px solid var(--border)',
-          }}>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>BOT</span>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>USERS</span>
+        <div className="glass" style={{ overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif", textTransform: 'uppercase' }}>BOT</span>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif", textTransform: 'uppercase' }}>USERS</span>
           </div>
           {loading ? (
             <div style={{ padding: '20px 16px' }}>
@@ -425,52 +380,26 @@ export default function DashboardHome() {
 
       {/* Help & Support */}
       <div>
-        <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>
-          Help &amp; Support
-        </h2>
+        <h2 style={{ marginBottom: '12px' }}>Help &amp; Support</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <a href="https://t.me/+xse0lboY9m03MjQ0" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '14px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid var(--border)',
-              borderRadius: '14px',
-              padding: '16px',
-              cursor: 'pointer',
-            }}>
-              <div style={{
-                width: '44px', height: '44px', borderRadius: '12px',
-                background: 'rgba(14,165,233,0.15)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                <Send size={20} color="#38BDF8" />
+            <div className="glass" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', cursor: 'pointer' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Send size={18} color="var(--accent)" />
               </div>
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Telegram Community</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Join our group for help &amp; updates</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif" }}>Telegram Community</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'Inter, sans-serif' }}>Join our group for help &amp; updates</div>
               </div>
             </div>
           </a>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '14px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid var(--border)',
-            borderRadius: '14px',
-            padding: '16px',
-            cursor: 'pointer',
-          }}>
-            <div style={{
-              width: '44px', height: '44px', borderRadius: '12px',
-              background: 'rgba(16,185,129,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexShrink: 0,
-            }}>
-              <CircleHelp size={20} color="#34D399" />
+          <div className="glass" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', cursor: 'pointer' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(57,255,20,0.08)', border: '1px solid rgba(57,255,20,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CircleHelp size={18} color="var(--accent)" />
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Get Support</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Ask questions &amp; get help</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif" }}>Get Support</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'Inter, sans-serif' }}>Ask questions &amp; get help</div>
             </div>
           </div>
         </div>
