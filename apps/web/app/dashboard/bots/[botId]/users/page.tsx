@@ -274,6 +274,7 @@ export default function UsersPage() {
       notify(error.message, false)
       setRejectingInProgress(false)
     }
+  }
 
   async function sendBroadcast() {
     if (!broadcastText.trim()) { notify('Message text is required', false); return }
