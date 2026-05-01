@@ -879,6 +879,7 @@ export default function UsersPage() {
                 {broadcasting ? 'Sending...' : <><Megaphone size={16} /> Send Broadcast to {users.filter(u => !u.is_banned).length} Users</>}
               </button>
             </div>
+          </div>
         </div>
       )}
 
