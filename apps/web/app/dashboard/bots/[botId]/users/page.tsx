@@ -94,6 +94,7 @@ export default function UsersPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [customRejectReason, setCustomRejectReason] = useState('')
+  const [rejectingInProgress, setRejectingInProgress] = useState(false)
   const [botSettings, setBotSettings] = useState<any>(null)
 
   // Broadcast state
@@ -211,6 +212,9 @@ export default function UsersPage() {
   }
 
   async function rejectWithdrawal(id: string, reason: string) {
+    if (rejectingInProgress) return // prevent double-click
+    setRejectingInProgress(true)
+
     // Only reject if still pending — prevents double-credit on multiple clicks
     const { data: existing } = await supabase
       .from('transactions')
@@ -221,6 +225,7 @@ export default function UsersPage() {
     if (!existing || existing.status !== 'pending') {
       notify('This withdrawal has already been processed', false)
       setRejectingId(null)
+      setRejectingInProgress(false)
       await loadWithdrawals()
       return
     }
@@ -263,9 +268,12 @@ export default function UsersPage() {
       setRejectingId(null)
       setRejectReason('')
       setCustomRejectReason('')
+      setRejectingInProgress(false)
       await loadWithdrawals()
-    } else notify(error.message, false)
-  }
+    } else {
+      notify(error.message, false)
+      setRejectingInProgress(false)
+    }
 
   async function sendBroadcast() {
     if (!broadcastText.trim()) { notify('Message text is required', false); return }
@@ -682,10 +690,10 @@ export default function UsersPage() {
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <button
                               onClick={() => rejectWithdrawal(w.id, rejectReason === 'Custom reason...' ? customRejectReason : rejectReason)}
-                              disabled={!rejectReason || (rejectReason === 'Custom reason...' && !customRejectReason)}
-                              style={{ flex: 1, padding: '8px', background: '#EF4444', border: 'none', borderRadius: '7px', color: 'white', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
+                              disabled={rejectingInProgress || !rejectReason || (rejectReason === 'Custom reason...' && !customRejectReason)}
+                              style={{ flex: 1, padding: '8px', background: rejectingInProgress ? '#9CA3AF' : '#EF4444', border: 'none', borderRadius: '7px', color: 'white', fontSize: '12px', fontWeight: 500, cursor: rejectingInProgress ? 'not-allowed' : 'pointer' }}
                             >
-                              Confirm Reject
+                              {rejectingInProgress ? 'Processing...' : 'Confirm Reject'}
                             </button>
                             <button onClick={() => setRejectingId(null)} style={{ padding: '8px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' }}>
                               Cancel

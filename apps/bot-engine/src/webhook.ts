@@ -558,7 +558,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         const { getWithdrawalDestinationHint } = await import('./payments/payouts')
         const hint = getWithdrawalDestinationHint(settings)
         const addressLabel = provider === 'faucetpay'
-          ? '📧 Enter your <b>FaucetPay email address</b> or FaucetPay-linked wallet:'
+          ? `📧 <b>FaucetPay is your payment method.</b>\n\nEnter your <b>FaucetPay email address</b> or a wallet address linked to your FaucetPay account:`
           : provider === 'oxapay'
             ? '💳 Enter your <b>USDT TRC20 wallet address</b> (starts with T, 34 chars):'
             : '📝 Enter your payout address or details:'

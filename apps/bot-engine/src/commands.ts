@@ -315,10 +315,16 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
   const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`) || null
 
   if (savedAddress) {
+    const providerNote = provider === 'faucetpay'
+      ? `\n💳 Payment via: <b>FaucetPay (${settings?.faucetpayPayoutCurrency || 'USDT'})</b>`
+      : provider === 'oxapay'
+        ? `\n💳 Payment via: <b>OxaPay (USDT TRC20)</b>`
+        : ''
+
     await sendMessage(
       bot.botToken, chatId,
       `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n` +
-      `≈ ${netUsd.toFixed(4)} USD after fees\n\n` +
+      `≈ ${netUsd.toFixed(4)} USD after fees${providerNote}\n\n` +
       `You have a saved address:\n<code>${savedAddress}</code>\n\n` +
       `Use this address or enter a new one?`,
       {
@@ -332,7 +338,7 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
   } else {
     const hint = getWithdrawalDestinationHint(settings)
     const addressLabel = provider === 'faucetpay'
-      ? '📧 Enter your <b>FaucetPay email address</b> or FaucetPay-linked wallet:'
+      ? `📧 <b>FaucetPay is your payment method.</b>\n\nEnter your <b>FaucetPay email address</b> or a wallet address linked to your FaucetPay account:`
       : provider === 'oxapay'
         ? '💳 Enter your <b>USDT TRC20 wallet address</b> (starts with T, 34 chars):'
         : '📝 Enter your payout address or details:'
