@@ -112,6 +112,14 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
 
   useEffect(() => { setMode(initialMode) }, [initialMode])
 
+  // Read ?redirect= param — if user came from /dashboard/advertise, go back there after login
+  const redirectTo = useMemo(() => {
+    if (typeof window === 'undefined') return '/dashboard'
+    const params = new URLSearchParams(window.location.search)
+    const r = params.get('redirect')
+    return r && r.startsWith('/dashboard') ? r : '/dashboard'
+  }, [])
+
   function onTouchStart(e: React.TouchEvent) { touchStartX.current = e.touches[0].clientX }
   function onTouchEnd(e: React.TouchEvent) {
     if (touchStartX.current === null) return
@@ -126,7 +134,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
   function beginSuccessTransition(label: string) {
     setTransitionLabel(label)
     setTransitionVisible(true)
-    window.setTimeout(() => { window.location.href = '/dashboard' }, 1500)
+    window.setTimeout(() => { window.location.href = redirectTo }, 1500)
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -358,7 +366,9 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
               <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '150px', height: 'auto' }} />
             </div>
             <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '20px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px' }}>{transitionLabel}</h2>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#39FF14' }}>Securing session and opening your dashboard...</p>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#39FF14' }}>
+              {redirectTo === '/dashboard/advertise' ? 'Taking you to the advertising platform...' : 'Securing session and opening your dashboard...'}
+            </p>
           </div>
         </div>
       )}

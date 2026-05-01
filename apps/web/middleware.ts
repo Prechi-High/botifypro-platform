@@ -11,7 +11,6 @@ export async function middleware(request: NextRequest) {
   }
 
   const cookies = request.cookies
-
   let hasSession = false
 
   cookies.getAll().forEach((cookie) => {
@@ -23,13 +22,17 @@ export async function middleware(request: NextRequest) {
   })
 
   if (isDashboard && !hasSession) {
+    // Preserve the intended destination so we can redirect back after login
     const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
   if (isAuthPage && hasSession) {
-    const dashboardUrl = new URL('/dashboard', request.url)
-    return NextResponse.redirect(dashboardUrl)
+    // If already logged in and visiting auth page, check for redirect param
+    const redirect = request.nextUrl.searchParams.get('redirect')
+    const dest = redirect && redirect.startsWith('/dashboard') ? redirect : '/dashboard'
+    return NextResponse.redirect(new URL(dest, request.url))
   }
 
   return NextResponse.next()
@@ -42,4 +45,3 @@ export const config = {
     '/signup',
   ],
 }
-
