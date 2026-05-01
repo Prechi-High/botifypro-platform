@@ -8,18 +8,66 @@ type RouteContext = {
   params: { botId: string }
 }
 
-async function getOwnedBot(botId: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+function extractJwt(request: Request): string | null {
+  const cookieHeader = request.headers.get('cookie') || ''
+  const cookies = Object.fromEntries(
+    cookieHeader.split(';').map((c) => {
+      const [k, ...v] = c.trim().split('=')
+      return [k.trim(), v.join('=')]
+    })
+  )
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const ref = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || ''
+  const tokenKey = ref ? `sb-${ref}-auth-token` : null
 
-  if (!user) {
+  if (tokenKey && cookies[tokenKey]) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(cookies[tokenKey]))
+      return parsed?.access_token || null
+    } catch {}
+  }
+
+  for (const [key, value] of Object.entries(cookies)) {
+    if (key.includes('-auth-token')) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(value))
+        if (parsed?.access_token) return parsed.access_token
+      } catch {}
+    }
+  }
+
+  return null
+}
+
+async function getOwnedBot(request: Request, botId: string) {
+  let userId: string | null = null
+
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) userId = user.id
+  } catch {}
+
+  if (!userId) {
+    const jwt = extractJwt(request)
+    if (jwt) {
+      try {
+        const serviceClient = createSupabaseClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        )
+        const { data: { user } } = await serviceClient.auth.getUser(jwt)
+        if (user) userId = user.id
+      } catch {}
+    }
+  }
+
+  if (!userId) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   }
 
   const bot = await prisma.bot.findFirst({
-    where: { id: botId, creatorId: user.id },
+    where: { id: botId, creatorId: userId },
     include: { settings: true, creator: { select: { plan: true, email: true } } },
   })
 
@@ -27,7 +75,7 @@ async function getOwnedBot(botId: string) {
     return { error: NextResponse.json({ error: 'Bot not found' }, { status: 404 }) }
   }
 
-  return { bot, user }
+  return { bot, user: { id: userId } }
 }
 
 async function verifyPassword(email: string, password: string) {
@@ -47,7 +95,7 @@ function normalizeProvider(input: string) {
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { botId } = context.params
-    const result = await getOwnedBot(botId)
+    const result = await getOwnedBot(request, botId)
     if ('error' in result) return result.error
 
     const { bot } = result
@@ -116,7 +164,7 @@ export async function POST(request: Request, context: RouteContext) {
 export async function DELETE(request: Request, context: RouteContext) {
   try {
     const { botId } = context.params
-    const result = await getOwnedBot(botId)
+    const result = await getOwnedBot(request, botId)
     if ('error' in result) return result.error
 
     const { bot } = result

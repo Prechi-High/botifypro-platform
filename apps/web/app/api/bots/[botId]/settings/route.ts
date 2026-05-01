@@ -1,46 +1,151 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@botifypro/database'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { writeDebugLog } from '@/lib/debugFile'
 
 type RouteContext = {
   params: { botId: string }
 }
 
-async function getOwnedBot(botId: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+function getCookieNames(request: Request) {
+  const cookieHeader = request.headers.get('cookie') || ''
+  return cookieHeader
+    .split(';')
+    .map((part) => part.trim().split('=')[0])
+    .filter(Boolean)
+}
 
-  if (!user) {
+// Extract the JWT from the cookie header directly
+function extractJwt(request: Request): string | null {
+  const cookieHeader = request.headers.get('cookie') || ''
+  const cookies = Object.fromEntries(
+    cookieHeader.split(';').map((c) => {
+      const [k, ...v] = c.trim().split('=')
+      return [k.trim(), v.join('=')]
+    })
+  )
+  // Supabase SSR stores the token in sb-<ref>-auth-token or sb-access-token
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const ref = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || ''
+  const tokenKey = ref ? `sb-${ref}-auth-token` : null
+
+  if (tokenKey && cookies[tokenKey]) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(cookies[tokenKey]))
+      return parsed?.access_token || null
+    } catch {}
+  }
+
+  // Fallback: look for any sb-*-auth-token cookie
+  for (const [key, value] of Object.entries(cookies)) {
+    if (key.includes('-auth-token')) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(value))
+        if (parsed?.access_token) return parsed.access_token
+      } catch {}
+    }
+  }
+
+  return null
+}
+
+async function getWebhookStatus(botId: string, fallback: boolean) {
+  const botEngineUrl = process.env.BOT_ENGINE_URL || process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
+
+  try {
+    const response = await fetch(`${botEngineUrl}/api/bots/${botId}/webhook-status`, { cache: 'no-store' })
+    const payload = await response.json()
+    if (!response.ok) {
+      writeDebugLog('web-settings-api', 'Webhook status fetch failed', {
+        botId,
+        status: response.status,
+        fallback,
+      })
+      return fallback
+    }
+
+    return Boolean(payload?.webhookSet)
+  } catch (error: any) {
+    writeDebugLog('web-settings-api', 'Webhook status fetch threw error', {
+      botId,
+      fallback,
+      error: error?.message || 'Unknown error',
+    })
+    return fallback
+  }
+}
+
+async function getOwnedBot(request: Request, botId: string) {
+  let userId: string | null = null
+
+  // Primary: use the SSR client (works when cookies are fresh)
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) userId = user.id
+  } catch {}
+
+  // Fallback: decode JWT directly from cookie using service role client
+  if (!userId) {
+    const jwt = extractJwt(request)
+    if (jwt) {
+      try {
+        const serviceClient = createServiceClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        )
+        const { data: { user } } = await serviceClient.auth.getUser(jwt)
+        if (user) userId = user.id
+      } catch {}
+    }
+  }
+
+  if (!userId) {
+    writeDebugLog('web-settings-api', 'Unauthorized bot settings access', {
+      botId,
+      cookieNames: getCookieNames(request),
+    })
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   }
 
   const bot = await prisma.bot.findFirst({
-    where: { id: botId, creatorId: user.id },
+    where: { id: botId, creatorId: userId },
     include: { settings: true, creator: { select: { plan: true } } },
   })
 
   if (!bot?.settings) {
+    writeDebugLog('web-settings-api', 'Bot settings not found', {
+      botId,
+      userId,
+    })
     return { error: NextResponse.json({ error: 'Bot not found' }, { status: 404 }) }
   }
 
-  return { bot, user }
+  return { bot, user: { id: userId } }
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const { botId } = context.params
-    const result = await getOwnedBot(botId)
+    const result = await getOwnedBot(request, botId)
     if ('error' in result) return result.error
 
     const { bot } = result
     const settings = bot.settings
+    const webhookStatus = await getWebhookStatus(botId, Boolean(bot.webhookSet))
+
+    writeDebugLog('web-settings-api', 'Loaded bot settings', {
+      botId,
+      userId: result.user.id,
+      dbWebhookSet: Boolean(bot.webhookSet),
+      returnedWebhookSet: webhookStatus,
+    })
 
     return NextResponse.json({
       botToken: bot.botToken,
       botUsername: bot.botUsername || 'your bot',
-      webhookStatus: bot.webhookSet,
+      webhookStatus,
       userPlan: bot.creator.plan === 'pro' ? 'pro' : 'free',
       settings: {
         welcomeMessage: settings.welcomeMessage || '',
@@ -64,6 +169,9 @@ export async function GET(_request: Request, context: RouteContext) {
       },
     })
   } catch (error: any) {
+    writeDebugLog('web-settings-api', 'Failed to load settings', {
+      error: error?.message || 'Unknown error',
+    })
     return NextResponse.json({ error: error?.message || 'Failed to load settings' }, { status: 500 })
   }
 }
@@ -71,7 +179,7 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PUT(request: Request, context: RouteContext) {
   try {
     const { botId } = context.params
-    const result = await getOwnedBot(botId)
+    const result = await getOwnedBot(request, botId)
     if ('error' in result) return result.error
 
     const { bot } = result
@@ -123,6 +231,10 @@ export async function PUT(request: Request, context: RouteContext) {
       withdrawProvider: updated.withdrawProvider || 'faucetpay',
     })
   } catch (error: any) {
+    writeDebugLog('web-settings-api', 'Failed to save settings', {
+      botId: context.params.botId,
+      error: error?.message || 'Unknown error',
+    })
     return NextResponse.json({ error: error?.message || 'Failed to save settings' }, { status: 500 })
   }
 }
