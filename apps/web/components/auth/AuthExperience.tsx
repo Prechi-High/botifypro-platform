@@ -1,36 +1,88 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, Bot, Zap, Gift, Megaphone, Send } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, ChevronRight } from 'lucide-react'
 
 type AuthMode = 'signup' | 'login'
 
-const PREVIEW_ITEMS = [
-  { icon: <Bot size={16} />, title: 'Launch Fast', text: 'Create reward bots, referral systems, and auto flows in minutes.' },
-  { icon: <Gift size={16} />, title: 'Monetize', text: 'Handle campaigns, deposits, upgrades, and user engagement from one place.' },
-  { icon: <Megaphone size={16} />, title: 'Broadcast', text: 'Reach thousands of bot users instantly with smart audience targeting.' },
-  { icon: <Zap size={16} />, title: 'Automate', text: 'Plug in payments, referrals, and retention mechanics without coding.' },
+// ── Onboarding slides ─────────────────────────────────────────────────────────
+const SLIDES = [
+  {
+    id: 0,
+    headline: 'Build Telegram Bots in Seconds',
+    sub: 'No coding. Just automation.',
+    visual: (
+      <div style={{ position: 'relative', width: '100%', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'rgba(20,241,217,0.12)', border: '1.5px solid rgba(20,241,217,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(20,241,217,0.18)', animation: 'floatY 3s ease-in-out infinite' }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8l-1.68 7.92c-.12.56-.44.7-.9.44l-2.48-1.83-1.2 1.15c-.13.13-.24.24-.5.24l.18-2.52 4.6-4.16c.2-.18-.04-.28-.3-.1L7.74 14.6l-2.44-.76c-.53-.17-.54-.53.11-.78l9.54-3.68c.44-.16.83.11.69.42z" fill="#14F1D9"/></svg>
+        </div>
+        {[...Array(6)].map((_, i) => (
+          <div key={i} style={{ position: 'absolute', width: '4px', height: '4px', borderRadius: '50%', background: '#14F1D9', opacity: 0.4 + (i % 3) * 0.2, left: `${15 + i * 13}%`, top: `${20 + (i % 3) * 25}%`, animation: `starPulse ${2 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }} />
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: 1,
+    headline: 'Automate Everything',
+    sub: 'Rewards · Referrals · Leaderboards',
+    visual: (
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', padding: '16px 0' }}>
+        {[
+          { icon: '🪙', label: 'Rewards', color: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.3)' },
+          { icon: '🔗', label: 'Referrals', color: 'rgba(20,241,217,0.12)', border: 'rgba(20,241,217,0.3)' },
+          { icon: '🏆', label: 'Leaderboard', color: 'rgba(139,92,246,0.15)', border: 'rgba(139,92,246,0.3)' },
+        ].map((item, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', animation: `floatY ${2.5 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: item.color, border: `1.5px solid ${item.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>{item.icon}</div>
+            <span style={{ fontSize: '11px', color: '#9CA3AF', fontFamily: 'Inter, sans-serif' }}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: 2,
+    headline: 'Built-in Payments & Growth',
+    sub: 'Deposit · Withdraw · Broadcast',
+    visual: (
+      <div style={{ position: 'relative', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+        {['📥 Deposit', '💸 Withdraw', '📢 Broadcast'].map((item, i) => (
+          <div key={i} style={{ padding: '8px 12px', borderRadius: '12px', background: 'rgba(20,241,217,0.08)', border: '1px solid rgba(20,241,217,0.2)', fontSize: '11px', color: '#14F1D9', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', animation: `floatY ${2.2 + i * 0.5}s ease-in-out ${i * 0.4}s infinite` }}>{item}</div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: 3,
+    headline: 'Start Building Now',
+    sub: 'Join thousands of bot creators',
+    visual: (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+        <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(20,241,217,0.2), rgba(20,241,217,0.04))', border: '2px solid rgba(20,241,217,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 60px rgba(20,241,217,0.2)', animation: 'floatY 3s ease-in-out infinite' }}>
+          <span style={{ fontSize: '36px' }}>🚀</span>
+        </div>
+      </div>
+    ),
+  },
 ]
-
-const INTRO_PRIMARY_TEXT = 'Build fully automated Telegram bots in minutes'
-const INTRO_FIRST_SECONDARY = 'Plug and play'
-const INTRO_SECOND_SECONDARY = 'No coding Required'
 
 export default function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
   const router = useRouter()
-  const pathname = usePathname()
   const supabase = useMemo(() => createClient(), [])
 
+  // ── Onboarding state ────────────────────────────────────────────────────────
+  const [slide, setSlide] = useState(0)
+  const [showAuth, setShowAuth] = useState(false)
+  const touchStartX = useRef<number | null>(null)
+
+  // ── Auth state (unchanged logic) ────────────────────────────────────────────
   const [mode, setMode] = useState<AuthMode>(initialMode)
-  const [entryVisible, setEntryVisible] = useState(true)
-  const [entryReady, setEntryReady] = useState(false)
-  const [primaryVisible, setPrimaryVisible] = useState(false)
-  const [secondaryText, setSecondaryText] = useState('')
+  const [focusedField, setFocusedField] = useState<string | null>(null)
   const [transitionVisible, setTransitionVisible] = useState(false)
   const [transitionLabel, setTransitionLabel] = useState('Initializing workspace')
-  const [focusedField, setFocusedField] = useState<string | null>(null)
 
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -47,149 +99,39 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
   const [signupLoading, setSignupLoading] = useState(false)
   const [signupError, setSignupError] = useState('')
 
-  const starDots = useMemo(
-    () =>
-      Array.from({ length: 44 }, (_, index) => ({
-        id: index,
-        left: `${(index * 17) % 100}%`,
-        top: `${(index * 11 + 7) % 100}%`,
-        size: 1 + (index % 3),
-        delay: `${(index % 9) * 0.45}s`,
-        duration: `${5 + (index % 5)}s`,
-        opacity: 0.25 + ((index % 6) * 0.1),
-      })),
-    []
-  )
+  useEffect(() => { setMode(initialMode) }, [initialMode])
 
-  const nebulaParticles = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, index) => ({
-        id: index,
-        left: `${8 + (index * 8) % 86}%`,
-        top: `${12 + (index * 13) % 78}%`,
-        size: 80 + (index % 4) * 36,
-        delay: `${index * 0.3}s`,
-        duration: `${14 + (index % 4) * 3}s`,
-      })),
-    []
-  )
-
-  const shootingLogos = useMemo(
-    () => [
-      { id: 1, top: '12%', left: '-14%', duration: '18s', delay: '1.5s', scale: 0.9 },
-      { id: 2, top: '28%', left: '-20%', duration: '22s', delay: '7s', scale: 1.05 },
-      { id: 3, top: '46%', left: '-18%', duration: '20s', delay: '12s', scale: 0.82 },
-      { id: 4, top: '66%', left: '-24%', duration: '24s', delay: '16s', scale: 1.12 },
-    ],
-    []
-  )
-
-  useEffect(() => {
-    setMode(initialMode)
-  }, [initialMode])
-
-  useEffect(() => {
-    // #region agent log
-    console.log('[auth-debug] auth screen pathname changed', {
-      pathname,
-      transitionVisible,
-      loginLoading,
-    })
-    // #endregion
-  }, [pathname, transitionVisible, loginLoading])
-
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      // #region agent log
-      console.log('[auth-debug] auth state changed', {
-        event,
-        hasSession: Boolean(session),
-        pathname: window.location.pathname,
-      })
-      // #endregion
-    })
-
-    return () => {
-      subscription.unsubscribe()
+  // ── Swipe handlers ──────────────────────────────────────────────────────────
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    if (Math.abs(dx) > 50) {
+      if (dx < 0) nextSlide()
+      else prevSlide()
     }
-  }, [supabase])
+    touchStartX.current = null
+  }
+  function nextSlide() {
+    if (slide < SLIDES.length - 1) setSlide(s => s + 1)
+    else enterAuth()
+  }
+  function prevSlide() {
+    if (slide > 0) setSlide(s => s - 1)
+  }
+  function enterAuth() {
+    setShowAuth(true)
+  }
 
-  useEffect(() => {
-    let cancelled = false
-    const timers: number[] = []
-
-    function schedule(delay: number, fn: () => void) {
-      const timer = window.setTimeout(() => {
-        if (!cancelled) fn()
-      }, delay)
-      timers.push(timer)
-    }
-
-    function typeSequence(text: string, onDone?: () => void) {
-      let index = 0
-      const interval = window.setInterval(() => {
-        if (cancelled) {
-          window.clearInterval(interval)
-          return
-        }
-        index += 1
-        setSecondaryText(text.slice(0, index))
-        if (index >= text.length) {
-          window.clearInterval(interval)
-          onDone?.()
-        }
-      }, 52)
-    }
-
-    function deleteSequence(length: number, onDone?: () => void) {
-      let index = length
-      const interval = window.setInterval(() => {
-        if (cancelled) {
-          window.clearInterval(interval)
-          return
-        }
-        index -= 1
-        setSecondaryText(INTRO_FIRST_SECONDARY.slice(0, Math.max(0, index)))
-        if (index <= 0) {
-          window.clearInterval(interval)
-          onDone?.()
-        }
-      }, 34)
-    }
-
-    schedule(180, () => setEntryReady(true))
-    schedule(900, () => setPrimaryVisible(true))
-    schedule(1600, () => {
-      typeSequence(INTRO_FIRST_SECONDARY, () => {
-        schedule(600, () => {
-          deleteSequence(INTRO_FIRST_SECONDARY.length, () => {
-            schedule(180, () => {
-              typeSequence(INTRO_SECOND_SECONDARY)
-            })
-          })
-        })
-      })
-    })
-    schedule(6000, () => setEntryVisible(false))
-
-    return () => {
-      cancelled = true
-      timers.forEach((timer) => window.clearTimeout(timer))
-    }
-  }, [])
-
+  // ── Auth logic (unchanged) ──────────────────────────────────────────────────
   function beginSuccessTransition(label: string) {
     setTransitionLabel(label)
     setTransitionVisible(true)
     window.setTimeout(() => {
-      // #region agent log
-      console.log('[auth-debug] success transition timer fired', { label, currentPath: window.location.pathname })
-      fetch('http://127.0.0.1:7640/ingest/f8d22ce6-9d74-4edb-bee6-4fc8cfd0ca00',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'93c4ff'},body:JSON.stringify({sessionId:'93c4ff',runId:'login-debug',hypothesisId:'H2',location:'AuthExperience.tsx:179',message:'Success transition timer fired',data:{label,currentPath:window.location.pathname},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
-      router.replace('/dashboard')
-    }, 2200)
+      window.location.href = '/dashboard'
+    }, 1500)
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -198,14 +140,8 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     setLoginError('')
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
-      if (error) {
-        setLoginError(error.message)
-        setLoginLoading(false)
-        return
-      }
-      if (data?.user) {
-        beginSuccessTransition('Preparing your dashboard')
-      }
+      if (error) { setLoginError(error.message); setLoginLoading(false); return }
+      if (data?.user) beginSuccessTransition('Preparing your dashboard')
     } catch {
       setLoginError('Something went wrong')
       setLoginLoading(false)
@@ -216,46 +152,25 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     e.preventDefault()
     setSignupLoading(true)
     setSignupError('')
-
     if (signupPassword !== confirmPassword) {
       setSignupError('Passwords do not match')
       setSignupLoading(false)
       return
     }
-
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: signupEmail,
         password: signupPassword,
         options: { data: { full_name: fullName } }
       })
-
-      if (authError) {
-        setSignupError(authError.message)
-        setSignupLoading(false)
-        return
-      }
-
+      if (authError) { setSignupError(authError.message); setSignupLoading(false); return }
       if (authData?.user) {
         const { error: insertError } = await supabase.from('users').upsert(
-          {
-            id: authData.user.id,
-            email: authData.user.email || signupEmail,
-            full_name: fullName,
-            password_hash: 'supabase_auth',
-            role: 'creator',
-            plan: 'free'
-          },
+          { id: authData.user.id, email: authData.user.email || signupEmail, full_name: fullName, password_hash: 'supabase_auth', role: 'creator', plan: 'free' },
           { onConflict: 'id' }
         )
-
-        if (insertError) {
-          setSignupError(insertError.message)
-          setSignupLoading(false)
-          return
-        }
+        if (insertError) { setSignupError(insertError.message); setSignupLoading(false); return }
       }
-
       beginSuccessTransition('Launching your bot workspace')
     } catch {
       setSignupError('Something went wrong. Please try again.')
@@ -264,775 +179,272 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
   }
 
   const activeError = mode === 'signup' ? signupError : loginError
+  const currentSlide = SLIDES[slide]
+
+  // ── Stars ───────────────────────────────────────────────────────────────────
+  const stars = useMemo(() => Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    left: `${(i * 19) % 100}%`,
+    top: `${(i * 13 + 5) % 100}%`,
+    size: 1 + (i % 2),
+    delay: `${(i % 8) * 0.5}s`,
+    dur: `${4 + (i % 4)}s`,
+    op: 0.2 + (i % 5) * 0.1,
+  })), [])
 
   return (
     <div
-      style={{
-        minHeight: '100vh',
-        position: 'relative',
-        overflow: 'hidden',
-        background: '#030712',
-        display: 'flex',
-        alignItems: 'stretch',
-        justifyContent: 'center',
-      }}
+      style={{ minHeight: '100vh', background: '#0B0F14', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 0,
-          overflow: 'hidden',
-          background: 'radial-gradient(circle at 50% 20%, rgba(37,99,235,0.18), transparent 24%), radial-gradient(circle at 15% 80%, rgba(59,130,246,0.12), transparent 26%), radial-gradient(circle at 88% 18%, rgba(99,102,241,0.16), transparent 28%), linear-gradient(180deg, #020617 0%, #030712 50%, #020617 100%)',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            inset: '-8%',
-            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.14) 0, rgba(255,255,255,0.08) 1px, transparent 1.4px)',
-            backgroundSize: '180px 180px',
-            opacity: 0.18,
-            animation: 'starDrift 26s linear infinite',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            inset: '-10%',
-            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0, rgba(255,255,255,0.04) 1px, transparent 1.2px)',
-            backgroundSize: '110px 110px',
-            opacity: 0.14,
-            animation: 'starDriftSlow 38s linear infinite',
-          }}
-        />
-        {starDots.map((star) => (
-          <span
-            key={star.id}
-            style={{
-              position: 'absolute',
-              left: star.left,
-              top: star.top,
-              width: `${star.size}px`,
-              height: `${star.size}px`,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.95)',
-              opacity: star.opacity,
-              boxShadow: '0 0 8px rgba(255,255,255,0.6)',
-              animation: `starPulse ${star.duration} ease-in-out ${star.delay} infinite`,
-            }}
-          />
+      {/* ── Background ── */}
+      <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(20,241,217,0.06), transparent)' }} />
+        {stars.map(s => (
+          <span key={s.id} style={{ position: 'absolute', left: s.left, top: s.top, width: s.size, height: s.size, borderRadius: '50%', background: '#fff', opacity: s.op, animation: `starPulse ${s.dur} ease-in-out ${s.delay} infinite` }} />
         ))}
-        {nebulaParticles.map((particle) => (
-          <span
-            key={particle.id}
-            style={{
-              position: 'absolute',
-              left: particle.left,
-              top: particle.top,
-              width: `${particle.size}px`,
-              height: `${particle.size}px`,
-              borderRadius: '50%',
-              background: particle.id % 2 === 0
-                ? 'radial-gradient(circle, rgba(96,165,250,0.12), transparent 68%)'
-                : 'radial-gradient(circle, rgba(129,140,248,0.1), transparent 70%)',
-              filter: 'blur(10px)',
-              animation: `nebulaFloat ${particle.duration} ease-in-out ${particle.delay} infinite`,
-            }}
-          />
-        ))}
-        {shootingLogos.map((logo) => (
-          <div
-            key={logo.id}
-            style={{
-              position: 'absolute',
-              left: logo.left,
-              top: logo.top,
-              width: '230px',
-              height: '84px',
-              opacity: 0,
-              transform: `scale(${logo.scale}) rotate(-20deg)`,
-              animation: `telegramShoot ${logo.duration} cubic-bezier(0.22,1,0.36,1) ${logo.delay} infinite`,
-              willChange: 'transform, opacity',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                left: '0',
-                top: '50%',
-                width: '165px',
-                height: '3px',
-                transform: 'translateY(-50%)',
-                background: 'linear-gradient(90deg, rgba(56,189,248,0), rgba(56,189,248,0.18) 28%, rgba(125,211,252,0.55) 78%, rgba(255,255,255,0.9) 100%)',
-                filter: 'blur(1px)',
-                borderRadius: '999px',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                right: '18px',
-                top: '50%',
-                width: '42px',
-                height: '42px',
-                transform: 'translateY(-50%)',
-                borderRadius: '999px',
-                background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.28), rgba(56,189,248,0.16) 58%, rgba(2,132,199,0.12) 100%)',
-                border: '1px solid rgba(125,211,252,0.3)',
-                boxShadow: '0 0 24px rgba(56,189,248,0.22), 0 0 46px rgba(14,165,233,0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(6px)',
-              }}
-            >
-              <Send size={18} color="#e0f2fe" style={{ transform: 'rotate(-18deg)' }} />
-            </div>
+      </div>
+
+      {/* ── Skip button ── */}
+      {!showAuth && (
+        <button
+          onClick={enterAuth}
+          style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '999px', padding: '6px 14px', color: '#9CA3AF', fontSize: '13px', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+        >
+          Skip
+        </button>
+      )}
+
+      {/* ── Onboarding ── */}
+      {!showAuth && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px 40px', position: 'relative', zIndex: 2 }}>
+          {/* Logo */}
+          <div style={{ marginBottom: '32px', animation: 'floatY 4s ease-in-out infinite', filter: 'drop-shadow(0 0 20px rgba(20,241,217,0.2))' }}>
+            <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '160px', height: 'auto' }} />
           </div>
-        ))}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(180deg, rgba(2,6,23,0.2) 0%, rgba(2,6,23,0.62) 40%, rgba(2,6,23,0.9) 100%)',
-          }}
-        />
-      </div>
 
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 2,
-          width: '100%',
-          maxWidth: '1280px',
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr)',
-          minHeight: '100vh',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr)',
-            padding: '20px 16px 28px',
-            alignItems: 'center',
-          }}
-          className="auth-shell"
-        >
-          <section
-            style={{
-              display: 'none',
-              position: 'relative',
-              padding: '48px 48px 48px 32px',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              gap: '24px',
-            }}
-            className="auth-copy"
+          {/* Slide content */}
+          <div
+            key={slide}
+            style={{ width: '100%', maxWidth: '360px', textAlign: 'center', animation: 'slideIn 0.28s ease' }}
           >
-            <div
-              style={{
-                width: 'fit-content',
-                animation: 'logoFloat 4.8s ease-in-out infinite',
-                filter: 'drop-shadow(0 0 30px rgba(56,189,248,0.22))',
-              }}
-            >
-              <img
-                src="/platform-logo.png"
-                alt="1-TouchBot"
-                style={{ width: '280px', maxWidth: '100%', height: 'auto', display: 'block' }}
+            {currentSlide.visual}
+
+            <h1 style={{ fontFamily: '"Sora", sans-serif', fontSize: '26px', fontWeight: 700, color: '#E5E7EB', lineHeight: 1.2, margin: '16px 0 8px', letterSpacing: '-0.02em' }}>
+              {currentSlide.headline}
+            </h1>
+            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#9CA3AF', lineHeight: 1.6, margin: 0 }}>
+              {currentSlide.sub}
+            </p>
+          </div>
+
+          {/* Progress dots */}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '32px' }}>
+            {SLIDES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => i < SLIDES.length - 1 ? setSlide(i) : enterAuth()}
+                style={{ width: i === slide ? '24px' : '8px', height: '8px', borderRadius: '999px', background: i === slide ? '#14F1D9' : 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', transition: 'all 0.25s ease', padding: 0 }}
               />
-            </div>
+            ))}
+          </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '520px' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 14px',
-                  borderRadius: '999px',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'rgba(255,255,255,0.06)',
-                  color: '#cbd5e1',
-                  fontSize: '12px',
-                  width: 'fit-content',
-                  backdropFilter: 'blur(12px)',
-                }}
+          {/* CTA */}
+          <div style={{ marginTop: '28px', width: '100%', maxWidth: '360px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {slide === SLIDES.length - 1 ? (
+              <button
+                onClick={enterAuth}
+                style={{ width: '100%', padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #14F1D9, #0ea5e9)', color: '#0B0F14', fontSize: '15px', fontWeight: 700, cursor: 'pointer', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 0 30px rgba(20,241,217,0.3)', animation: 'glowPulse 2.5s ease-in-out infinite' }}
               >
-                <Sparkles size={14} color="#60a5fa" />
-                Space-powered Telegram bot onboarding
-              </div>
-
-              <h1
-                style={{
-                  fontSize: 'clamp(36px, 5vw, 64px)',
-                  lineHeight: 1.02,
-                  letterSpacing: '-0.04em',
-                  fontWeight: 800,
-                  color: '#f8fafc',
-                }}
+                Get Started <ArrowRight size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={nextSlide}
+                style={{ width: '100%', padding: '15px', borderRadius: '14px', border: '1.5px solid rgba(20,241,217,0.4)', background: 'rgba(20,241,217,0.06)', color: '#14F1D9', fontSize: '15px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                Build, automate, and monetize your Telegram bots faster.
-              </h1>
-
-              <p style={{ fontSize: '16px', lineHeight: 1.7, color: 'rgba(226,232,240,0.8)', maxWidth: '480px' }}>
-                1-TouchBot gives creators a polished control center for referrals, rewards, payments, campaigns, and broadcasts without the engineering overhead.
-              </p>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: '12px',
-                maxWidth: '520px',
-              }}
-              className="desktop-feature-grid"
-            >
-              {PREVIEW_ITEMS.map((item) => (
-                <div
-                  key={item.title}
-                  style={{
-                    padding: '16px',
-                    borderRadius: '18px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(255,255,255,0.05)',
-                    backdropFilter: 'blur(16px)',
-                    boxShadow: '0 10px 40px rgba(2,6,23,0.22)',
-                  }}
-                >
-                  <div style={{ color: '#60a5fa', marginBottom: '10px' }}>{item.icon}</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#f8fafc', marginBottom: '6px' }}>{item.title}</div>
-                  <div style={{ fontSize: '12px', lineHeight: 1.55, color: 'rgba(203,213,225,0.78)' }}>{item.text}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '460px',
-                position: 'relative',
-                opacity: entryVisible ? 0.1 : 1,
-                transform: entryVisible ? 'translateY(18px) scale(0.985)' : 'translateY(0) scale(1)',
-                transition: 'opacity 0.45s ease, transform 0.55s ease',
-              }}
-            >
-              <div
-                style={{
-                  position: 'relative',
-                  borderRadius: '30px',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(255,255,255,0.14)',
-                  background: 'linear-gradient(180deg, rgba(15,23,42,0.7), rgba(15,23,42,0.56))',
-                  backdropFilter: 'blur(24px)',
-                  boxShadow: '0 24px 100px rgba(2,6,23,0.55)',
-                }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(135deg, rgba(96,165,250,0.16), transparent 36%, rgba(129,140,248,0.12) 72%, transparent)',
-                    pointerEvents: 'none',
-                  }}
-                />
-
-                <div style={{ position: 'relative', padding: '22px 22px 20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '18px' }}>
-                    <div
-                      style={{
-                        width: 'fit-content',
-                        animation: 'logoFloat 4.8s ease-in-out infinite',
-                        filter: 'drop-shadow(0 0 26px rgba(56,189,248,0.18))',
-                      }}
-                    >
-                      <img
-                        src="/platform-logo.png"
-                        alt="1-TouchBot"
-                        style={{ width: '190px', maxWidth: '100%', height: 'auto', display: 'block' }}
-                      />
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      position: 'relative',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      padding: '5px',
-                      borderRadius: '999px',
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      marginBottom: '22px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '5px',
-                        bottom: '5px',
-                        left: mode === 'signup' ? '5px' : 'calc(50% + 1px)',
-                        width: 'calc(50% - 6px)',
-                        borderRadius: '999px',
-                        background: 'linear-gradient(135deg, rgba(59,130,246,0.95), rgba(99,102,241,0.95))',
-                        boxShadow: '0 10px 28px rgba(37,99,235,0.28)',
-                        transition: 'left 0.32s cubic-bezier(0.4,0,0.2,1)',
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setMode('signup')}
-                      style={{
-                        position: 'relative',
-                        zIndex: 1,
-                        border: 'none',
-                        background: 'transparent',
-                        color: mode === 'signup' ? '#ffffff' : '#94a3b8',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        padding: '12px 14px',
-                        cursor: 'pointer',
-                        transition: 'color 0.2s ease',
-                      }}
-                    >
-                      Create account
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode('login')}
-                      style={{
-                        position: 'relative',
-                        zIndex: 1,
-                        border: 'none',
-                        background: 'transparent',
-                        color: mode === 'login' ? '#ffffff' : '#94a3b8',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        padding: '12px 14px',
-                        cursor: 'pointer',
-                        transition: 'color 0.2s ease',
-                      }}
-                    >
-                      Sign in
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '18px',
-                      gap: '12px',
-                    }}
-                  >
-                    <div>
-                      <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#f8fafc', marginBottom: '6px', letterSpacing: '-0.03em' }}>
-                        {mode === 'signup' ? 'Create account' : 'Welcome back'}
-                      </h2>
-                      <p style={{ fontSize: '14px', color: 'rgba(203,213,225,0.78)', lineHeight: 1.55 }}>
-                        {mode === 'signup'
-                          ? 'Create your workspace and start building Telegram bot automations.'
-                          : 'Sign in to continue managing campaigns, wallets, and bot growth.'}
-                      </p>
-                    </div>
-                    <div
-                      style={{
-                        display: 'none',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '8px 12px',
-                        borderRadius: '999px',
-                        background: 'rgba(16,185,129,0.1)',
-                        border: '1px solid rgba(16,185,129,0.25)',
-                        color: '#86efac',
-                        fontSize: '12px',
-                        whiteSpace: 'nowrap',
-                      }}
-                      className="trust-pill"
-                    >
-                      <CheckCircle2 size={14} />
-                      Secure auth
-                    </div>
-                  </div>
-
-                  {activeError && (
-                    <div
-                      style={{
-                        background: 'rgba(239,68,68,0.12)',
-                        border: '1px solid rgba(239,68,68,0.28)',
-                        borderRadius: '14px',
-                        padding: '12px 14px',
-                        fontSize: '13px',
-                        color: '#fecaca',
-                        marginBottom: '18px',
-                      }}
-                    >
-                      {activeError}
-                    </div>
-                  )}
-
-                  <div key={mode} style={{ animation: 'authSwap 0.34s ease' }}>
-                    {mode === 'signup' ? (
-                      <form onSubmit={handleSignup}>
-                        <Field label="Full Name" active={!!fullName || focusedField === 'signup-name'}>
-                          <input
-                            type="text"
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            onFocus={() => setFocusedField('signup-name')}
-                            onBlur={() => setFocusedField(null)}
-                            required
-                            placeholder=""
-                            className="input-field auth-input"
-                          />
-                        </Field>
-
-                        <Field label="Email address" active={!!signupEmail || focusedField === 'signup-email'}>
-                          <input
-                            type="email"
-                            value={signupEmail}
-                            onChange={(e) => setSignupEmail(e.target.value)}
-                            onFocus={() => setFocusedField('signup-email')}
-                            onBlur={() => setFocusedField(null)}
-                            required
-                            placeholder=""
-                            className="input-field auth-input"
-                          />
-                        </Field>
-
-                        <Field label="Password" active={!!signupPassword || focusedField === 'signup-password'}>
-                          <div style={{ position: 'relative' }}>
-                            <input
-                              type={showSignupPass ? 'text' : 'password'}
-                              value={signupPassword}
-                              onChange={(e) => setSignupPassword(e.target.value)}
-                              onFocus={() => setFocusedField('signup-password')}
-                              onBlur={() => setFocusedField(null)}
-                              required
-                              placeholder=""
-                              className="input-field auth-input"
-                              style={{ paddingRight: '46px' }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowSignupPass(!showSignupPass)}
-                              style={iconButtonStyle}
-                            >
-                              {showSignupPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
-                        </Field>
-
-                        <Field label="Confirm Password" active={!!confirmPassword || focusedField === 'signup-confirm'}>
-                          <div style={{ position: 'relative' }}>
-                            <input
-                              type={showConfirmPass ? 'text' : 'password'}
-                              value={confirmPassword}
-                              onChange={(e) => setConfirmPassword(e.target.value)}
-                              onFocus={() => setFocusedField('signup-confirm')}
-                              onBlur={() => setFocusedField(null)}
-                              required
-                              placeholder=""
-                              className="input-field auth-input"
-                              style={{ paddingRight: '46px' }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowConfirmPass(!showConfirmPass)}
-                              style={iconButtonStyle}
-                            >
-                              {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
-                        </Field>
-
-                        <button
-                          type="submit"
-                          disabled={signupLoading}
-                          className="btn-primary auth-cta"
-                          style={{
-                            width: '100%',
-                            padding: '14px 18px',
-                            fontSize: '15px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            fontWeight: 700,
-                            marginTop: '6px',
-                          }}
-                        >
-                          {signupLoading ? 'Creating account...' : <><span>Create account</span><ArrowRight size={16} /></>}
-                        </button>
-                      </form>
-                    ) : (
-                      <form onSubmit={handleLogin}>
-                        <Field label="Email address" active={!!loginEmail || focusedField === 'login-email'}>
-                          <input
-                            type="email"
-                            value={loginEmail}
-                            onChange={(e) => setLoginEmail(e.target.value)}
-                            onFocus={() => setFocusedField('login-email')}
-                            onBlur={() => setFocusedField(null)}
-                            required
-                            placeholder=""
-                            className="input-field auth-input"
-                          />
-                        </Field>
-
-                        <Field label="Password" active={!!loginPassword || focusedField === 'login-password'}>
-                          <div style={{ position: 'relative' }}>
-                            <input
-                              type={loginShowPass ? 'text' : 'password'}
-                              value={loginPassword}
-                              onChange={(e) => setLoginPassword(e.target.value)}
-                              onFocus={() => setFocusedField('login-password')}
-                              onBlur={() => setFocusedField(null)}
-                              required
-                              placeholder=""
-                              className="input-field auth-input"
-                              style={{ paddingRight: '46px' }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setLoginShowPass(!loginShowPass)}
-                              style={iconButtonStyle}
-                            >
-                              {loginShowPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
-                        </Field>
-
-                        <button
-                          type="submit"
-                          disabled={loginLoading}
-                          className="btn-primary auth-cta"
-                          style={{
-                            width: '100%',
-                            padding: '14px 18px',
-                            fontSize: '15px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            fontWeight: 700,
-                            marginTop: '6px',
-                          }}
-                        >
-                          {loginLoading ? 'Signing in...' : <><span>Sign in</span><ArrowRight size={16} /></>}
-                        </button>
-                      </form>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: '18px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      color: '#94a3b8',
-                      fontSize: '13px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <span>{mode === 'signup' ? 'Already have an account?' : 'No account yet?'}</span>
-                    <button
-                      type="button"
-                      onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#60a5fa',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                    >
-                      {mode === 'signup' ? 'Sign in' : 'Create one free'}
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: '18px',
-                      display: 'flex',
-                      gap: '10px',
-                      overflowX: 'auto',
-                      paddingBottom: '4px',
-                      scrollSnapType: 'x proximity',
-                    }}
-                  >
-                    {PREVIEW_ITEMS.slice(0, 3).map((item) => (
-                      <div
-                        key={item.title}
-                        style={{
-                          minWidth: '160px',
-                          flex: '0 0 160px',
-                          scrollSnapAlign: 'start',
-                          borderRadius: '18px',
-                          padding: '14px',
-                          border: '1px solid rgba(255,255,255,0.08)',
-                          background: 'rgba(255,255,255,0.04)',
-                        }}
-                      >
-                        <div style={{ color: '#60a5fa', marginBottom: '8px' }}>{item.icon}</div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc', marginBottom: '4px' }}>{item.title}</div>
-                        <div style={{ fontSize: '11px', lineHeight: 1.5, color: 'rgba(203,213,225,0.72)' }}>{item.text}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+                Next <ChevronRight size={16} />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {entryVisible && (
+      {/* ── Auth card ── */}
+      {showAuth && (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px',
-            background: 'linear-gradient(180deg, rgba(2,6,23,0.18), rgba(2,6,23,0.72))',
-            backdropFilter: 'blur(6px)',
-            opacity: entryVisible ? 1 : 0,
-            transition: 'opacity 0.7s ease',
-          }}
+          style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 16px', position: 'relative', zIndex: 2, animation: 'slideUp 0.35s cubic-bezier(0.22,1,0.36,1)' }}
         >
-          <div style={{ maxWidth: '760px', textAlign: 'center' }}>
-            <div
-              style={{
-                width: 'fit-content',
-                margin: '0 auto 18px',
-                transform: entryReady ? 'scale(1)' : 'scale(0.8)',
-                opacity: entryReady ? 1 : 0,
-                transition: 'transform 0.8s cubic-bezier(0.22,1,0.36,1), opacity 0.8s ease',
-                animation: 'logoFloat 4.6s ease-in-out infinite',
-                filter: 'drop-shadow(0 0 34px rgba(56,189,248,0.28))',
-              }}
-            >
-              <img
-                src="/platform-logo.png"
-                alt="1-TouchBot"
-                style={{ width: '220px', maxWidth: '70vw', height: 'auto', display: 'block' }}
-              />
-            </div>
+          {/* Logo */}
+          <div style={{ marginBottom: '24px', animation: 'floatY 4s ease-in-out infinite', filter: 'drop-shadow(0 0 16px rgba(20,241,217,0.18))' }}>
+            <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '140px', height: 'auto' }} />
+          </div>
 
-            <div
-              style={{
-                fontSize: 'clamp(28px, 4.8vw, 54px)',
-                lineHeight: 1.04,
-                fontWeight: 800,
-                letterSpacing: '-0.045em',
-                color: '#f8fafc',
-                textShadow: '0 12px 44px rgba(15,23,42,0.45)',
-                opacity: primaryVisible ? 1 : 0,
-                transform: primaryVisible ? 'translateY(0)' : 'translateY(16px)',
-                transition: 'opacity 0.6s ease, transform 0.6s ease',
-              }}
-            >
-              {INTRO_PRIMARY_TEXT}
-            </div>
+          <div style={{ width: '100%', maxWidth: '420px', borderRadius: '24px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(20,241,217,0.15)', backdropFilter: 'blur(20px)', boxShadow: '0 0 60px rgba(20,241,217,0.06), 0 24px 80px rgba(0,0,0,0.4)', overflow: 'hidden' }}>
+            {/* Teal glow top */}
+            <div style={{ height: '2px', background: 'linear-gradient(90deg, transparent, #14F1D9, transparent)' }} />
 
-            <div
-              style={{
-                minHeight: '36px',
-                marginTop: '16px',
-                fontSize: 'clamp(18px, 2.6vw, 28px)',
-                color: '#93c5fd',
-                fontWeight: 700,
-                letterSpacing: '-0.02em',
-              }}
-            >
-              {secondaryText}
-              <span style={{ opacity: 0.8, marginLeft: '2px' }}>|</span>
+            <div style={{ padding: '24px 22px 28px' }}>
+              {/* Toggle */}
+              <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '4px', borderRadius: '999px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '24px' }}>
+                <div style={{ position: 'absolute', top: '4px', bottom: '4px', left: mode === 'signup' ? '4px' : 'calc(50% + 1px)', width: 'calc(50% - 5px)', borderRadius: '999px', background: 'linear-gradient(135deg, #14F1D9, #0ea5e9)', transition: 'left 0.28s cubic-bezier(0.4,0,0.2,1)', boxShadow: '0 0 16px rgba(20,241,217,0.3)' }} />
+                <button type="button" onClick={() => setMode('signup')} style={{ position: 'relative', zIndex: 1, border: 'none', background: 'transparent', color: mode === 'signup' ? '#0B0F14' : '#9CA3AF', fontWeight: 700, fontSize: '13px', padding: '11px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'color 0.2s' }}>
+                  Create account
+                </button>
+                <button type="button" onClick={() => setMode('login')} style={{ position: 'relative', zIndex: 1, border: 'none', background: 'transparent', color: mode === 'login' ? '#0B0F14' : '#9CA3AF', fontWeight: 700, fontSize: '13px', padding: '11px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'color 0.2s' }}>
+                  Sign in
+                </button>
+              </div>
+
+              {/* Heading */}
+              <h2 style={{ fontFamily: '"Sora", sans-serif', fontSize: '22px', fontWeight: 700, color: '#E5E7EB', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                {mode === 'signup' ? 'Create your account' : 'Welcome back'}
+              </h2>
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#9CA3AF', margin: '0 0 20px', lineHeight: 1.5 }}>
+                {mode === 'signup' ? 'Start building Telegram bots for free.' : 'Sign in to your workspace.'}
+              </p>
+
+              {/* Error */}
+              {activeError && (
+                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '12px', padding: '11px 14px', fontSize: '13px', color: '#FCA5A5', marginBottom: '16px', fontFamily: 'Inter, sans-serif' }}>
+                  {activeError}
+                </div>
+              )}
+
+              {/* Forms */}
+              <div key={mode} style={{ animation: 'authSwap 0.28s ease' }}>
+                {mode === 'signup' ? (
+                  <form onSubmit={handleSignup}>
+                    <FloatField label="Full Name" value={fullName} focused={focusedField === 'signup-name'}>
+                      <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} onFocus={() => setFocusedField('signup-name')} onBlur={() => setFocusedField(null)} required placeholder="" className="teal-input" />
+                    </FloatField>
+                    <FloatField label="Email address" value={signupEmail} focused={focusedField === 'signup-email'}>
+                      <input type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} onFocus={() => setFocusedField('signup-email')} onBlur={() => setFocusedField(null)} required placeholder="" className="teal-input" />
+                    </FloatField>
+                    <FloatField label="Password" value={signupPassword} focused={focusedField === 'signup-password'}>
+                      <div style={{ position: 'relative' }}>
+                        <input type={showSignupPass ? 'text' : 'password'} value={signupPassword} onChange={e => setSignupPassword(e.target.value)} onFocus={() => setFocusedField('signup-password')} onBlur={() => setFocusedField(null)} required placeholder="" className="teal-input" style={{ paddingRight: '44px' }} />
+                        <button type="button" onClick={() => setShowSignupPass(!showSignupPass)} style={eyeBtn}>{showSignupPass ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                      </div>
+                    </FloatField>
+                    <FloatField label="Confirm Password" value={confirmPassword} focused={focusedField === 'signup-confirm'}>
+                      <div style={{ position: 'relative' }}>
+                        <input type={showConfirmPass ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onFocus={() => setFocusedField('signup-confirm')} onBlur={() => setFocusedField(null)} required placeholder="" className="teal-input" style={{ paddingRight: '44px' }} />
+                        <button type="button" onClick={() => setShowConfirmPass(!showConfirmPass)} style={eyeBtn}>{showConfirmPass ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                      </div>
+                    </FloatField>
+                    <button type="submit" disabled={signupLoading} className="teal-cta">
+                      {signupLoading ? 'Creating account...' : <><span>Start Building Instantly</span><ArrowRight size={16} /></>}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleLogin}>
+                    <FloatField label="Email address" value={loginEmail} focused={focusedField === 'login-email'}>
+                      <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} onFocus={() => setFocusedField('login-email')} onBlur={() => setFocusedField(null)} required placeholder="" className="teal-input" />
+                    </FloatField>
+                    <FloatField label="Password" value={loginPassword} focused={focusedField === 'login-password'}>
+                      <div style={{ position: 'relative' }}>
+                        <input type={loginShowPass ? 'text' : 'password'} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onFocus={() => setFocusedField('login-password')} onBlur={() => setFocusedField(null)} required placeholder="" className="teal-input" style={{ paddingRight: '44px' }} />
+                        <button type="button" onClick={() => setLoginShowPass(!loginShowPass)} style={eyeBtn}>{loginShowPass ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                      </div>
+                    </FloatField>
+                    <button type="submit" disabled={loginLoading} className="teal-cta">
+                      {loginLoading ? 'Signing in...' : <><span>Start Building Instantly</span><ArrowRight size={16} /></>}
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* Switch mode */}
+              <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '13px', color: '#9CA3AF', fontFamily: 'Inter, sans-serif' }}>
+                {mode === 'signup' ? 'Already have an account? ' : 'No account yet? '}
+                <button type="button" onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')} style={{ border: 'none', background: 'transparent', color: '#14F1D9', fontWeight: 700, cursor: 'pointer', padding: 0, fontFamily: 'Inter, sans-serif' }}>
+                  {mode === 'signup' ? 'Sign in' : 'Create one free'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Success transition ── */}
       {transitionVisible && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 6,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px',
-            background: 'linear-gradient(180deg, rgba(2,6,23,0.48), rgba(2,6,23,0.86))',
-            backdropFilter: 'blur(10px)',
-          }}
-        >
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(11,15,20,0.92)', backdropFilter: 'blur(12px)' }}>
           <div style={{ textAlign: 'center' }}>
-            <div
-              style={{
-                width: 'fit-content',
-                margin: '0 auto 18px',
-                animation: 'logoFloat 3.6s ease-in-out infinite',
-                filter: 'drop-shadow(0 0 34px rgba(56,189,248,0.28))',
-              }}
-            >
-              <img
-                src="/platform-logo.png"
-                alt="1-TouchBot"
-                style={{ width: '200px', maxWidth: '70vw', height: 'auto', display: 'block' }}
-              />
+            <div style={{ marginBottom: '16px', animation: 'floatY 3s ease-in-out infinite', filter: 'drop-shadow(0 0 24px rgba(20,241,217,0.3))' }}>
+              <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '160px', height: 'auto' }} />
             </div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#f8fafc', marginBottom: '8px', letterSpacing: '-0.03em' }}>
-              {transitionLabel}
-            </div>
-            <div style={{ fontSize: '13px', color: '#93c5fd' }}>
-              Securing session and opening your dashboard...
-            </div>
+            <div style={{ fontFamily: '"Sora", sans-serif', fontSize: '20px', fontWeight: 700, color: '#E5E7EB', marginBottom: '6px' }}>{transitionLabel}</div>
+            <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#14F1D9' }}>Securing session and opening your dashboard...</div>
           </div>
         </div>
       )}
 
       <style>{`
-        .auth-input {
-          background: rgba(255,255,255,0.035);
-          border-color: rgba(255,255,255,0.12);
-          padding: 18px 14px 10px;
-          border-radius: 16px;
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+        .teal-input {
+          width: 100%;
+          box-sizing: border-box;
+          background: rgba(255,255,255,0.04);
+          border: 1.5px solid rgba(255,255,255,0.1);
+          border-radius: 14px;
+          padding: 22px 14px 8px;
           font-size: 14px;
-          transform: scale(1);
+          color: #E5E7EB;
+          font-family: Inter, sans-serif;
+          outline: none;
+          transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
         }
-        .auth-input:hover {
-          border-color: rgba(148,163,184,0.24);
-        }
-        .auth-input:focus {
-          border-color: rgba(96,165,250,0.9);
-          box-shadow: 0 0 0 4px rgba(59,130,246,0.14), 0 0 24px rgba(59,130,246,0.16);
+        .teal-input:hover { border-color: rgba(20,241,217,0.25); }
+        .teal-input:focus {
+          border-color: #14F1D9;
+          box-shadow: 0 0 0 3px rgba(20,241,217,0.12), 0 0 20px rgba(20,241,217,0.1);
           transform: scale(1.01);
         }
-        .auth-cta {
+        .teal-cta {
+          width: 100%;
+          margin-top: 8px;
+          padding: 14px 18px;
+          border-radius: 14px;
+          border: none;
+          background: linear-gradient(135deg, #14F1D9 0%, #0ea5e9 50%, #14F1D9 100%);
           background-size: 200% 200%;
-          animation: ctaFlow 5s ease infinite, ctaPulse 2.6s ease-in-out infinite;
+          color: #0B0F14;
+          font-size: 15px;
+          font-weight: 700;
+          font-family: Inter, sans-serif;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          animation: ctaFlow 4s ease infinite, glowPulse 2.5s ease-in-out infinite;
+          transition: transform 0.15s, opacity 0.15s;
+        }
+        .teal-cta:hover { transform: scale(1.02); }
+        .teal-cta:active { transform: scale(0.98); }
+        .teal-cta:disabled { opacity: 0.6; cursor: not-allowed; animation: none; }
+
+        @keyframes floatY {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        @keyframes starPulse {
+          0%, 100% { opacity: 0.2; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.4); }
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(24px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(40px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes authSwap {
-          from { opacity: 0; transform: translateY(10px); }
+          from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
         }
         @keyframes ctaFlow {
@@ -1040,126 +452,33 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
         }
-        @keyframes ctaPulse {
-          0%, 100% { box-shadow: 0 0 24px rgba(59,130,246,0.28); }
-          50% { box-shadow: 0 0 36px rgba(99,102,241,0.4); }
-        }
-        @keyframes logoFloat {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-8px); }
-        }
-        @keyframes starDrift {
-          from { transform: translate3d(0, 0, 0); }
-          to { transform: translate3d(-22px, 16px, 0); }
-        }
-        @keyframes starDriftSlow {
-          from { transform: translate3d(0, 0, 0) scale(1.02); }
-          to { transform: translate3d(18px, -20px, 0) scale(1.06); }
-        }
-        @keyframes starPulse {
-          0%, 100% { opacity: 0.35; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.2); }
-        }
-        @keyframes nebulaFloat {
-          0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.72; }
-          50% { transform: translate3d(12px, -16px, 0); opacity: 1; }
-        }
-        @keyframes telegramShoot {
-          0% {
-            opacity: 0;
-            transform: translate3d(-8vw, -8vh, 0) scale(0.72) rotate(-20deg);
-          }
-          8% {
-            opacity: 0.15;
-          }
-          14% {
-            opacity: 0.95;
-          }
-          26% {
-            opacity: 0.85;
-          }
-          36% {
-            opacity: 0;
-            transform: translate3d(110vw, 46vh, 0) scale(1) rotate(-20deg);
-          }
-          100% {
-            opacity: 0;
-            transform: translate3d(110vw, 46vh, 0) scale(1) rotate(-20deg);
-          }
-        }
-        @media (min-width: 980px) {
-          .auth-shell {
-            grid-template-columns: minmax(0, 1.08fr) minmax(420px, 470px);
-            gap: 24px;
-            padding: 28px 28px 32px;
-          }
-          .auth-copy {
-            display: flex !important;
-          }
-          .trust-pill {
-            display: inline-flex !important;
-          }
-        }
-        @media (max-width: 640px) {
-          .desktop-feature-grid {
-            display: none !important;
-          }
+        @keyframes glowPulse {
+          0%, 100% { box-shadow: 0 0 20px rgba(20,241,217,0.25); }
+          50% { box-shadow: 0 0 36px rgba(20,241,217,0.45); }
         }
         @media (prefers-reduced-motion: reduce) {
-          .auth-cta,
-          .auth-input,
-          .desktop-feature-grid,
-          .trust-pill {
-            animation: none !important;
-            transition: none !important;
-          }
+          .teal-cta, .teal-input { animation: none !important; transition: none !important; }
         }
       `}</style>
     </div>
   )
 }
 
-function Field({
-  label,
-  active,
-  children,
-}: {
-  label: string
-  active: boolean
-  children: React.ReactNode
-}) {
+// ── Floating label field ──────────────────────────────────────────────────────
+function FloatField({ label, value, focused, children }: { label: string; value: string; focused: boolean; children: React.ReactNode }) {
+  const active = !!value || focused
   return (
     <div style={{ position: 'relative', marginBottom: '14px' }}>
-      <div style={{ position: 'relative' }}>
-        {children}
-        <label
-          style={{
-            position: 'absolute',
-            left: '14px',
-            top: active ? '8px' : '15px',
-            fontSize: active ? '11px' : '13px',
-            color: active ? '#93c5fd' : '#94a3b8',
-            pointerEvents: 'none',
-            transition: 'all 0.2s ease',
-            fontWeight: 600,
-          }}
-        >
-          {label}
-        </label>
-      </div>
+      {children}
+      <label style={{ position: 'absolute', left: '14px', top: active ? '7px' : '15px', fontSize: active ? '10px' : '13px', color: active ? '#14F1D9' : '#6B7280', pointerEvents: 'none', transition: 'all 0.18s ease', fontWeight: 600, fontFamily: 'Inter, sans-serif', letterSpacing: active ? '0.04em' : '0' }}>
+        {label}
+      </label>
     </div>
   )
 }
 
-const iconButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: '12px',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  color: '#94a3b8',
-  display: 'flex',
-  alignItems: 'center',
+const eyeBtn: React.CSSProperties = {
+  position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+  background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280',
+  display: 'flex', alignItems: 'center', padding: 0,
 }
