@@ -110,6 +110,7 @@ model BotSettings {
 
   // ── Pro/VIP Investment Plan ──────────────────────────────────────────────────
   proPlanEnabled          Boolean @default(false) @map("pro_plan_enabled")
+  proPlanButtonLabel      String  @default("💎 Invest") @map("pro_plan_button_label")
   proPlanDepositMin       Float   @default(10) @map("pro_plan_deposit_min")
   proPlanDurationDays     Int     @default(30) @map("pro_plan_duration_days")
   proPlanDailyBonus       Float   @default(50) @map("pro_plan_daily_bonus")

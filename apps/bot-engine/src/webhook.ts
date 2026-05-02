@@ -463,6 +463,10 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (text === '🏆 Leaderboard') { await handleLeaderboard(bot, botUser, chatId); return }
       if (text === '📥 Deposit') { await handleDeposit(bot, botUser, chatId); return }
       if (text === '⭐ VIP Plan') { await handleProPlan(bot, botUser, chatId); return }
+      // Handle custom investment button label set by bot creator
+      const investLabel = (bot.settings as any)?.proPlanButtonLabel
+      if (investLabel && text === investLabel) { await handleProPlan(bot, botUser, chatId); return }
+      if (text === '💎 Invest') { await handleProPlan(bot, botUser, chatId); return }
       if (text === '❓ Help' || text === '📋 Menu') { await handleHelp(bot, chatId); return }
 
       if (text.startsWith('/start')) {
@@ -593,10 +597,10 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         const { getWithdrawalDestinationHint } = await import('./payments/payouts')
         const hint = getWithdrawalDestinationHint(settings)
         const addressLabel = provider === 'faucetpay'
-          ? `📧 <b>FaucetPay is your payment method.</b>\n\nEnter your <b>FaucetPay email address</b> or a wallet address linked to your FaucetPay account:`
+          ? `📧 <b>FaucetPay is your payment method.</b>\n\nEnter your <b>FaucetPay email address</b> or a FaucetPay-linked wallet address to receive your payout:`
           : provider === 'oxapay'
-            ? '💳 Enter your <b>USDT TRC20 wallet address</b> (starts with T, 34 chars):'
-            : '📝 Enter your payout address or details:'
+            ? `💳 <b>OxaPay payout — USDT on TRC20 (Tron) network.</b>\n\nEnter your <b>USDT TRC20 wallet address</b>\n(starts with <b>T</b>, exactly 34 characters):`
+            : `📝 Enter your payout address or account details:`
         await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
         await sendMessage(bot.botToken, cbChatId,
           `${addressLabel}\n\n<i>${hint}</i>\n\n⏱ You have 10 minutes.`,

@@ -48,8 +48,13 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
   if (settings.dailyBonusEnabled || settings.bonusEnabled) allButtons.push({ text: '🎁 Daily Bonus' })
   if (settings.leaderboardEnabled) allButtons.push({ text: '🏆 Leaderboard' })
   if (settings.depositEnabled) allButtons.push({ text: '📥 Deposit' })
-  // Pro plan button — only shown if pro plan is enabled by bot creator
-  if ((settings as any).proPlanEnabled) allButtons.push({ text: '⭐ VIP Plan' })
+
+  // Investment/Pro plan button — shown to all users, locked for non-pro bots
+  const investSettings = settings as any
+  if (investSettings.proPlanEnabled) {
+    const investLabel = investSettings.proPlanButtonLabel || '💎 Invest'
+    allButtons.push({ text: investLabel })
+  }
 
   // Pro bot owners get 6 buttons per row (3x2), free gets 4 (2x2)
   const isPro = bot.creator?.plan === 'pro'
@@ -168,11 +173,13 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
   const rewardAmount = bot.settings?.referralRewardAmount || 100
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join and start earning!')}`
 
-  const subButtons: any[] = []
+  // Sub-menu inline keyboard — Leaderboard as sub-command + Back
+  const subButtons: any[][] = []
+  subButtons.push([{ text: '📤 Share Referral Link', url: shareUrl }])
   if (bot.settings?.leaderboardEnabled) {
     subButtons.push([{ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' }])
   }
-  subButtons.push([{ text: '📤 Share Referral Link', url: shareUrl }])
+  subButtons.push([{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }])
 
   await sendMessage(
     bot.botToken, chatId,
@@ -238,11 +245,29 @@ export async function handleDeposit(bot: any, botUser: any, chatId: number) {
     await sendMessage(bot.botToken, chatId, '💳 Deposit not configured. Contact bot owner.')
     return
   }
+
+  const isPro = bot.creator?.plan === 'pro'
+  const network = isPro ? 'USDT TRC20 (Tron network)' : 'USDT TRC20 (Tron network)'
+  const addressType = isPro
+    ? '💳 Send <b>USDT on TRC20 (Tron)</b> network only'
+    : '💳 Send <b>USDT on TRC20 (Tron)</b> network only'
+
   await redisSet(`deposit_state:${botUser.id}`, 'awaiting_txhash', 600)
+
+  // Try to generate QR code URL via a public QR API
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(address)}`
+
   await sendMessage(
     bot.botToken, chatId,
-    `📥 <b>Deposit USDT (TRC20)</b>\n\nSend USDT to:\n<code>${address}</code>\n\n` +
-    `⚠️ TRC20 network only.\n\nAfter sending, reply with your transaction hash.`,
+    `📥 <b>Deposit ${network}</b>\n\n` +
+    `${addressType}\n\n` +
+    `Send to this address:\n<code>${address}</code>\n\n` +
+    `⚠️ <b>IMPORTANT:</b>\n` +
+    `• Only send USDT on <b>TRC20 (Tron)</b> network\n` +
+    `• Sending on wrong network = <b>permanent loss of funds</b>\n` +
+    `• Minimum deposit: $${bot.settings?.minDepositUsd || 1} USDT\n\n` +
+    `After sending, reply with your <b>transaction hash (TXID)</b>.\n\n` +
+    `📷 QR Code: ${qrUrl}`,
     { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_deposit' }]] }
   )
 }
@@ -343,10 +368,10 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
   } else {
     const hint = getWithdrawalDestinationHint(settings)
     const addressLabel = provider === 'faucetpay'
-      ? `📧 <b>FaucetPay is your payment method.</b>\n\nEnter your <b>FaucetPay email address</b> or a wallet address linked to your FaucetPay account:`
+      ? `📧 <b>FaucetPay is your payment method.</b>\n\nEnter your <b>FaucetPay email address</b> or a FaucetPay-linked wallet address to receive your payout:`
       : provider === 'oxapay'
-        ? '💳 Enter your <b>USDT TRC20 wallet address</b> (starts with T, 34 chars):'
-        : '📝 Enter your payout address or details:'
+        ? `💳 <b>OxaPay payout — USDT on TRC20 (Tron) network.</b>\n\nEnter your <b>USDT TRC20 wallet address</b>\n(starts with <b>T</b>, exactly 34 characters):`
+        : `📝 Enter your payout address or account details:`
 
     await sendMessage(
       bot.botToken, chatId,
@@ -361,7 +386,7 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
 export async function handleProPlan(bot: any, botUser: any, chatId: number) {
   const settings = bot.settings as any
   if (!settings?.proPlanEnabled) {
-    await sendMessage(bot.botToken, chatId, '⭐ VIP Plan is not available on this bot.')
+    await sendMessage(bot.botToken, chatId, '💎 Investment plans are not available on this bot.')
     return
   }
 
@@ -370,23 +395,25 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number) {
   const durationDays = Number(settings.proPlanDurationDays || 30)
   const dailyBonus = Number(settings.proPlanDailyBonus || 50)
   const referralReward = Number(settings.proPlanReferralReward || 200)
+  const planTitle = settings.proPlanButtonLabel || 'VIP Plan'
 
-  const isProMember = Boolean(botUser.isProMember)
-  const proExpiry = botUser.proExpiresAt ? new Date(botUser.proExpiresAt) : null
+  const isProMember = Boolean((botUser as any).isProMember)
+  const proExpiry = (botUser as any).proExpiresAt ? new Date((botUser as any).proExpiresAt) : null
   const isActive = isProMember && proExpiry && proExpiry > new Date()
 
   if (isActive) {
     const daysLeft = Math.ceil((proExpiry!.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    // Sub-menu: active plan options + Back
     await sendMessage(
       bot.botToken, chatId,
-      `⭐ <b>Your VIP Plan is Active!</b>\n\n` +
+      `💎 <b>${planTitle} — Active</b>\n\n` +
       `• Days remaining: <b>${daysLeft}</b>\n` +
       `• Daily bonus: <b>${dailyBonus} ${sym}</b>\n` +
       `• Referral reward: <b>${referralReward} ${sym}</b> per invite\n\n` +
       `Keep referring to earn more!`,
       {
         inline_keyboard: [
-          [{ text: '🎁 Claim VIP Daily Bonus', callback_data: 'cmd_pro_bonus' }],
+          [{ text: '🎁 Claim Daily Bonus', callback_data: 'cmd_pro_bonus' }],
           [{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }]
         ]
       }
@@ -394,28 +421,26 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number) {
     return
   }
 
-  // Not a pro member — show upgrade info
+  // Not active — show plan details as sub-menu with tiers + Back
   const proOxapayConfigured = Boolean(settings.proOxapayConfigured)
+  const depositButtons: any[][] = []
+  if (proOxapayConfigured) {
+    depositButtons.push([{ text: `💳 Deposit $${minDeposit} to Activate`, callback_data: 'cmd_pro_deposit' }])
+  }
+  depositButtons.push([{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }])
 
   await sendMessage(
     bot.botToken, chatId,
-    `⭐ <b>VIP / Investment Plan</b>\n\n` +
-    `Upgrade to VIP and unlock exclusive benefits:\n\n` +
+    `💎 <b>${planTitle}</b>\n\n` +
+    `Upgrade and unlock exclusive benefits:\n\n` +
     `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
     `• 🔗 Referral reward: <b>${referralReward} ${sym}</b> per invite\n` +
-    `• ⏱ Duration: <b>${durationDays} days</b>\n\n` +
-    `<b>Minimum deposit: $${minDeposit} USDT</b>\n\n` +
+    `• ⏱ Duration: <b>${durationDays} days</b>\n` +
+    `• 💵 Min deposit: <b>$${minDeposit} USDT</b>\n\n` +
     (proOxapayConfigured
-      ? `Tap the button below to make your deposit and activate VIP.`
-      : `Contact the bot owner to activate VIP.`),
-    proOxapayConfigured ? {
-      inline_keyboard: [
-        [{ text: '💳 Deposit to Activate VIP', callback_data: 'cmd_pro_deposit' }],
-        [{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }]
-      ]
-    } : {
-      inline_keyboard: [[{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }]]
-    }
+      ? `Tap below to deposit and activate your plan.`
+      : `Contact the bot owner to activate this plan.`),
+    { inline_keyboard: depositButtons }
   )
 }
 
