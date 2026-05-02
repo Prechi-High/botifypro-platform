@@ -996,7 +996,6 @@ export default function UsersPage() {
     </div>
   )
 }
-                  ['Last Active', ago(selected.last_active)],
                 ].map(([l, v]) => (
                   <div key={String(l)} style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px 12px' }}>
                     <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500', marginBottom: '2px' }}>{l}</div>
