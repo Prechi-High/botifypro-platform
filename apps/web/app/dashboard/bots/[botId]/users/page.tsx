@@ -996,17 +996,6 @@ export default function UsersPage() {
     </div>
   )
 }
-
-                {[
-                  ['Telegram ID', String(selected.telegram_user_id || 'N/A')],
-                  ['Total Balance', Number(selected.balance || 0).toLocaleString() + ' ' + sym],
-                  ['Channel Verified', selected.channel_verified
-                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={14} color="#10B981" /> Yes</span>
-                    : <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><XCircle size={14} color="#EF4444" /> No</span>],
-                  ['Status', selected.is_banned
-                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Ban size={14} color="#EF4444" /> Banned</span>
-                    : <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={14} color="#10B981" /> Active</span>],
-                  ['Joined', fmt(selected.joined_at)],
                   ['Last Active', ago(selected.last_active)],
                 ].map(([l, v]) => (
                   <div key={String(l)} style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px 12px' }}>
