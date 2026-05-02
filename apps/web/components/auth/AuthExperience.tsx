@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Eye, EyeOff, ArrowRight, ChevronRight,
-  Bot, Coins, Users, Trophy, ArrowDownToLine, ArrowUpFromLine, Megaphone, Rocket
+  Bot, Coins, Users, Trophy, ArrowDownToLine, ArrowUpFromLine, Megaphone, Rocket,
+  Zap, Clock, Calendar
 } from 'lucide-react'
 
 type AuthMode = 'signup' | 'login'
@@ -81,6 +82,80 @@ const SLIDES = [
   },
 ]
 
+// ── Advertiser-specific onboarding slides ─────────────────────────────────────
+const ADVERTISER_SLIDES = [
+  {
+    id: 0,
+    headline: 'Reach Millions of Users',
+    sub: 'Tap into an engaged network of active Telegram bot users across every niche.',
+    Visual: () => (
+      <div style={{ position: 'relative', width: '100%', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '88px', height: '88px', borderRadius: '50%', background: 'rgba(57,255,20,0.08)', border: '1.5px solid rgba(57,255,20,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(57,255,20,0.15)', animation: 'authFloat 3s ease-in-out infinite' }}>
+          <Users size={40} color="#39FF14" />
+        </div>
+        {[0,1,2,3,4,5,6,7].map(i => (
+          <div key={i} style={{ position: 'absolute', width: '6px', height: '6px', borderRadius: '50%', background: '#39FF14', opacity: 0.2 + (i % 4) * 0.15, left: `${8 + i * 12}%`, top: `${15 + (i % 4) * 20}%`, animation: `authPulse ${1.8 + i * 0.3}s ease-in-out ${i * 0.25}s infinite` }} />
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: 1,
+    headline: 'Target Any Category',
+    sub: 'Choose your audience by activity window — reach the hottest users in the last 24h or re-engage users from the past 7 days.',
+    Visual: () => (
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', padding: '12px 0', flexWrap: 'wrap' }}>
+        {[
+          { Icon: Zap,      label: '24h Active',  color: '#39FF14' },
+          { Icon: Clock,    label: '48h Window',  color: '#60A5FA' },
+          { Icon: Calendar, label: '7d Window',   color: '#A78BFA' },
+        ].map(({ Icon, label, color }, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '14px 16px', borderRadius: '12px', background: 'rgba(57,255,20,0.05)', border: '1px solid rgba(57,255,20,0.15)', animation: `authFloat ${2.4 + i * 0.4}s ease-in-out ${i * 0.3}s infinite`, minWidth: '80px' }}>
+            <Icon size={24} color={color} />
+            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{label}</span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: 2,
+    headline: 'Bigger Budget, Bigger Savings',
+    sub: 'The more you spend, the more audience you unlock. Volume discounts apply automatically on large campaigns.',
+    Visual: () => (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0', width: '100%', maxWidth: '300px', margin: '0 auto' }}>
+        {[
+          { label: '$20 budget',  reach: '20,000 users',  pct: 30 },
+          { label: '$50 budget',  reach: '55,000 users',  pct: 60 },
+          { label: '$100 budget', reach: '120,000 users', pct: 100 },
+        ].map(({ label, reach, pct }, i) => (
+          <div key={i} style={{ animation: `authFloat ${2.5 + i * 0.3}s ease-in-out ${i * 0.2}s infinite` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px', fontFamily: 'Inter, sans-serif' }}>
+              <span style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</span>
+              <span style={{ color: '#39FF14', fontWeight: 700 }}>{reach}</span>
+            </div>
+            <div style={{ height: '6px', borderRadius: '999px', background: 'rgba(57,255,20,0.1)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #39FF14, #00CC44)', borderRadius: '999px', boxShadow: '0 0 8px rgba(57,255,20,0.4)' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: 3,
+    headline: 'Launch Your First Campaign',
+    sub: 'Set your budget, pick your audience, upload your creative — go live in minutes.',
+    Visual: () => (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+        <div style={{ width: '96px', height: '96px', borderRadius: '50%', background: 'rgba(57,255,20,0.08)', border: '2px solid rgba(57,255,20,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 60px rgba(57,255,20,0.15)', animation: 'authFloat 3s ease-in-out infinite' }}>
+          <Megaphone size={40} color="#39FF14" />
+        </div>
+      </div>
+    ),
+  },
+]
+
 export default function AuthExperience({ initialMode }: { initialMode: AuthMode }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -120,6 +195,10 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     return r && r.startsWith('/dashboard') ? r : '/dashboard'
   }, [])
 
+  // Use advertiser slides when coming from the advertise link
+  const isAdvertiserFlow = redirectTo === '/dashboard/advertise'
+  const activeSlides = isAdvertiserFlow ? ADVERTISER_SLIDES : SLIDES
+
   function onTouchStart(e: React.TouchEvent) { touchStartX.current = e.touches[0].clientX }
   function onTouchEnd(e: React.TouchEvent) {
     if (touchStartX.current === null) return
@@ -127,7 +206,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
     if (Math.abs(dx) > 50) { dx < 0 ? nextSlide() : prevSlide() }
     touchStartX.current = null
   }
-  function nextSlide() { slide < SLIDES.length - 1 ? setSlide(s => s + 1) : enterAuth() }
+  function nextSlide() { slide < activeSlides.length - 1 ? setSlide(s => s + 1) : enterAuth() }
   function prevSlide() { if (slide > 0) setSlide(s => s - 1) }
   function enterAuth() { setShowAuth(true) }
 
@@ -176,7 +255,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
   }
 
   const activeError = mode === 'signup' ? signupError : loginError
-  const currentSlide = SLIDES[slide]
+  const currentSlide = activeSlides[slide]
 
   // Stars
   const stars = useMemo(() => Array.from({ length: 40 }, (_, i) => ({
@@ -233,10 +312,10 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
 
           {/* Progress dots */}
           <div style={{ display: 'flex', gap: '8px', marginTop: '32px' }}>
-            {SLIDES.map((_, i) => (
+            {activeSlides.map((_, i) => (
               <button
                 key={i}
-                onClick={() => i < SLIDES.length - 1 ? setSlide(i) : enterAuth()}
+                onClick={() => i < activeSlides.length - 1 ? setSlide(i) : enterAuth()}
                 style={{ width: i === slide ? '28px' : '8px', height: '8px', borderRadius: '999px', background: i === slide ? '#39FF14' : 'rgba(57,255,20,0.2)', border: 'none', cursor: 'pointer', transition: 'all 0.25s ease', padding: 0, boxShadow: i === slide ? '0 0 8px rgba(57,255,20,0.5)' : 'none' }}
               />
             ))}
@@ -244,12 +323,12 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
 
           {/* CTA */}
           <div style={{ marginTop: '28px', width: '100%', maxWidth: '360px' }}>
-            {slide === SLIDES.length - 1 ? (
+            {slide === activeSlides.length - 1 ? (
               <button
                 onClick={enterAuth}
                 style={{ width: '100%', padding: '14px', borderRadius: '6px', border: 'none', background: '#39FF14', color: '#050A05', fontSize: '14px', fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 0 28px rgba(57,255,20,0.35)', animation: 'authGlow 2.5s ease-in-out infinite' }}
               >
-                Get Started <ArrowRight size={16} />
+                {isAdvertiserFlow ? 'Start Advertising' : 'Get Started'} <ArrowRight size={16} />
               </button>
             ) : (
               <button
