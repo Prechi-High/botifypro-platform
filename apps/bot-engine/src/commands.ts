@@ -404,8 +404,9 @@ export async function handleProPlanDetail(bot: any, botUser: any, chatId: number
   const settings = bot.settings as any
   const sym = settings?.currencySymbol || '🪙'
 
-  // Strip "💎 " prefix and " — $XX" suffix to get the plan name
-  const cleanName = planButtonText.replace(/^💎\s*/, '').replace(/\s*—\s*\$[\d.]+$/, '').trim()
+  // Strip "💎 " prefix and " — XX" suffix (activation amount) to get the plan name
+  // Button format: "💎 PlanName — 10" (no $ sign)
+  const cleanName = planButtonText.replace(/^💎\s*/, '').replace(/\s*—\s*[\d.]+$/, '').trim()
   const plan = await (prisma as any).investmentPlan.findFirst({
     where: { botId: bot.id, isActive: true, name: cleanName }
   })
