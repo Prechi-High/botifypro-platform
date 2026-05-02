@@ -52,6 +52,19 @@ export default function CommandsPage() {
   const [wishDesc, setWishDesc] = useState('')
   const [addingWish, setAddingWish] = useState(false)
 
+  // Investment / Pro Plan
+  const [proPlanEnabled, setProPlanEnabled] = useState(false)
+  const [proPlanButtonLabel, setProPlanButtonLabel] = useState('💎 Invest')
+  const [proPlanDepositMin, setProPlanDepositMin] = useState(10)
+  const [proPlanDurationDays, setProPlanDurationDays] = useState(30)
+  const [proPlanDailyBonus, setProPlanDailyBonus] = useState(50)
+  const [proPlanReferralReward, setProPlanReferralReward] = useState(200)
+  const [proTierReferralEnabled, setProTierReferralEnabled] = useState(false)
+  const [proTier1Percent, setProTier1Percent] = useState(40)
+  const [proTier2Percent, setProTier2Percent] = useState(20)
+  const [proTier3Percent, setProTier3Percent] = useState(5)
+  const [savingProPlan, setSavingProPlan] = useState(false)
+
   // Button counting
   const fixedCount = 2 // Balance + Referral always count
   const optionalEnabled = [leaderboardEnabled, dailyBonusEnabled, withdrawEnabled].filter(Boolean).length
@@ -88,6 +101,17 @@ export default function CommandsPage() {
           setDailyBonusAmount(Number(settings.daily_bonus_amount) || 10)
           setCurrencySymbol(settings.currency_symbol || '🪙')
           setCurrencyName(settings.currency_name || 'Coins')
+          // Investment plan
+          setProPlanEnabled(Boolean(settings.pro_plan_enabled))
+          setProPlanButtonLabel(settings.pro_plan_button_label || '💎 Invest')
+          setProPlanDepositMin(Number(settings.pro_plan_deposit_min) || 10)
+          setProPlanDurationDays(Number(settings.pro_plan_duration_days) || 30)
+          setProPlanDailyBonus(Number(settings.pro_plan_daily_bonus) || 50)
+          setProPlanReferralReward(Number(settings.pro_plan_referral_reward) || 200)
+          setProTierReferralEnabled(Boolean(settings.pro_tier_referral_enabled))
+          setProTier1Percent(Number(settings.pro_tier1_percent) || 40)
+          setProTier2Percent(Number(settings.pro_tier2_percent) || 20)
+          setProTier3Percent(Number(settings.pro_tier3_percent) || 5)
         }
 
         const { data: wishData } = await supabase
@@ -142,6 +166,30 @@ export default function CommandsPage() {
       toast.error(e.message || 'Failed to save')
     }
     setSavingFeatures(false)
+  }
+
+  async function saveProPlan() {
+    if (userPlan !== 'pro') { toast.error('Investment Plan requires a Pro account'); return }
+    setSavingProPlan(true)
+    try {
+      const { error } = await supabase.from('bot_settings').update({
+        pro_plan_enabled: proPlanEnabled,
+        pro_plan_button_label: proPlanButtonLabel || '💎 Invest',
+        pro_plan_deposit_min: proPlanDepositMin,
+        pro_plan_duration_days: proPlanDurationDays,
+        pro_plan_daily_bonus: proPlanDailyBonus,
+        pro_plan_referral_reward: proPlanReferralReward,
+        pro_tier_referral_enabled: proTierReferralEnabled,
+        pro_tier1_percent: proTier1Percent,
+        pro_tier2_percent: proTier2Percent,
+        pro_tier3_percent: proTier3Percent,
+      }).eq('bot_id', botId)
+      if (error) throw error
+      toast.success('Investment Plan saved!')
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save')
+    }
+    setSavingProPlan(false)
   }
 
   async function submitWish() {
@@ -337,6 +385,99 @@ export default function CommandsPage() {
                 {savingFeatures ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : 'Save commands'}
               </button>
             </div>
+          </div>
+
+          {/* ── Investment / Pro Plan Command ── */}
+          <div style={{ ...sectionCard, border: userPlan === 'pro' ? '1px solid rgba(57,255,20,0.2)' : '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>💎 Investment / Pro Plan</h3>
+                {userPlan !== 'pro' && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: 'var(--accent)', background: 'rgba(57,255,20,0.08)', border: '1px solid rgba(57,255,20,0.2)', borderRadius: '999px', padding: '2px 8px' }}>
+                    <Lock size={10} /> PRO ONLY
+                  </span>
+                )}
+              </div>
+              {userPlan === 'pro' && (
+                <div className={`toggle-track ${proPlanEnabled ? 'on' : 'off'}`} onClick={() => setProPlanEnabled(!proPlanEnabled)} style={{ flexShrink: 0 }}>
+                  <div className="toggle-thumb" />
+                </div>
+              )}
+            </div>
+
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+              Allow bot users to deposit and join an investment plan. They earn daily bonuses and referral commissions while their plan is active.
+              {userPlan !== 'pro' && <span style={{ color: 'var(--accent)', fontWeight: 600 }}> Upgrade to Pro to activate.</span>}
+            </p>
+
+            {userPlan === 'pro' && proPlanEnabled && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={labelStyle}>Button label (shown in bot keyboard)</label>
+                  <input
+                    value={proPlanButtonLabel}
+                    onChange={e => setProPlanButtonLabel(e.target.value)}
+                    className="input-field"
+                    placeholder="💎 Invest"
+                  />
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Default: 💎 Invest. You can use any emoji + text.</div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>Min deposit to activate (USD)</label>
+                    <input type="number" min="1" value={proPlanDepositMin} onChange={e => setProPlanDepositMin(Number(e.target.value))} className="input-field" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Plan duration (days)</label>
+                    <input type="number" min="1" value={proPlanDurationDays} onChange={e => setProPlanDurationDays(Number(e.target.value))} className="input-field" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Daily bonus ({currencySymbol})</label>
+                    <input type="number" min="0" value={proPlanDailyBonus} onChange={e => setProPlanDailyBonus(Number(e.target.value))} className="input-field" />
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Separate from normal daily bonus</div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Referral reward ({currencySymbol})</label>
+                    <input type="number" min="0" value={proPlanReferralReward} onChange={e => setProPlanReferralReward(Number(e.target.value))} className="input-field" />
+                  </div>
+                </div>
+
+                {/* 3-Tier Referral */}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>3-Tier Referral Commission</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Earn % when referrals claim bonuses (up to 3 levels)</div>
+                    </div>
+                    <div className={`toggle-track ${proTierReferralEnabled ? 'on' : 'off'}`} onClick={() => setProTierReferralEnabled(!proTierReferralEnabled)} style={{ flexShrink: 0 }}>
+                      <div className="toggle-thumb" />
+                    </div>
+                  </div>
+                  {proTierReferralEnabled && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                      <div>
+                        <label style={labelStyle}>Level 1 (%)</label>
+                        <input type="number" min="0" max="100" value={proTier1Percent} onChange={e => setProTier1Percent(Number(e.target.value))} className="input-field" />
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Direct referrals</div>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Level 2 (%)</label>
+                        <input type="number" min="0" max="100" value={proTier2Percent} onChange={e => setProTier2Percent(Number(e.target.value))} className="input-field" />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Level 3 (%)</label>
+                        <input type="number" min="0" max="100" value={proTier3Percent} onChange={e => setProTier3Percent(Number(e.target.value))} className="input-field" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button onClick={saveProPlan} disabled={savingProPlan} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {savingProPlan ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : '💾 Save Investment Plan'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ── Feature wishlist ── */}
