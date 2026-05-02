@@ -996,3 +996,70 @@ export default function UsersPage() {
     </div>
   )
 }
+
+                {[
+                  ['Telegram ID', String(selected.telegram_user_id || 'N/A')],
+                  ['Total Balance', Number(selected.balance || 0).toLocaleString() + ' ' + sym],
+                  ['Channel Verified', selected.channel_verified
+                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={14} color="#10B981" /> Yes</span>
+                    : <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><XCircle size={14} color="#EF4444" /> No</span>],
+                  ['Status', selected.is_banned
+                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Ban size={14} color="#EF4444" /> Banned</span>
+                    : <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={14} color="#10B981" /> Active</span>],
+                  ['Joined', fmt(selected.joined_at)],
+                  ['Last Active', ago(selected.last_active)],
+                ].map(([l, v]) => (
+                  <div key={String(l)} style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px 12px' }}>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500', marginBottom: '2px' }}>{l}</div>
+                    <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: '500' }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <h3 style={{ fontSize: '13px', fontWeight: '600', color: '#374151', margin: '0 0 8px' }}>Recent Transactions</h3>
+              {txns.length === 0
+                ? <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 16px' }}>No transactions yet</p>
+                : (
+                  <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', marginBottom: '16px' }}>
+                    {txns.map((tx, i) => (
+                      <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: '12px', background: i % 2 === 0 ? 'white' : '#fafafa', borderBottom: i < txns.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                        <div>
+                          <span style={{ fontWeight: '500', color: '#374151', textTransform: 'capitalize' }}>{(tx.type || '').replace(/_/g, ' ')}</span>
+                          <span style={{ color: '#94a3b8', marginLeft: '8px' }}>{fmt(tx.created_at)}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: '500', color: '#1e293b' }}>{Number(tx.amount_currency || 0).toLocaleString()} {sym}</span>
+                          <span style={{ padding: '1px 6px', borderRadius: '20px', fontSize: '10px', fontWeight: '500', background: tx.status === 'completed' ? '#f0fdf4' : tx.status === 'pending' ? '#fffbeb' : '#fef2f2', color: tx.status === 'completed' ? '#166534' : tx.status === 'pending' ? '#92400e' : '#dc2626' }}>{tx.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <button
+                  onClick={() => banUser(selected.id, !selected.is_banned, selected.first_name || 'User')}
+                  style={{ padding: '9px', border: `1px solid ${selected.is_banned ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', background: selected.is_banned ? '#f0fdf4' : '#fef2f2', color: selected.is_banned ? '#166534' : '#dc2626', fontSize: '12px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                >
+                  <Ban size={14} />{selected.is_banned ? 'Unban' : 'Ban'}
+                </button>
+                <button
+                  onClick={() => resetBalance(selected.id)}
+                  style={{ padding: '9px', border: '1px solid #fde68a', borderRadius: '8px', background: '#fffbeb', color: '#92400e', fontSize: '12px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                >
+                  <RefreshCw size={14} />Reset
+                </button>
+                <button
+                  onClick={() => deleteUser(selected.id, selected.first_name || 'User')}
+                  disabled={deleting === selected.id}
+                  style={{ padding: '9px', border: '1px solid #fecaca', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', fontSize: '12px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                >
+                  <Trash2 size={14} />{deleting === selected.id ? '...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
