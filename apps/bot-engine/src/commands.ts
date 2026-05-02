@@ -49,19 +49,21 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
   if (settings.leaderboardEnabled) allButtons.push({ text: '🏆 Leaderboard' })
   if (settings.depositEnabled) allButtons.push({ text: '📥 Deposit' })
 
-  // Investment/Pro plan button — shown to all users, locked for non-pro bots
+  // Investment/Pro plan button — only shown if bot creator is PRO and has enabled it
   const investSettings = settings as any
-  if (investSettings.proPlanEnabled) {
+  const isPro = bot.creator?.plan === 'pro'
+  if (isPro && investSettings.proPlanEnabled) {
     const investLabel = investSettings.proPlanButtonLabel || '💎 Invest'
     allButtons.push({ text: investLabel })
   }
 
-  // Pro bot owners get 6 buttons per row (3x2), free gets 4 (2x2)
-  const isPro = bot.creator?.plan === 'pro'
+  // Free bot owners: max 4 buttons. Pro bot owners: max 6 buttons.
+  const maxButtons = isPro ? 6 : 4
+  const buttonsToShow = allButtons.slice(0, maxButtons)
   const buttonsPerRow = isPro ? 3 : 2
   const keyboard: any[][] = []
-  for (let i = 0; i < allButtons.length; i += buttonsPerRow) {
-    keyboard.push(allButtons.slice(i, i + buttonsPerRow))
+  for (let i = 0; i < buttonsToShow.length; i += buttonsPerRow) {
+    keyboard.push(buttonsToShow.slice(i, i + buttonsPerRow))
   }
 
   const replyMarkup = { keyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
@@ -173,13 +175,12 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
   const rewardAmount = bot.settings?.referralRewardAmount || 100
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join and start earning!')}`
 
-  // Sub-menu inline keyboard — Leaderboard as sub-command + Back
-  const subButtons: any[][] = []
-  subButtons.push([{ text: '📤 Share Referral Link', url: shareUrl }])
+  // Build sub-menu as reply keyboard (fixed bottom panel)
+  const subKeyboard: any[][] = []
   if (bot.settings?.leaderboardEnabled) {
-    subButtons.push([{ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' }])
+    subKeyboard.push([{ text: '🏆 Leaderboard' }])
   }
-  subButtons.push([{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }])
+  subKeyboard.push([{ text: '⬅️ Back' }])
 
   await sendMessage(
     bot.botToken, chatId,
@@ -189,8 +190,9 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
     `• Your referral link:\n${referralLink}\n\n` +
     `Total earned: <b>${stats.totalEarned} ${sym} ${currencyName}</b>\n\n` +
     `⚠️ Please avoid fake or self-referrals.\n` +
-    `💬 Share your link and earn more daily!`,
-    { inline_keyboard: subButtons }
+    `💬 Share your link and earn more daily!\n\n` +
+    `📤 <a href="${shareUrl}">Tap to share your referral link</a>`,
+    { keyboard: subKeyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
   )
 }
 
@@ -229,9 +231,8 @@ export async function handleLeaderboard(bot: any, botUser: any, chatId: number) 
   })
 
   await sendMessage(bot.botToken, chatId, text, {
-    inline_keyboard: [[
-      { text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }
-    ]]
+    keyboard: [[{ text: '⬅️ Back' }]],
+    resize_keyboard: true, persistent: true, one_time_keyboard: false
   })
 }
 
@@ -403,7 +404,7 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number) {
 
   if (isActive) {
     const daysLeft = Math.ceil((proExpiry!.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    // Sub-menu: active plan options + Back
+    // Sub-menu as reply keyboard
     await sendMessage(
       bot.botToken, chatId,
       `💎 <b>${planTitle} — Active</b>\n\n` +
@@ -412,22 +413,23 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number) {
       `• Referral reward: <b>${referralReward} ${sym}</b> per invite\n\n` +
       `Keep referring to earn more!`,
       {
-        inline_keyboard: [
-          [{ text: '🎁 Claim Daily Bonus', callback_data: 'cmd_pro_bonus' }],
-          [{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }]
-        ]
+        keyboard: [
+          [{ text: '🎁 Claim Daily Bonus' }],
+          [{ text: '⬅️ Back' }]
+        ],
+        resize_keyboard: true, persistent: true, one_time_keyboard: false
       }
     )
     return
   }
 
-  // Not active — show plan details as sub-menu with tiers + Back
+  // Not active — show plan details
   const proOxapayConfigured = Boolean(settings.proOxapayConfigured)
   const depositButtons: any[][] = []
   if (proOxapayConfigured) {
-    depositButtons.push([{ text: `💳 Deposit $${minDeposit} to Activate`, callback_data: 'cmd_pro_deposit' }])
+    depositButtons.push([{ text: '💳 Deposit to Activate' }])
   }
-  depositButtons.push([{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }])
+  depositButtons.push([{ text: '⬅️ Back' }])
 
   await sendMessage(
     bot.botToken, chatId,
@@ -440,7 +442,7 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number) {
     (proOxapayConfigured
       ? `Tap below to deposit and activate your plan.`
       : `Contact the bot owner to activate this plan.`),
-    { inline_keyboard: depositButtons }
+    { keyboard: depositButtons, resize_keyboard: true, persistent: true, one_time_keyboard: false }
   )
 }
 

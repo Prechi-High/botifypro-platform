@@ -467,6 +467,42 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       const investLabel = (bot.settings as any)?.proPlanButtonLabel
       if (investLabel && text === investLabel) { await handleProPlan(bot, botUser, chatId); return }
       if (text === '💎 Invest') { await handleProPlan(bot, botUser, chatId); return }
+      // Sub-menu reply keyboard buttons
+      if (text === '⬅️ Back') { const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } }); await handleStart(bot, freshUser || botUser, chatId); return }
+      if (text === '🎁 Claim Daily Bonus') { await handleProBonus(bot, botUser, chatId); return }
+      if (text === '💳 Deposit to Activate') {
+        // Trigger OxaPay pro deposit via inline callback logic
+        const settings = bot.settings as any
+        if (!settings?.proOxapayConfigured || !settings?.proOxapayMerchantKey) {
+          await sendMessage(bot.botToken, chatId, '❌ VIP deposit not configured. Contact bot owner.')
+        } else {
+          const minDeposit = Number(settings.proPlanDepositMin || 10)
+          try {
+            const response = await axios.post(
+              'https://api.oxapay.com/v1/payment/white-label',
+              {
+                amount: minDeposit, currency: 'USD', pay_currency: 'USDT', network: 'TRC20',
+                lifetime: 30, fee_paid_by_payer: 0, under_paid_coverage: 2,
+                callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/${bot.id}`,
+                description: `VIP botId:${bot.id} userId:${botUser.id}`
+              },
+              { headers: { 'merchant_api_key': settings.proOxapayMerchantKey, 'Content-Type': 'application/json' } }
+            )
+            if (response.data?.status === 200) {
+              const inv = response.data.data
+              await redisSet(`pro_deposit:${bot.id}:${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId, botToken: bot.botToken }), 1800)
+              await sendMessage(bot.botToken, chatId,
+                `💳 <b>VIP Activation Deposit</b>\n\nSend exactly <b>${inv.pay_amount} USDT</b> to:\n<code>${inv.address}</code>\n\n🌐 Network: <b>TRC20</b>\n⏱ Expires in: <b>30 minutes</b>\n\n✅ VIP activates automatically once confirmed.`
+              )
+            } else {
+              await sendMessage(bot.botToken, chatId, '❌ Could not generate deposit. Try again later.')
+            }
+          } catch {
+            await sendMessage(bot.botToken, chatId, '❌ Deposit failed. Try again later.')
+          }
+        }
+        return
+      }
       if (text === '❓ Help' || text === '📋 Menu') { await handleHelp(bot, chatId); return }
 
       if (text.startsWith('/start')) {
