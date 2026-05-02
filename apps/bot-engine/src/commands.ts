@@ -374,13 +374,15 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number, page
     return
   }
 
-  const PAGE_SIZE = 6
+  const PAGE_SIZE = 5
   const totalPages = Math.ceil(plans.length / PAGE_SIZE)
   const pagePlans = plans.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
+  // 3 plan buttons per row, max 5 per page
   const keyboard: any[][] = []
-  for (const plan of pagePlans) {
-    keyboard.push([{ text: `💎 ${plan.name} — $${plan.activationAmount}` }])
+  const planButtons = pagePlans.map((plan) => ({ text: '💎 ' + plan.name }))
+  for (let i = 0; i < planButtons.length; i += 3) {
+    keyboard.push(planButtons.slice(i, i + 3))
   }
 
   const navRow: any[] = []
@@ -393,7 +395,7 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number, page
   await sendMessage(
     bot.botToken, chatId,
     `${planTitle}\n\nChoose an investment plan:\n\n` +
-    pagePlans.map((p: any, i: number) => `${page * PAGE_SIZE + i + 1}. <b>${p.name}</b> — $${p.activationAmount} · ${p.durationDays} days`).join('\n'),
+    pagePlans.map((p, i) => (page * PAGE_SIZE + i + 1) + '. <b>' + p.name + '</b>\n   💰 ' + p.dailyBonus + ' ' + (settings.currencySymbol || '🪙') + '/day · ⏱ ' + p.durationDays + 'd · 💵 ' + p.activationAmount + ' USDT').join('\n\n'),
     { keyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
   )
 
@@ -404,9 +406,8 @@ export async function handleProPlanDetail(bot: any, botUser: any, chatId: number
   const settings = bot.settings as any
   const sym = settings?.currencySymbol || '🪙'
 
-  // Strip "💎 " prefix and " — XX" suffix (activation amount) to get the plan name
-  // Button format: "💎 PlanName — 10" (no $ sign)
-  const cleanName = planButtonText.replace(/^💎\s*/, '').replace(/\s*—\s*[\d.]+$/, '').trim()
+  // Strip "💎 " prefix to get the plan name — button format is now "💎 PlanName"
+  const cleanName = planButtonText.replace(/^💎\s*/, '').trim()
   const plan = await (prisma as any).investmentPlan.findFirst({
     where: { botId: bot.id, isActive: true, name: cleanName }
   })

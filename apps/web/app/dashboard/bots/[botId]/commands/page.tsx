@@ -94,6 +94,9 @@ export default function CommandsPage() {
   const [investmentPlans, setInvestmentPlans] = useState<InvestmentPlan[]>([])
   const [savingPlanId, setSavingPlanId] = useState<string | null>(null)
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null)
+  // Plan UI mode: 'collapsed' | 'view' | 'edit' | 'delete'
+  const [planMode, setPlanMode] = useState<Record<number, 'collapsed' | 'view' | 'edit' | 'delete'>>({})
+  const [deleteConfirmText, setDeleteConfirmText] = useState<Record<number, string>>({})
 
   // Button counting
   const fixedCount = 2
@@ -278,14 +281,21 @@ export default function CommandsPage() {
     const plan = investmentPlans[index]
     if (!plan.id) {
       setInvestmentPlans(prev => prev.filter((_, i) => i !== index))
+      setPlanMode(prev => { const n = { ...prev }; delete n[index]; return n })
       return
     }
     setDeletingPlanId(plan.id)
     try {
+      // Reset all users on this plan back to normal (isProMember=false, activePlanId=null)
+      await supabase.from('bot_users')
+        .update({ is_pro_member: false, pro_expires_at: null, active_plan_id: null })
+        .eq('active_plan_id', plan.id)
       const { error } = await supabase.from('investment_plans').delete().eq('id', plan.id)
       if (error) throw error
       setInvestmentPlans(prev => prev.filter((_, i) => i !== index))
-      toast.success('Plan deleted.')
+      setPlanMode(prev => { const n = { ...prev }; delete n[index]; return n })
+      setDeleteConfirmText(prev => { const n = { ...prev }; delete n[index]; return n })
+      toast.success('Plan deleted. Affected users reset to normal.')
     } catch (e: any) {
       toast.error(e.message || 'Failed to delete plan')
     }
@@ -536,38 +546,59 @@ export default function CommandsPage() {
                       </div>
                     )}
 
-                    {investmentPlans.map((plan, index) => (
+                    {investmentPlans.map((plan, index) => {
+                      const mode = planMode[index] || 'collapsed'
+                      return (
                       <div key={plan.id || index} style={{ border: '1px solid rgba(57,255,20,0.15)', borderRadius: '12px', overflow: 'hidden' }}>
-                        {/* Plan header */}
-                        <div
-                          onClick={() => updatePlan(index, 'expanded', !plan.expanded)}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(57,255,20,0.04)', cursor: 'pointer', gap: '10px' }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{plan.name || `Plan ${index + 1}`}</span>
-                            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>${plan.activationAmount} · {plan.durationDays}d · {plan.dailyBonus} {currencySymbol}/day</span>
+                        {/* Plan header — always visible */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(57,255,20,0.04)', gap: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>💎 {plan.name || `Plan ${index + 1}`}</span>
                             {!plan.isActive && <span style={{ fontSize: '10px', color: '#FBBF24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '4px', padding: '1px 6px' }}>INACTIVE</span>}
+                            {!plan.id && <span style={{ fontSize: '10px', color: '#60A5FA', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '4px', padding: '1px 6px' }}>UNSAVED</span>}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                            <button
-                              onClick={e => { e.stopPropagation(); deletePlan(index) }}
-                              disabled={deletingPlanId === plan.id}
-                              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', color: '#FCA5A5', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
-                            >
-                              <Trash2 size={12} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                            <button onClick={() => setPlanMode(prev => ({ ...prev, [index]: mode === 'view' ? 'collapsed' : 'view' }))}
+                              style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: '#818cf8', fontSize: '12px', fontWeight: 500 }}>
+                              {mode === 'view' ? 'Close' : 'View'}
                             </button>
-                            {plan.expanded ? <ChevronUp size={16} color="var(--text-muted)" /> : <ChevronDown size={16} color="var(--text-muted)" />}
+                            <button onClick={() => setPlanMode(prev => ({ ...prev, [index]: mode === 'edit' ? 'collapsed' : 'edit' }))}
+                              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: '#60A5FA', fontSize: '12px', fontWeight: 500 }}>
+                              {mode === 'edit' ? 'Close' : 'Edit'}
+                            </button>
+                            <button onClick={() => setPlanMode(prev => ({ ...prev, [index]: mode === 'delete' ? 'collapsed' : 'delete' }))}
+                              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', color: '#FCA5A5', fontSize: '12px', fontWeight: 500 }}>
+                              Delete
+                            </button>
                           </div>
                         </div>
 
-                        {/* Plan body */}
-                        {plan.expanded && (
+                        {/* VIEW mode */}
+                        {mode === 'view' && (
+                          <div style={{ padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: 'rgba(0,0,0,0.2)' }}>
+                            {[
+                              ['Activation', plan.activationAmount + ' USDT'],
+                              ['Duration', plan.durationDays + ' days'],
+                              ['Daily Bonus', plan.dailyBonus + ' ' + currencySymbol],
+                              ['Referral Reward', plan.referralReward + ' ' + currencySymbol],
+                              ['3-Tier Commission', plan.tierEnabled ? `L1:${plan.tier1Percent}% L2:${plan.tier2Percent}% L3:${plan.tier3Percent}%` : 'Disabled'],
+                              ['Status', plan.isActive ? 'Active' : 'Inactive'],
+                            ].map(([label, value]) => (
+                              <div key={String(label)} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '8px', padding: '8px 10px' }}>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>{label}</div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* EDIT mode */}
+                        {mode === 'edit' && (
                           <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                             <div>
                               <label style={labelStyle}>Plan name</label>
                               <input value={plan.name} onChange={e => updatePlan(index, 'name', e.target.value)} className="input-field" placeholder="e.g. Tier 1, Gold Plan..." />
                             </div>
-
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                               <div>
                                 <label style={labelStyle}>Activation amount (USD)</label>
@@ -586,60 +617,65 @@ export default function CommandsPage() {
                                 <input type="number" min="0" value={plan.referralReward} onChange={e => updatePlan(index, 'referralReward', Number(e.target.value))} className="input-field" />
                               </div>
                             </div>
-
-                            {/* Active toggle */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div>
-                                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Plan active</div>
-                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Inactive plans are hidden from users</div>
-                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Plan active</div>
                               <div className={`toggle-track ${plan.isActive ? 'on' : 'off'}`} onClick={() => updatePlan(index, 'isActive', !plan.isActive)} style={{ flexShrink: 0 }}>
                                 <div className="toggle-thumb" />
                               </div>
                             </div>
-
-                            {/* 3-Tier Referral per plan */}
                             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <div>
-                                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>3-Tier Referral Commission</div>
-                                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Earn % when referrals claim this plan's bonus</div>
-                                </div>
+                                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>3-Tier Referral Commission</div>
                                 <div className={`toggle-track ${plan.tierEnabled ? 'on' : 'off'}`} onClick={() => updatePlan(index, 'tierEnabled', !plan.tierEnabled)} style={{ flexShrink: 0 }}>
                                   <div className="toggle-thumb" />
                                 </div>
                               </div>
                               {plan.tierEnabled && (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
-                                  <div>
-                                    <label style={labelStyle}>Level 1 (%)</label>
-                                    <input type="number" min="0" max="100" value={plan.tier1Percent} onChange={e => updatePlan(index, 'tier1Percent', Number(e.target.value))} className="input-field" />
-                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Direct referrals</div>
-                                  </div>
-                                  <div>
-                                    <label style={labelStyle}>Level 2 (%)</label>
-                                    <input type="number" min="0" max="100" value={plan.tier2Percent} onChange={e => updatePlan(index, 'tier2Percent', Number(e.target.value))} className="input-field" />
-                                  </div>
-                                  <div>
-                                    <label style={labelStyle}>Level 3 (%)</label>
-                                    <input type="number" min="0" max="100" value={plan.tier3Percent} onChange={e => updatePlan(index, 'tier3Percent', Number(e.target.value))} className="input-field" />
-                                  </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                                  <div><label style={labelStyle}>Level 1 (%)</label><input type="number" min="0" max="100" value={plan.tier1Percent} onChange={e => updatePlan(index, 'tier1Percent', Number(e.target.value))} className="input-field" /></div>
+                                  <div><label style={labelStyle}>Level 2 (%)</label><input type="number" min="0" max="100" value={plan.tier2Percent} onChange={e => updatePlan(index, 'tier2Percent', Number(e.target.value))} className="input-field" /></div>
+                                  <div><label style={labelStyle}>Level 3 (%)</label><input type="number" min="0" max="100" value={plan.tier3Percent} onChange={e => updatePlan(index, 'tier3Percent', Number(e.target.value))} className="input-field" /></div>
                                 </div>
                               )}
                             </div>
-
-                            <button
-                              onClick={() => savePlan(index)}
-                              disabled={savingPlanId === (plan.id || `saving-${index}`)}
-                              className="btn-primary"
-                              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                            >
-                              {savingPlanId === (plan.id || `saving-${index}`) ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : `💾 Save ${plan.name}`}
+                            <button onClick={() => savePlan(index).then(() => setPlanMode(prev => ({ ...prev, [index]: 'collapsed' })))}
+                              disabled={savingPlanId === (plan.id || `saving-${index}`)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {savingPlanId === (plan.id || `saving-${index}`) ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : '💾 Save changes'}
                             </button>
                           </div>
                         )}
+
+                        {/* DELETE mode */}
+                        {mode === 'delete' && (
+                          <div style={{ padding: '14px 16px', background: 'rgba(239,68,68,0.04)', borderTop: '1px solid rgba(239,68,68,0.15)' }}>
+                            <div style={{ fontSize: '13px', color: '#FCA5A5', marginBottom: '10px', lineHeight: 1.5 }}>
+                              ⚠️ This will permanently delete <strong>{plan.name}</strong> and reset all users on this plan to normal users.
+                              <br />Type <strong style={{ color: '#ef4444' }}>DELETE</strong> to confirm:
+                            </div>
+                            <input
+                              value={deleteConfirmText[index] || ''}
+                              onChange={e => setDeleteConfirmText(prev => ({ ...prev, [index]: e.target.value }))}
+                              placeholder="DELETE"
+                              className="input-field"
+                              style={{ marginBottom: '10px', borderColor: deleteConfirmText[index] === 'DELETE' ? 'rgba(239,68,68,0.5)' : undefined }}
+                            />
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={() => deletePlan(index)}
+                                disabled={deleteConfirmText[index] !== 'DELETE' || deletingPlanId === plan.id}
+                                style={{ flex: 1, padding: '9px', borderRadius: '8px', border: 'none', background: deleteConfirmText[index] === 'DELETE' ? '#ef4444' : 'rgba(239,68,68,0.2)', color: deleteConfirmText[index] === 'DELETE' ? '#fff' : 'rgba(255,255,255,0.3)', fontSize: '13px', fontWeight: 600, cursor: deleteConfirmText[index] === 'DELETE' ? 'pointer' : 'not-allowed' }}>
+                                {deletingPlanId === plan.id ? 'Deleting...' : '🗑️ Delete Plan'}
+                              </button>
+                              <button onClick={() => { setPlanMode(prev => ({ ...prev, [index]: 'collapsed' })); setDeleteConfirmText(prev => ({ ...prev, [index]: '' })) }}
+                                style={{ padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      )
+                    })}
                   </>
                 )}
               </div>

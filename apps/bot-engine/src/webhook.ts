@@ -517,11 +517,11 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         }
         return
       }
-      // Investment plan selection — button text is "💎 PlanName — XX" (where XX is the activation amount)
-      // Must not match the main invest button (e.g. "💎 Invest") which has no " — " separator
-      if (text.startsWith('💎 ') && text.includes(' — ') && text !== '💎 Invest') {
-        const investLabel = (bot.settings as any)?.proPlanButtonLabel || ''
-        if (text !== investLabel) {
+      // Investment plan selection — button text is "💎 PlanName"
+      // Must not match the main invest button label
+      if (text.startsWith('💎 ')) {
+        const investLabel = (bot.settings as any)?.proPlanButtonLabel || '💎 Invest'
+        if (text !== investLabel && text !== '💎 Invest') {
           await handleProPlanDetail(bot, botUser, chatId, text)
           return
         }
