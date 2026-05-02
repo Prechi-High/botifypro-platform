@@ -37,7 +37,6 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
     return
   }
 
-  // Cancel any in-progress withdrawal when user goes back to start
   await redisDel('withdraw_state:' + botUser.id)
   await redisDel('withdraw_amount:' + botUser.id)
 
@@ -49,15 +48,22 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
   if (settings.leaderboardEnabled) allButtons.push({ text: '🏆 Leaderboard' })
   if (settings.depositEnabled) allButtons.push({ text: '📥 Deposit' })
 
-  // Investment/Pro plan button — only shown if bot creator is PRO and has enabled it
   const investSettings = settings as any
-  const isPro = bot.creator?.plan === 'pro'
+  // Check creator plan — bot.creator is included in the webhook query.
+  // Fall back to a direct DB lookup if the relation is missing (e.g. called from other contexts).
+  let creatorPlan = bot.creator?.plan
+  if (!creatorPlan && bot.creatorId) {
+    try {
+      const creatorRow = await prisma.user.findUnique({ where: { id: bot.creatorId }, select: { plan: true } })
+      creatorPlan = creatorRow?.plan
+    } catch {}
+  }
+  const isPro = creatorPlan === 'pro'
   if (isPro && investSettings.proPlanEnabled) {
     const investLabel = investSettings.proPlanButtonLabel || '💎 Invest'
     allButtons.push({ text: investLabel })
   }
 
-  // Free bot owners: max 4 buttons. Pro bot owners: max 6 buttons.
   const maxButtons = isPro ? 6 : 4
   const buttonsToShow = allButtons.slice(0, maxButtons)
   const buttonsPerRow = isPro ? 3 : 2
@@ -78,42 +84,28 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
   const sym = bot.settings?.currencySymbol || '🪙'
   const currencyName = bot.settings?.currencyName || 'coins'
-
   await sendMessage(
     bot.botToken, chatId,
     `🏦 <b>Account Balance Overview</b>\n\n` +
     `• User ID: ${botUser.telegramUserId}\n` +
     `• Balance: ${botUser.balance} ${sym} ${currencyName}\n\n` +
     `✅ Keep growing. Withdraw anytime!`,
-    {
-      inline_keyboard: [[
-        { text: '📢 Advertise with AdsGalaxy', url: 'https://t.me/Ads_Galaxy_bot' }
-      ]]
-    }
+    { inline_keyboard: [[{ text: '📢 Advertise with AdsGalaxy', url: 'https://t.me/Ads_Galaxy_bot' }]] }
   )
 }
 
 export async function handleHelp(bot: any, chatId: number) {
   const settings = bot.settings
   const buttons: any[] = []
-
   buttons.push({ text: '💰 Balance', callback_data: 'cmd_balance' })
   buttons.push({ text: '🔗 Referral', callback_data: 'cmd_referral' })
   if (settings?.withdrawEnabled) buttons.push({ text: '📤 Withdraw', callback_data: 'cmd_withdraw' })
   if (settings?.dailyBonusEnabled || settings?.bonusEnabled) buttons.push({ text: '🎁 Daily Bonus', callback_data: 'cmd_bonus' })
   if (settings?.leaderboardEnabled) buttons.push({ text: '🏆 Leaderboard', callback_data: 'cmd_leaderboard' })
   if (settings?.depositEnabled) buttons.push({ text: '📥 Deposit', callback_data: 'cmd_deposit' })
-
   const inline_keyboard: any[][] = []
-  for (let i = 0; i < buttons.length; i += 2) {
-    inline_keyboard.push(buttons.slice(i, i + 2))
-  }
-
-  await sendMessage(
-    bot.botToken, chatId,
-    '📋 <b>Menu</b>\n\nChoose an option below:',
-    { inline_keyboard }
-  )
+  for (let i = 0; i < buttons.length; i += 2) inline_keyboard.push(buttons.slice(i, i + 2))
+  await sendMessage(bot.botToken, chatId, '📋 <b>Menu</b>\n\nChoose an option below:', { inline_keyboard })
 }
 
 export async function handleBonus(bot: any, botUser: any, chatId: number) {
@@ -122,7 +114,6 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
     await sendMessage(bot.botToken, chatId, '🎁 Daily bonus is not enabled on this bot.')
     return
   }
-
   const sym = settings?.currencySymbol || '🪙'
   const currencyName = settings?.currencyName || 'coins'
   const rate = Math.max(1, Number(settings?.usdToCurrencyRate || 1000))
@@ -134,34 +125,20 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
 
   const bonusKey = `daily_bonus:${bot.id}:${botUser.id}`
   const claimed = await redisGet(bonusKey)
-
   if (claimed) {
     const ttl = await redisTtl(bonusKey)
     const hours = Math.floor(Math.max(0, ttl) / 3600)
     const minutes = Math.floor((Math.max(0, ttl) % 3600) / 60)
     const secs = Math.max(0, ttl) % 60
-    await sendMessage(
-      bot.botToken, chatId,
-      `⏳ You can claim your bonus again in ${hours}h ${minutes}m ${secs}s`
-    )
+    await sendMessage(bot.botToken, chatId, `⏳ You can claim your bonus again in ${hours}h ${minutes}m ${secs}s`)
     return
   }
-
-  await prisma.botUser.update({
-    where: { id: botUser.id },
-    data: { balance: { increment: bonusAmount } }
-  })
+  await prisma.botUser.update({ where: { id: botUser.id }, data: { balance: { increment: bonusAmount } } })
   await redisSet(bonusKey, '1', 86400)
-
-  const updatedUser = await prisma.botUser.findUnique({
-    where: { id: botUser.id }, select: { balance: true }
-  })
-
+  const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id }, select: { balance: true } })
   await sendMessage(
     bot.botToken, chatId,
-    `🎁 <b>Daily Bonus Claimed!</b>\n\n` +
-    `+${bonusAmount} ${sym} ${currencyName} added to your balance!\n\n` +
-    `💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
+    `🎁 <b>Daily Bonus Claimed!</b>\n\n+${bonusAmount} ${sym} ${currencyName} added to your balance!\n\n💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
   )
 }
 
@@ -174,14 +151,9 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
   const currencyName = bot.settings?.currencyName || 'coins'
   const rewardAmount = bot.settings?.referralRewardAmount || 100
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join and start earning!')}`
-
-  // Build sub-menu as reply keyboard (fixed bottom panel)
   const subKeyboard: any[][] = []
-  if (bot.settings?.leaderboardEnabled) {
-    subKeyboard.push([{ text: '🏆 Leaderboard' }])
-  }
+  if (bot.settings?.leaderboardEnabled) subKeyboard.push([{ text: '🏆 Leaderboard' }])
   subKeyboard.push([{ text: '⬅️ Back' }])
-
   await sendMessage(
     bot.botToken, chatId,
     `🏁 <b>Referral Program Overview</b>\n\n` +
@@ -189,8 +161,7 @@ export async function handleReferralInfo(bot: any, botUser: any, chatId: number)
     `• Total referrals: ${stats.count}\n` +
     `• Your referral link:\n${referralLink}\n\n` +
     `Total earned: <b>${stats.totalEarned} ${sym} ${currencyName}</b>\n\n` +
-    `⚠️ Please avoid fake or self-referrals.\n` +
-    `💬 Share your link and earn more daily!\n\n` +
+    `⚠️ Please avoid fake or self-referrals.\n💬 Share your link and earn more daily!\n\n` +
     `📤 <a href="${shareUrl}">Tap to share your referral link</a>`,
     { keyboard: subKeyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
   )
@@ -201,7 +172,6 @@ export async function handleLeaderboard(bot: any, botUser: any, chatId: number) 
     await sendMessage(bot.botToken, chatId, '🏆 Leaderboard is not enabled.')
     return
   }
-
   const referralCounts = await prisma.referral.groupBy({
     by: ['referrerId'],
     where: { botId: bot.id },
@@ -209,18 +179,12 @@ export async function handleLeaderboard(bot: any, botUser: any, chatId: number) 
     orderBy: { _count: { referrerId: 'desc' } },
     take: 10
   })
-
   if (referralCounts.length === 0) {
     await sendMessage(bot.botToken, chatId, '🏆 <b>Leaderboard</b>\n\nNo referrals yet. Be the first!')
     return
   }
-
   const userIds = referralCounts.map(r => r.referrerId)
-  const users = await prisma.botUser.findMany({
-    where: { id: { in: userIds } },
-    select: { id: true, firstName: true }
-  })
-
+  const users = await prisma.botUser.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true } })
   const medals = ['🥇', '🥈', '🥉']
   let text = `🏆 <b>Leaderboard — Top Referrers</b>\n\n`
   referralCounts.forEach((r, i) => {
@@ -229,7 +193,6 @@ export async function handleLeaderboard(bot: any, botUser: any, chatId: number) 
     const isMe = r.referrerId === botUser.id ? ' 👈 You' : ''
     text += `${medal} ${user?.firstName || 'User'} — ${r._count.referrerId} referrals${isMe}\n`
   })
-
   await sendMessage(bot.botToken, chatId, text, {
     keyboard: [[{ text: '⬅️ Back' }]],
     resize_keyboard: true, persistent: true, one_time_keyboard: false
@@ -246,38 +209,20 @@ export async function handleDeposit(bot: any, botUser: any, chatId: number) {
     await sendMessage(bot.botToken, chatId, '💳 Deposit not configured. Contact bot owner.')
     return
   }
-
-  const isPro = bot.creator?.plan === 'pro'
-  const network = isPro ? 'USDT TRC20 (Tron network)' : 'USDT TRC20 (Tron network)'
-  const addressType = isPro
-    ? '💳 Send <b>USDT on TRC20 (Tron)</b> network only'
-    : '💳 Send <b>USDT on TRC20 (Tron)</b> network only'
-
   await redisSet(`deposit_state:${botUser.id}`, 'awaiting_txhash', 600)
-
-  // Try to generate QR code URL via a public QR API
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(address)}`
-
   await sendMessage(
     bot.botToken, chatId,
-    `📥 <b>Deposit ${network}</b>\n\n` +
-    `${addressType}\n\n` +
+    `📥 <b>Deposit USDT TRC20 (Tron network)</b>\n\n` +
+    `💳 Send <b>USDT on TRC20 (Tron)</b> network only\n\n` +
     `Send to this address:\n<code>${address}</code>\n\n` +
-    `⚠️ <b>IMPORTANT:</b>\n` +
-    `• Only send USDT on <b>TRC20 (Tron)</b> network\n` +
+    `⚠️ <b>IMPORTANT:</b>\n• Only send USDT on <b>TRC20 (Tron)</b> network\n` +
     `• Sending on wrong network = <b>permanent loss of funds</b>\n` +
-    `• Minimum deposit: $${bot.settings?.minDepositUsd || 1} USDT\n\n` +
-    `After sending, reply with your <b>transaction hash (TXID)</b>.\n\n` +
-    `📷 QR Code: ${qrUrl}`,
+    `• Minimum deposit: ${bot.settings?.minDepositUsd || 1} USDT\n\n` +
+    `After sending, reply with your <b>transaction hash (TXID)</b>.\n\n📷 QR Code: ${qrUrl}`,
     { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_deposit' }]] }
   )
 }
-
-// ── WITHDRAWAL FLOW ───────────────────────────────────────────────────────────
-// Step 1: User taps Withdraw → asked to type an amount
-// Step 2: Bot extracts number from free text, validates balance
-// Step 3: If saved address exists, ask to reuse or enter new
-// Step 4: User provides address → process withdrawal
 
 export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
   const settings = bot.settings
@@ -285,44 +230,26 @@ export async function handleWithdraw(bot: any, botUser: any, chatId: number) {
     await sendMessage(bot.botToken, chatId, '💳 Withdrawals not configured. Contact bot owner.')
     return
   }
-
   const sym = settings?.currencySymbol || '🪙'
   const currencyName = settings?.currencyName || 'coins'
   const rate = Number(settings?.usdToCurrencyRate || 1000)
   const minWithdrawUsd = Number(settings?.minWithdrawUsd || 0.5)
   const minWithdrawCurrency = minWithdrawUsd * rate
   const balance = Number(botUser.balance)
-
   if (balance < minWithdrawCurrency) {
-    await sendMessage(
-      bot.botToken, chatId,
-      `❌ <b>Insufficient Balance</b>\n\n` +
-      `Minimum withdrawal: <b>${minWithdrawCurrency.toFixed(0)} ${sym}</b>\n` +
-      `Your balance: <b>${balance.toFixed(0)} ${sym}</b>\n\n` +
-      `👥 Share your referral link to earn more!`
+    await sendMessage(bot.botToken, chatId,
+      `❌ <b>Insufficient Balance</b>\n\nMinimum withdrawal: <b>${minWithdrawCurrency.toFixed(0)} ${sym}</b>\nYour balance: <b>${balance.toFixed(0)} ${sym}</b>\n\n👥 Share your referral link to earn more!`
     )
     return
   }
-
   const provider = getWithdrawProvider(settings)
-  const providerLabel = provider === 'manual'
-    ? 'Manual review'
-    : provider === 'oxapay'
-      ? 'OxaPay (USDT TRC20)'
-      : `FaucetPay (${settings?.faucetpayPayoutCurrency || 'USDT'})`
-
-  // Set state to awaiting_amount
+  const providerLabel = provider === 'manual' ? 'Manual review'
+    : provider === 'oxapay' ? 'OxaPay (USDT TRC20)'
+    : `FaucetPay (${settings?.faucetpayPayoutCurrency || 'USDT'})`
   await redisSet('withdraw_state:' + botUser.id, 'awaiting_amount', 600)
-
   await sendMessage(
     bot.botToken, chatId,
-    `📤 <b>Withdraw</b>\n\n` +
-    `Provider: <b>${providerLabel}</b>\n` +
-    `Balance: <b>${balance.toFixed(0)} ${sym} ${currencyName}</b>\n` +
-    `Minimum: <b>${minWithdrawCurrency.toFixed(0)} ${sym}</b>\n\n` +
-    `How much do you want to withdraw?\n` +
-    `Just type the amount — e.g. <code>500</code> or <code>50 ${sym}</code>\n\n` +
-    `⏱ You have 10 minutes.`,
+    `📤 <b>Withdraw</b>\n\nProvider: <b>${providerLabel}</b>\nBalance: <b>${balance.toFixed(0)} ${sym} ${currencyName}</b>\nMinimum: <b>${minWithdrawCurrency.toFixed(0)} ${sym}</b>\n\nHow much do you want to withdraw?\nJust type the amount — e.g. <code>500</code> or <code>50 ${sym}</code>\n\n⏱ You have 10 minutes.`,
     { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
   )
 }
@@ -335,36 +262,21 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
   const feePercent = Number(settings?.withdrawFeePercent || 0)
   const feeUsd = usdEquiv * (feePercent / 100)
   const netUsd = usdEquiv - feeUsd
-
-  // Save chosen amount to Redis
   await redisSet('withdraw_amount:' + botUser.id, String(amount), 600)
   await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
-
   const provider = getWithdrawProvider(settings)
-
-  // Check if user has a saved address (stored in Redis)
   const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`) || null
-
   if (savedAddress) {
     const providerNote = provider === 'faucetpay'
       ? `\n💳 Payment via: <b>FaucetPay (${settings?.faucetpayPayoutCurrency || 'USDT'})</b>`
-      : provider === 'oxapay'
-        ? `\n💳 Payment via: <b>OxaPay (USDT TRC20)</b>`
-        : ''
-
-    await sendMessage(
-      bot.botToken, chatId,
-      `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n` +
-      `≈ ${netUsd.toFixed(4)} USD after fees${providerNote}\n\n` +
-      `You have a saved address:\n<code>${savedAddress}</code>\n\n` +
-      `Use this address or enter a new one?`,
-      {
-        inline_keyboard: [
-          [{ text: '✅ Use Saved Address', callback_data: 'withdraw_use_saved' }],
-          [{ text: '✏️ Enter New Address', callback_data: 'withdraw_new_address' }],
-          [{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]
-        ]
-      }
+      : provider === 'oxapay' ? `\n💳 Payment via: <b>OxaPay (USDT TRC20)</b>` : ''
+    await sendMessage(bot.botToken, chatId,
+      `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n≈ ${netUsd.toFixed(4)} USD after fees${providerNote}\n\nYou have a saved address:\n<code>${savedAddress}</code>\n\nUse this address or enter a new one?`,
+      { inline_keyboard: [
+        [{ text: '✅ Use Saved Address', callback_data: 'withdraw_use_saved' }],
+        [{ text: '✏️ Enter New Address', callback_data: 'withdraw_new_address' }],
+        [{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]
+      ]}
     )
   } else {
     const hint = getWithdrawalDestinationHint(settings)
@@ -373,30 +285,75 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
       : provider === 'oxapay'
         ? `💳 <b>OxaPay payout — USDT on TRC20 (Tron) network.</b>\n\nEnter your <b>USDT TRC20 wallet address</b>\n(starts with <b>T</b>, exactly 34 characters):`
         : `📝 Enter your payout address or account details:`
-
-    await sendMessage(
-      bot.botToken, chatId,
-      `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n` +
-      `≈ ${netUsd.toFixed(4)} USD after fees\n\n` +
-      `${addressLabel}\n\n<i>${hint}</i>\n\n⏱ You have 10 minutes.`,
+    await sendMessage(bot.botToken, chatId,
+      `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n≈ ${netUsd.toFixed(4)} USD after fees\n\n${addressLabel}\n\n<i>${hint}</i>\n\n⏱ You have 10 minutes.`,
       { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
     )
   }
 }
 
-export async function handleProPlan(bot: any, botUser: any, chatId: number) {
+// ── INVESTMENT / PRO PLAN ─────────────────────────────────────────────────────
+
+export async function handleProPlan(bot: any, botUser: any, chatId: number, page: number = 0) {
   const settings = bot.settings as any
   if (!settings?.proPlanEnabled) {
     await sendMessage(bot.botToken, chatId, '💎 Investment plans are not available on this bot.')
     return
   }
 
+  const plans = await (prisma as any).investmentPlan.findMany({
+    where: { botId: bot.id, isActive: true },
+    orderBy: { sortOrder: 'asc' }
+  })
+
+  if (plans.length === 0) {
+    await sendMessage(bot.botToken, chatId, '💎 No investment plans are available yet. Check back soon!', {
+      keyboard: [[{ text: '⬅️ Back' }]],
+      resize_keyboard: true, persistent: true, one_time_keyboard: false
+    })
+    return
+  }
+
+  const PAGE_SIZE = 6
+  const totalPages = Math.ceil(plans.length / PAGE_SIZE)
+  const pagePlans = plans.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  const keyboard: any[][] = []
+  for (const plan of pagePlans) {
+    keyboard.push([{ text: `💎 ${plan.name} — $${plan.activationAmount}` }])
+  }
+
+  const navRow: any[] = []
+  if (page > 0) navRow.push({ text: '◀️ Previous' })
+  if ((page + 1) < totalPages) navRow.push({ text: 'Next ▶️' })
+  if (navRow.length > 0) keyboard.push(navRow)
+  keyboard.push([{ text: '⬅️ Back' }])
+
+  const planTitle = settings.proPlanButtonLabel || '💎 Invest'
+  await sendMessage(
+    bot.botToken, chatId,
+    `${planTitle}\n\nChoose an investment plan:\n\n` +
+    pagePlans.map((p: any, i: number) => `${page * PAGE_SIZE + i + 1}. <b>${p.name}</b> — $${p.activationAmount} · ${p.durationDays} days`).join('\n'),
+    { keyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
+  )
+
+  await redisSet(`invest_page:${botUser.id}`, String(page), 300)
+}
+
+export async function handleProPlanDetail(bot: any, botUser: any, chatId: number, planButtonText: string) {
+  const settings = bot.settings as any
   const sym = settings?.currencySymbol || '🪙'
-  const minDeposit = Number(settings.proPlanDepositMin || 10)
-  const durationDays = Number(settings.proPlanDurationDays || 30)
-  const dailyBonus = Number(settings.proPlanDailyBonus || 50)
-  const referralReward = Number(settings.proPlanReferralReward || 200)
-  const planTitle = settings.proPlanButtonLabel || 'VIP Plan'
+
+  // Strip "💎 " prefix and " — $XX" suffix to get the plan name
+  const cleanName = planButtonText.replace(/^💎\s*/, '').replace(/\s*—\s*\$[\d.]+$/, '').trim()
+  const plan = await (prisma as any).investmentPlan.findFirst({
+    where: { botId: bot.id, isActive: true, name: cleanName }
+  })
+
+  if (!plan) {
+    await sendMessage(bot.botToken, chatId, '❌ Plan not found. Please try again.')
+    return
+  }
 
   const isProMember = Boolean((botUser as any).isProMember)
   const proExpiry = (botUser as any).proExpiresAt ? new Date((botUser as any).proExpiresAt) : null
@@ -404,44 +361,31 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number) {
 
   if (isActive) {
     const daysLeft = Math.ceil((proExpiry!.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    // Sub-menu as reply keyboard
-    await sendMessage(
-      bot.botToken, chatId,
-      `💎 <b>${planTitle} — Active</b>\n\n` +
-      `• Days remaining: <b>${daysLeft}</b>\n` +
-      `• Daily bonus: <b>${dailyBonus} ${sym}</b>\n` +
-      `• Referral reward: <b>${referralReward} ${sym}</b> per invite\n\n` +
-      `Keep referring to earn more!`,
-      {
-        keyboard: [
-          [{ text: '🎁 Claim Daily Bonus' }],
-          [{ text: '⬅️ Back' }]
-        ],
-        resize_keyboard: true, persistent: true, one_time_keyboard: false
-      }
+    await sendMessage(bot.botToken, chatId,
+      `💎 <b>You already have an active plan!</b>\n\n• Days remaining: <b>${daysLeft}</b>\n\nClaim your daily bonus below.`,
+      { keyboard: [[{ text: '🎁 Claim Daily Bonus' }], [{ text: '⬅️ Back' }]], resize_keyboard: true, persistent: true, one_time_keyboard: false }
     )
     return
   }
 
-  // Not active — show plan details
   const proOxapayConfigured = Boolean(settings.proOxapayConfigured)
   const depositButtons: any[][] = []
   if (proOxapayConfigured) {
-    depositButtons.push([{ text: '💳 Deposit to Activate' }])
+    depositButtons.push([{ text: `💳 Deposit $${plan.activationAmount} to Activate` }])
   }
+  depositButtons.push([{ text: '⬅️ Back to Plans' }])
   depositButtons.push([{ text: '⬅️ Back' }])
+
+  await redisSet(`invest_selected_plan:${botUser.id}`, plan.id, 600)
 
   await sendMessage(
     bot.botToken, chatId,
-    `💎 <b>${planTitle}</b>\n\n` +
-    `Upgrade and unlock exclusive benefits:\n\n` +
-    `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
-    `• 🔗 Referral reward: <b>${referralReward} ${sym}</b> per invite\n` +
-    `• ⏱ Duration: <b>${durationDays} days</b>\n` +
-    `• 💵 Min deposit: <b>$${minDeposit} USDT</b>\n\n` +
-    (proOxapayConfigured
-      ? `Tap below to deposit and activate your plan.`
-      : `Contact the bot owner to activate this plan.`),
+    `💎 <b>${plan.name}</b>\n\n` +
+    `• 💰 Daily bonus: <b>${plan.dailyBonus} ${sym}</b> every day\n` +
+    `• 🔗 Referral reward: <b>${plan.referralReward} ${sym}</b> per invite\n` +
+    `• ⏱ Duration: <b>${plan.durationDays} days</b>\n` +
+    `• 💵 Activation: <b>$${plan.activationAmount} USDT</b>\n\n` +
+    (proOxapayConfigured ? `Tap below to deposit and activate this plan.` : `Contact the bot owner to activate this plan.`),
     { keyboard: depositButtons, resize_keyboard: true, persistent: true, one_time_keyboard: false }
   )
 }
@@ -460,10 +404,28 @@ export async function handleProBonus(bot: any, botUser: any, chatId: number) {
   }
 
   const sym = settings?.currencySymbol || '🪙'
-  const dailyBonus = Number(settings.proPlanDailyBonus || 50)
+
+  // Get the user's active plan for the correct bonus amount
+  const activePlanId = (botUser as any).activePlanId
+  let dailyBonus = Number(settings.proPlanDailyBonus || 50)
+  let planTierEnabled = Boolean(settings.proTierReferralEnabled)
+  let planTier1 = Number(settings.proTier1Percent || 40)
+  let planTier2 = Number(settings.proTier2Percent || 20)
+  let planTier3 = Number(settings.proTier3Percent || 5)
+
+  if (activePlanId) {
+    const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: activePlanId } })
+    if (plan) {
+      dailyBonus = Number(plan.dailyBonus)
+      planTierEnabled = Boolean(plan.tierEnabled)
+      planTier1 = Number(plan.tier1Percent)
+      planTier2 = Number(plan.tier2Percent)
+      planTier3 = Number(plan.tier3Percent)
+    }
+  }
+
   const bonusKey = `pro_bonus:${bot.id}:${botUser.id}`
   const claimed = await redisGet(bonusKey)
-
   if (claimed) {
     const ttl = await redisTtl(bonusKey)
     const hours = Math.floor(Math.max(0, ttl) / 3600)
@@ -472,53 +434,36 @@ export async function handleProBonus(bot: any, botUser: any, chatId: number) {
     return
   }
 
-  await prisma.botUser.update({
-    where: { id: botUser.id },
-    data: { balance: { increment: dailyBonus } }
-  })
+  await prisma.botUser.update({ where: { id: botUser.id }, data: { balance: { increment: dailyBonus } } })
   await redisSet(bonusKey, '1', 86400)
 
-  // 3-tier referral commission
-  if (settings.proTierReferralEnabled && botUser.referredBy) {
-    await payTierCommission(bot, botUser, dailyBonus, settings, 1)
+  if (planTierEnabled && botUser.referredBy) {
+    await payTierCommission(bot, botUser, dailyBonus, { ...settings, proTierReferralEnabled: true, proTier1Percent: planTier1, proTier2Percent: planTier2, proTier3Percent: planTier3 }, 1)
   }
 
   const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id }, select: { balance: true } })
   await sendMessage(
     bot.botToken, chatId,
-    `⭐ <b>VIP Daily Bonus Claimed!</b>\n\n` +
-    `+${dailyBonus} ${sym} added!\n` +
-    `💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
+    `⭐ <b>VIP Daily Bonus Claimed!</b>\n\n+${dailyBonus} ${sym} added!\n💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
   )
 }
 
 async function payTierCommission(bot: any, botUser: any, bonusAmount: number, settings: any, currentLevel: number) {
   if (currentLevel > 3 || !botUser.referredBy) return
-
   const percentKey = currentLevel === 1 ? 'proTier1Percent' : currentLevel === 2 ? 'proTier2Percent' : 'proTier3Percent'
   const percent = Number(settings[percentKey] || 0)
   if (percent <= 0) return
-
   const commission = Math.floor(bonusAmount * (percent / 100))
   if (commission <= 0) return
-
-  // Find the referrer
   const referrer = await prisma.botUser.findUnique({ where: { id: botUser.referredBy } })
   if (!referrer) return
-
-  await prisma.botUser.update({
-    where: { id: referrer.id },
-    data: { balance: { increment: commission } }
-  })
-
+  await prisma.botUser.update({ where: { id: referrer.id }, data: { balance: { increment: commission } } })
   const sym = settings?.currencySymbol || '🪙'
   await sendMessage(
     bot.botToken,
     Number(referrer.telegramUserId),
     `💸 <b>Tier ${currentLevel} Commission!</b>\n\n+${commission} ${sym} from your referral's VIP bonus.`
   )
-
-  // Recurse up the chain
   if (referrer.referredBy && currentLevel < 3) {
     await payTierCommission(bot, referrer, bonusAmount, settings, currentLevel + 1)
   }

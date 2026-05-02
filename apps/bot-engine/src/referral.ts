@@ -9,7 +9,9 @@ export async function handleReferral(
   chatId: number
 ) {
   try {
-    if (!bot.settings?.referralEnabled) return
+    // Referral is always enabled — the /referral command is always-on.
+    // Only skip if the bot has no settings at all.
+    if (!bot.settings) return
     if (botUser.id === referrerId) return
 
     const referrer = await prisma.botUser.findUnique({
@@ -44,8 +46,7 @@ export async function handleReferral(
       prisma.botUser.update({
         where: { id: referrer.id },
         data: {
-          balance: { increment: rewardAmount },
-          referredBy: referrer.referredBy
+          balance: { increment: rewardAmount }
         }
       }),
       prisma.botUser.update({
@@ -55,15 +56,14 @@ export async function handleReferral(
     ])
 
     const sym = bot.settings?.currencySymbol || '🪙'
+    const currencyName = bot.settings?.currencyName || 'coins'
 
     await sendMessage(
       bot.botToken,
-      referrer.telegramUserId
-        ? Number(referrer.telegramUserId)
-        : Number(chatId),
+      Number(referrer.telegramUserId),
       `🎉 <b>Referral Bonus!</b>\n\n` +
-      `Someone joined using your referral link!\n\n` +
-      `+${rewardAmount} ${sym} added to your balance.`
+      `Someone just registered using your referral link!\n\n` +
+      `+${rewardAmount} ${sym} ${currencyName} has been added to your balance.`
     )
 
     logger.info('Referral processed', {

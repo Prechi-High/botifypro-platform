@@ -34,6 +34,7 @@ model Bot {
   botName                String?       @map("bot_name")
   webhookSet             Boolean       @default(false) @map("webhook_set")
   isActive               Boolean       @default(true) @map("is_active")
+  isPaused               Boolean       @default(false) @map("is_paused")
   category               String        @default("general")
   platformAdminConfirmed Boolean       @default(false) @map("platform_admin_confirmed")
   createdAt              DateTime      @default(now()) @map("created_at")
@@ -43,6 +44,7 @@ model Bot {
   transactions           Transaction[]
   depositTransactions    DepositTransaction[]
   referrals              Referral[]
+  investmentPlans        InvestmentPlan[]
   @@map("bots")
 }
 
@@ -150,6 +152,7 @@ model BotUser {
   proExpiresAt     DateTime?     @map("pro_expires_at")
   proDepositAmount Decimal       @default(0) @map("pro_deposit_amount")
   lastProBonusClaimed DateTime?  @map("last_pro_bonus_claimed")
+  activePlanId     String?       @map("active_plan_id")
   transactions     Transaction[]
   depositTransactions DepositTransaction[]
   adImpressions    AdImpression[]
@@ -294,5 +297,24 @@ model CommandWishlist {
   upvotes     Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
   @@map("command_wishlist")
+}
+
+model InvestmentPlan {
+  id                   String  @id @default(cuid())
+  botId                String  @map("bot_id")
+  bot                  Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
+  name                 String  @default("Plan")
+  activationAmount     Float   @default(10) @map("activation_amount")
+  durationDays         Int     @default(30) @map("duration_days")
+  dailyBonus           Float   @default(50) @map("daily_bonus")
+  referralReward       Float   @default(200) @map("referral_reward")
+  tierEnabled          Boolean @default(false) @map("tier_enabled")
+  tier1Percent         Float   @default(40) @map("tier1_percent")
+  tier2Percent         Float   @default(20) @map("tier2_percent")
+  tier3Percent         Float   @default(5) @map("tier3_percent")
+  isActive             Boolean @default(true) @map("is_active")
+  sortOrder            Int     @default(0) @map("sort_order")
+  createdAt            DateTime @default(now()) @map("created_at")
+  @@map("investment_plans")
 }
 

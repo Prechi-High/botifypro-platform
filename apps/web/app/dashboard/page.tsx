@@ -9,7 +9,9 @@ import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
   totalBots: number
+  activeBots: number
   activeUsers: number
+  newUsers: number
   commands: number
   workingBots: number
 }
@@ -107,7 +109,7 @@ export default function DashboardHome() {
   const router = useRouter()
   const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<Stats>({ totalBots: 0, activeUsers: 0, commands: 0, workingBots: 0 })
+  const [stats, setStats] = useState<Stats>({ totalBots: 0, activeBots: 0, activeUsers: 0, newUsers: 0, commands: 0, workingBots: 0 })
   const [hourlyData, setHourlyData] = useState<HourlyData[]>(buildSixHourSlots())
   const [chartStats, setChartStats] = useState({ totalUsers: 0, peakHour: 0, avgPerHour: 0, activeHours: 0 })
   const [topBots, setTopBots] = useState<TopBot[]>([])
@@ -133,15 +135,17 @@ export default function DashboardHome() {
 
       const botsRes = await supabase
         .from('bots')
-        .select('id, bot_username, bot_name, is_active')
+        .select('id, bot_username, bot_name, is_active, is_paused')
         .eq('creator_id', userId)
       const bots = botsRes.data || []
       const botIds = bots.map((b: any) => b.id)
       const totalBots = bots.length
       const workingBots = bots.filter((b: any) => b.is_active).length
+      const activeBots = bots.filter((b: any) => b.is_active && !b.is_paused).length
 
       let activeUsers = 0
       let commands = 0
+      let newUsers = 0
       let topBotsData: TopBot[] = []
       const slots = buildSixHourSlots()
 
@@ -155,7 +159,16 @@ export default function DashboardHome() {
           .gte('last_active', since6h)
         activeUsers = activeRes.count || 0
 
-        // Total active commands: DB commands + enabled built-in commands from settings
+        // New users joined today
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const newUsersRes = await supabase
+          .from('bot_users')
+          .select('id', { count: 'exact', head: true })
+          .in('bot_id', botIds)
+          .gte('joined_at', todayStart.toISOString())
+        newUsers = newUsersRes.count || 0
+
         const cmdRes = await supabase
           .from('bot_commands')
           .select('id', { count: 'exact', head: true })
@@ -219,7 +232,7 @@ export default function DashboardHome() {
         topBotsData.sort((a, b) => b.users - a.users)
       }
 
-      setStats({ totalBots, activeUsers, commands, workingBots })
+      setStats({ totalBots, activeBots, activeUsers, newUsers, commands, workingBots })
       setHourlyData(slots)
       setTopBots(topBotsData)
     } catch (e: any) {
@@ -264,28 +277,44 @@ export default function DashboardHome() {
       iconBg: 'rgba(99,102,241,0.18)',
     },
     {
+      label: 'ACTIVE BOTS',
+      value: stats.activeBots,
+      sub: 'Running and not paused',
+      icon: Zap,
+      iconColor: '#34D399',
+      iconBg: 'rgba(16,185,129,0.18)',
+    },
+    {
       label: 'ACTIVE USERS',
       value: stats.activeUsers,
       sub: 'Active in last 6 hours',
       icon: Users,
-      iconColor: '#34D399',
-      iconBg: 'rgba(16,185,129,0.18)',
+      iconColor: '#60A5FA',
+      iconBg: 'rgba(59,130,246,0.18)',
+    },
+    {
+      label: 'NEW USERS',
+      value: stats.newUsers,
+      sub: 'Joined today',
+      icon: Users,
+      iconColor: '#A78BFA',
+      iconBg: 'rgba(139,92,246,0.18)',
     },
     {
       label: 'COMMANDS',
       value: stats.commands,
       sub: 'Total active commands',
       icon: Terminal,
-      iconColor: '#60A5FA',
-      iconBg: 'rgba(59,130,246,0.18)',
+      iconColor: '#FBBF24',
+      iconBg: 'rgba(245,158,11,0.18)',
     },
     {
       label: 'WORKING',
       value: stats.workingBots,
       sub: `${stats.totalBots > 0 ? Math.round((stats.workingBots / stats.totalBots) * 100) : 0}% of total bots`,
       icon: CheckSquare,
-      iconColor: '#FBBF24',
-      iconBg: 'rgba(245,158,11,0.18)',
+      iconColor: '#F472B6',
+      iconBg: 'rgba(244,114,182,0.18)',
     },
   ]
 

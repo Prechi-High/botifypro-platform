@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, Lock, Plus, ThumbsUp, Zap, Trophy, Medal, Gift, ExternalLink, Info } from 'lucide-react'
+import { Loader2, Lock, Plus, ThumbsUp, Zap, Trophy, Medal, Gift, ExternalLink, Info, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 const sectionCard: React.CSSProperties = {
@@ -15,6 +15,39 @@ const sectionCard: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: '13px',
   color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '6px'
+}
+
+type InvestmentPlan = {
+  id?: string
+  name: string
+  activationAmount: number
+  durationDays: number
+  dailyBonus: number
+  referralReward: number
+  tierEnabled: boolean
+  tier1Percent: number
+  tier2Percent: number
+  tier3Percent: number
+  isActive: boolean
+  sortOrder: number
+  expanded?: boolean
+}
+
+function newPlan(sortOrder: number): InvestmentPlan {
+  return {
+    name: `Plan ${sortOrder + 1}`,
+    activationAmount: 10,
+    durationDays: 30,
+    dailyBonus: 50,
+    referralReward: 200,
+    tierEnabled: false,
+    tier1Percent: 40,
+    tier2Percent: 20,
+    tier3Percent: 5,
+    isActive: true,
+    sortOrder,
+    expanded: true,
+  }
 }
 
 export default function CommandsPage() {
@@ -52,21 +85,18 @@ export default function CommandsPage() {
   const [wishDesc, setWishDesc] = useState('')
   const [addingWish, setAddingWish] = useState(false)
 
-  // Investment / Pro Plan
+  // Investment / Pro Plan — global settings
   const [proPlanEnabled, setProPlanEnabled] = useState(false)
   const [proPlanButtonLabel, setProPlanButtonLabel] = useState('💎 Invest')
-  const [proPlanDepositMin, setProPlanDepositMin] = useState(10)
-  const [proPlanDurationDays, setProPlanDurationDays] = useState(30)
-  const [proPlanDailyBonus, setProPlanDailyBonus] = useState(50)
-  const [proPlanReferralReward, setProPlanReferralReward] = useState(200)
-  const [proTierReferralEnabled, setProTierReferralEnabled] = useState(false)
-  const [proTier1Percent, setProTier1Percent] = useState(40)
-  const [proTier2Percent, setProTier2Percent] = useState(20)
-  const [proTier3Percent, setProTier3Percent] = useState(5)
   const [savingProPlan, setSavingProPlan] = useState(false)
 
+  // Investment plans list
+  const [investmentPlans, setInvestmentPlans] = useState<InvestmentPlan[]>([])
+  const [savingPlanId, setSavingPlanId] = useState<string | null>(null)
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null)
+
   // Button counting
-  const fixedCount = 2 // Balance + Referral always count
+  const fixedCount = 2
   const optionalEnabled = [leaderboardEnabled, dailyBonusEnabled, withdrawEnabled].filter(Boolean).length
   const totalActive = fixedCount + optionalEnabled
   const limit = userPlan === 'pro' ? 14 : 4
@@ -101,17 +131,32 @@ export default function CommandsPage() {
           setDailyBonusAmount(Number(settings.daily_bonus_amount) || 10)
           setCurrencySymbol(settings.currency_symbol || '🪙')
           setCurrencyName(settings.currency_name || 'Coins')
-          // Investment plan
           setProPlanEnabled(Boolean(settings.pro_plan_enabled))
           setProPlanButtonLabel(settings.pro_plan_button_label || '💎 Invest')
-          setProPlanDepositMin(Number(settings.pro_plan_deposit_min) || 10)
-          setProPlanDurationDays(Number(settings.pro_plan_duration_days) || 30)
-          setProPlanDailyBonus(Number(settings.pro_plan_daily_bonus) || 50)
-          setProPlanReferralReward(Number(settings.pro_plan_referral_reward) || 200)
-          setProTierReferralEnabled(Boolean(settings.pro_tier_referral_enabled))
-          setProTier1Percent(Number(settings.pro_tier1_percent) || 40)
-          setProTier2Percent(Number(settings.pro_tier2_percent) || 20)
-          setProTier3Percent(Number(settings.pro_tier3_percent) || 5)
+        }
+
+        // Load investment plans
+        const { data: plans } = await supabase
+          .from('investment_plans')
+          .select('*')
+          .eq('bot_id', botId)
+          .order('sort_order', { ascending: true })
+        if (!cancelled && plans) {
+          setInvestmentPlans(plans.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            activationAmount: Number(p.activation_amount),
+            durationDays: Number(p.duration_days),
+            dailyBonus: Number(p.daily_bonus),
+            referralReward: Number(p.referral_reward),
+            tierEnabled: Boolean(p.tier_enabled),
+            tier1Percent: Number(p.tier1_percent),
+            tier2Percent: Number(p.tier2_percent),
+            tier3Percent: Number(p.tier3_percent),
+            isActive: Boolean(p.is_active),
+            sortOrder: Number(p.sort_order),
+            expanded: false,
+          })))
         }
 
         const { data: wishData } = await supabase
@@ -130,10 +175,7 @@ export default function CommandsPage() {
     return () => { cancelled = true }
   }, [botId, supabase])
 
-  function handleOptionalToggle(
-    key: 'leaderboard' | 'bonus' | 'withdraw',
-    currentEnabled: boolean
-  ) {
+  function handleOptionalToggle(key: 'leaderboard' | 'bonus' | 'withdraw', currentEnabled: boolean) {
     if (!currentEnabled && !canAddMore) {
       toast.error(`Button limit reached on the ${userPlan} plan`)
       return
@@ -168,28 +210,80 @@ export default function CommandsPage() {
     setSavingFeatures(false)
   }
 
-  async function saveProPlan() {
+  async function saveProPlanGlobal() {
     if (userPlan !== 'pro') { toast.error('Investment Plan requires a Pro account'); return }
     setSavingProPlan(true)
     try {
       const { error } = await supabase.from('bot_settings').update({
         pro_plan_enabled: proPlanEnabled,
         pro_plan_button_label: proPlanButtonLabel || '💎 Invest',
-        pro_plan_deposit_min: proPlanDepositMin,
-        pro_plan_duration_days: proPlanDurationDays,
-        pro_plan_daily_bonus: proPlanDailyBonus,
-        pro_plan_referral_reward: proPlanReferralReward,
-        pro_tier_referral_enabled: proTierReferralEnabled,
-        pro_tier1_percent: proTier1Percent,
-        pro_tier2_percent: proTier2Percent,
-        pro_tier3_percent: proTier3Percent,
       }).eq('bot_id', botId)
       if (error) throw error
-      toast.success('Investment Plan saved!')
+      toast.success('Investment settings saved!')
     } catch (e: any) {
       toast.error(e.message || 'Failed to save')
     }
     setSavingProPlan(false)
+  }
+
+  function updatePlan(index: number, field: keyof InvestmentPlan, value: any) {
+    setInvestmentPlans(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p))
+  }
+
+  function addPlan() {
+    setInvestmentPlans(prev => [...prev, newPlan(prev.length)])
+  }
+
+  async function savePlan(index: number) {
+    const plan = investmentPlans[index]
+    const tempId = plan.id || `saving-${index}`
+    setSavingPlanId(tempId)
+    try {
+      const payload = {
+        bot_id: botId,
+        name: plan.name,
+        activation_amount: plan.activationAmount,
+        duration_days: plan.durationDays,
+        daily_bonus: plan.dailyBonus,
+        referral_reward: plan.referralReward,
+        tier_enabled: plan.tierEnabled,
+        tier1_percent: plan.tier1Percent,
+        tier2_percent: plan.tier2Percent,
+        tier3_percent: plan.tier3Percent,
+        is_active: plan.isActive,
+        sort_order: plan.sortOrder,
+      }
+      if (plan.id) {
+        const { error } = await supabase.from('investment_plans').update(payload).eq('id', plan.id)
+        if (error) throw error
+      } else {
+        const { data, error } = await supabase.from('investment_plans').insert(payload).select().single()
+        if (error) throw error
+        setInvestmentPlans(prev => prev.map((p, i) => i === index ? { ...p, id: data.id } : p))
+      }
+      toast.success(`${plan.name} saved!`)
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save plan')
+    }
+    setSavingPlanId(null)
+  }
+
+  async function deletePlan(index: number) {
+    const plan = investmentPlans[index]
+    if (!plan.id) {
+      setInvestmentPlans(prev => prev.filter((_, i) => i !== index))
+      return
+    }
+    setDeletingPlanId(plan.id)
+    try {
+      const { error } = await supabase.from('investment_plans').delete().eq('id', plan.id)
+      if (error) throw error
+      setInvestmentPlans(prev => prev.filter((_, i) => i !== index))
+      toast.success('Plan deleted.')
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to delete plan')
+    }
+    setDeletingPlanId(null)
   }
 
   async function submitWish() {
@@ -205,7 +299,7 @@ export default function CommandsPage() {
     if (error) {
       toast.error(error.message)
     } else {
-      toast.success('Wish submitted! ✓')
+      toast.success('Wish submitted!')
       setWishTitle('')
       setWishDesc('')
       const { data } = await supabase.from('command_wishlist').select('*').order('upvotes', { ascending: false })
@@ -262,7 +356,6 @@ export default function CommandsPage() {
               </div>
             )}
 
-            {/* Fixed: Balance & Referral */}
             {(['balance', 'referral'] as const).map(key => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
@@ -278,14 +371,13 @@ export default function CommandsPage() {
               </div>
             ))}
 
-            {/* Referral reward — always visible since referral is always on */}
             <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', marginTop: '8px' }}>
               <label style={labelStyle}>Referral reward amount ({currencyName})</label>
               <input type="number" value={referralRewardAmount} onChange={e => setReferralRewardAmount(Number(e.target.value))} className="input-field" style={{ maxWidth: '200px' }} />
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{referralRewardAmount} {currencySymbol} per successful referral</div>
             </div>
 
-            {/* Leaderboard command */}
+            {/* Leaderboard */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
@@ -325,14 +417,11 @@ export default function CommandsPage() {
                       <input type="number" value={leaderboardBonus3} onChange={e => setLeaderboardBonus3(Number(e.target.value))} className="input-field" />
                     </div>
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Leaderboard ranks users by most referrals. Bonuses are credited automatically at period end and the board resets.
-                  </div>
                 </div>
               )}
             </div>
 
-            {/* Daily Bonus command */}
+            {/* Daily Bonus */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
@@ -355,7 +444,7 @@ export default function CommandsPage() {
               )}
             </div>
 
-            {/* Withdraw command */}
+            {/* Withdraw */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
@@ -371,11 +460,8 @@ export default function CommandsPage() {
               </div>
               {withdrawEnabled && (
                 <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,170,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px', fontSize: '12px', color: '#FBBF24', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                  <Info size={14} style={{ marginTop: '2px', flexShrink: 0 }} /> 
-                  <div>
-                    Configure payout API keys in Bot Settings → Withdrawal Settings first.<br />
-                    Free creators use FaucetPay payouts. Pro creators can also enable OxaPay USDT (TRC20) payouts.
-                  </div>
+                  <Info size={14} style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div>Configure payout API keys in Bot Settings → Withdrawal Settings first.</div>
                 </div>
               )}
             </div>
@@ -387,11 +473,11 @@ export default function CommandsPage() {
             </div>
           </div>
 
-          {/* ── Investment / Pro Plan Command ── */}
+          {/* ── Investment / Pro Plan ── */}
           <div style={{ ...sectionCard, border: userPlan === 'pro' ? '1px solid rgba(57,255,20,0.2)' : '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>💎 Investment / Pro Plan</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>💎 Investment Plans</h3>
                 {userPlan !== 'pro' && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: 'var(--accent)', background: 'rgba(57,255,20,0.08)', border: '1px solid rgba(57,255,20,0.2)', borderRadius: '999px', padding: '2px 8px' }}>
                     <Lock size={10} /> PRO ONLY
@@ -406,76 +492,150 @@ export default function CommandsPage() {
             </div>
 
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
-              Allow bot users to deposit and join an investment plan. They earn daily bonuses and referral commissions while their plan is active.
+              Allow bot users to deposit and join investment plans. Each plan has its own daily bonus, referral reward, and optional 3-tier commission.
               {userPlan !== 'pro' && <span style={{ color: 'var(--accent)', fontWeight: 600 }}> Upgrade to Pro to activate.</span>}
             </p>
 
-            {userPlan === 'pro' && proPlanEnabled && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label style={labelStyle}>Button label (shown in bot keyboard)</label>
-                  <input
-                    value={proPlanButtonLabel}
-                    onChange={e => setProPlanButtonLabel(e.target.value)}
-                    className="input-field"
-                    placeholder="💎 Invest"
-                  />
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Default: 💎 Invest. You can use any emoji + text.</div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {userPlan === 'pro' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Global settings */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
                   <div>
-                    <label style={labelStyle}>Min deposit to activate (USD)</label>
-                    <input type="number" min="1" value={proPlanDepositMin} onChange={e => setProPlanDepositMin(Number(e.target.value))} className="input-field" />
+                    <label style={labelStyle}>Invest button label</label>
+                    <input value={proPlanButtonLabel} onChange={e => setProPlanButtonLabel(e.target.value)} className="input-field" placeholder="💎 Invest" />
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Shown in bot keyboard</div>
                   </div>
-                  <div>
-                    <label style={labelStyle}>Plan duration (days)</label>
-                    <input type="number" min="1" value={proPlanDurationDays} onChange={e => setProPlanDurationDays(Number(e.target.value))} className="input-field" />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Daily bonus ({currencySymbol})</label>
-                    <input type="number" min="0" value={proPlanDailyBonus} onChange={e => setProPlanDailyBonus(Number(e.target.value))} className="input-field" />
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Separate from normal daily bonus</div>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Referral reward ({currencySymbol})</label>
-                    <input type="number" min="0" value={proPlanReferralReward} onChange={e => setProPlanReferralReward(Number(e.target.value))} className="input-field" />
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <button onClick={saveProPlanGlobal} disabled={savingProPlan} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center' }}>
+                      {savingProPlan ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : 'Save settings'}
+                    </button>
                   </div>
                 </div>
 
-                {/* 3-Tier Referral */}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>3-Tier Referral Commission</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Earn % when referrals claim bonuses (up to 3 levels)</div>
-                    </div>
-                    <div className={`toggle-track ${proTierReferralEnabled ? 'on' : 'off'}`} onClick={() => setProTierReferralEnabled(!proTierReferralEnabled)} style={{ flexShrink: 0 }}>
-                      <div className="toggle-thumb" />
-                    </div>
-                  </div>
-                  {proTierReferralEnabled && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
-                      <div>
-                        <label style={labelStyle}>Level 1 (%)</label>
-                        <input type="number" min="0" max="100" value={proTier1Percent} onChange={e => setProTier1Percent(Number(e.target.value))} className="input-field" />
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Direct referrals</div>
+                {/* Plans list */}
+                {proPlanEnabled && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Plans ({investmentPlans.length})
                       </div>
-                      <div>
-                        <label style={labelStyle}>Level 2 (%)</label>
-                        <input type="number" min="0" max="100" value={proTier2Percent} onChange={e => setProTier2Percent(Number(e.target.value))} className="input-field" />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Level 3 (%)</label>
-                        <input type="number" min="0" max="100" value={proTier3Percent} onChange={e => setProTier3Percent(Number(e.target.value))} className="input-field" />
-                      </div>
+                      <button onClick={addPlan} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '7px 14px' }}>
+                        <Plus size={14} /> Add Plan
+                      </button>
                     </div>
-                  )}
-                </div>
 
-                <button onClick={saveProPlan} disabled={savingProPlan} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {savingProPlan ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : '💾 Save Investment Plan'}
-                </button>
+                    {investmentPlans.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '24px', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                        No plans yet. Click "Add Plan" to create your first investment plan.
+                      </div>
+                    )}
+
+                    {investmentPlans.map((plan, index) => (
+                      <div key={plan.id || index} style={{ border: '1px solid rgba(57,255,20,0.15)', borderRadius: '12px', overflow: 'hidden' }}>
+                        {/* Plan header */}
+                        <div
+                          onClick={() => updatePlan(index, 'expanded', !plan.expanded)}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(57,255,20,0.04)', cursor: 'pointer', gap: '10px' }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{plan.name || `Plan ${index + 1}`}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>${plan.activationAmount} · {plan.durationDays}d · {plan.dailyBonus} {currencySymbol}/day</span>
+                            {!plan.isActive && <span style={{ fontSize: '10px', color: '#FBBF24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '4px', padding: '1px 6px' }}>INACTIVE</span>}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                            <button
+                              onClick={e => { e.stopPropagation(); deletePlan(index) }}
+                              disabled={deletingPlanId === plan.id}
+                              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', color: '#FCA5A5', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                            {plan.expanded ? <ChevronUp size={16} color="var(--text-muted)" /> : <ChevronDown size={16} color="var(--text-muted)" />}
+                          </div>
+                        </div>
+
+                        {/* Plan body */}
+                        {plan.expanded && (
+                          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div>
+                              <label style={labelStyle}>Plan name</label>
+                              <input value={plan.name} onChange={e => updatePlan(index, 'name', e.target.value)} className="input-field" placeholder="e.g. Tier 1, Gold Plan..." />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                              <div>
+                                <label style={labelStyle}>Activation amount (USD)</label>
+                                <input type="number" min="1" value={plan.activationAmount} onChange={e => updatePlan(index, 'activationAmount', Number(e.target.value))} className="input-field" />
+                              </div>
+                              <div>
+                                <label style={labelStyle}>Duration (days)</label>
+                                <input type="number" min="1" value={plan.durationDays} onChange={e => updatePlan(index, 'durationDays', Number(e.target.value))} className="input-field" />
+                              </div>
+                              <div>
+                                <label style={labelStyle}>Daily bonus ({currencySymbol})</label>
+                                <input type="number" min="0" value={plan.dailyBonus} onChange={e => updatePlan(index, 'dailyBonus', Number(e.target.value))} className="input-field" />
+                              </div>
+                              <div>
+                                <label style={labelStyle}>Referral reward ({currencySymbol})</label>
+                                <input type="number" min="0" value={plan.referralReward} onChange={e => updatePlan(index, 'referralReward', Number(e.target.value))} className="input-field" />
+                              </div>
+                            </div>
+
+                            {/* Active toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Plan active</div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Inactive plans are hidden from users</div>
+                              </div>
+                              <div className={`toggle-track ${plan.isActive ? 'on' : 'off'}`} onClick={() => updatePlan(index, 'isActive', !plan.isActive)} style={{ flexShrink: 0 }}>
+                                <div className="toggle-thumb" />
+                              </div>
+                            </div>
+
+                            {/* 3-Tier Referral per plan */}
+                            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                <div>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>3-Tier Referral Commission</div>
+                                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Earn % when referrals claim this plan's bonus</div>
+                                </div>
+                                <div className={`toggle-track ${plan.tierEnabled ? 'on' : 'off'}`} onClick={() => updatePlan(index, 'tierEnabled', !plan.tierEnabled)} style={{ flexShrink: 0 }}>
+                                  <div className="toggle-thumb" />
+                                </div>
+                              </div>
+                              {plan.tierEnabled && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                                  <div>
+                                    <label style={labelStyle}>Level 1 (%)</label>
+                                    <input type="number" min="0" max="100" value={plan.tier1Percent} onChange={e => updatePlan(index, 'tier1Percent', Number(e.target.value))} className="input-field" />
+                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Direct referrals</div>
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Level 2 (%)</label>
+                                    <input type="number" min="0" max="100" value={plan.tier2Percent} onChange={e => updatePlan(index, 'tier2Percent', Number(e.target.value))} className="input-field" />
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Level 3 (%)</label>
+                                    <input type="number" min="0" max="100" value={plan.tier3Percent} onChange={e => updatePlan(index, 'tier3Percent', Number(e.target.value))} className="input-field" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => savePlan(index)}
+                              disabled={savingPlanId === (plan.id || `saving-${index}`)}
+                              className="btn-primary"
+                              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                            >
+                              {savingPlanId === (plan.id || `saving-${index}`) ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : `💾 Save ${plan.name}`}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -541,6 +701,110 @@ export default function CommandsPage() {
                 ))}
               </div>
             )}
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
+
+                                <div className={`toggle-track ${plan.tierEnabled ? 'on' : 'off'}`} onClick={() => updatePlan(index, 'tierEnabled', !plan.tierEnabled)} style={{ flexShrink: 0 }}>
+                                  <div className="toggle-thumb" />
+                                </div>
+                              </div>
+                              {plan.tierEnabled && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                                  <div>
+                                    <label style={labelStyle}>Level 1 (%)</label>
+                                    <input type="number" min="0" max="100" value={plan.tier1Percent} onChange={e => updatePlan(index, 'tier1Percent', Number(e.target.value))} className="input-field" />
+                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Direct referrals</div>
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Level 2 (%)</label>
+                                    <input type="number" min="0" max="100" value={plan.tier2Percent} onChange={e => updatePlan(index, 'tier2Percent', Number(e.target.value))} className="input-field" />
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Level 3 (%)</label>
+                                    <input type="number" min="0" max="100" value={plan.tier3Percent} onChange={e => updatePlan(index, 'tier3Percent', Number(e.target.value))} className="input-field" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => savePlan(index)}
+                              disabled={savingPlanId === (plan.id || `saving-${index}`)}
+                              className="btn-primary"
+                              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                            >
+                              {savingPlanId === (plan.id || `saving-${index}`)
+                                ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</>
+                                : `💾 Save ${plan.name || 'Plan'}`}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Feature wishlist ── */}
+          <div style={sectionCard}>
+            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Zap size={16} />
+              Feature wishlist
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
+              Suggest new bot commands. Shared across all bots — top requests get built first.
+            </p>
+
+            {userId ? (
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', marginBottom: '10px' }}>
+                  <div>
+                    <label style={labelStyle}>Feature title</label>
+                    <input value={wishTitle} onChange={e => setWishTitle(e.target.value)} className="input-field" placeholder="e.g. Daily quiz game" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Description (optional)</label>
+                    <input value={wishDesc} onChange={e => setWishDesc(e.target.value)} className="input-field" placeholder="More details..." />
+                  </div>
+                </div>
+                <button onClick={submitWish} disabled={addingWish} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {addingWish ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Submitting...</> : <><Plus size={14} />Submit wish</>}
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>Log in to submit a wish.</div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {loadingWishes ? (
+                <div className="skeleton" style={{ height: '60px', borderRadius: '8px' }} />
+              ) : wishes.length === 0 ? (
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px' }}>No wishes yet. Be the first!</div>
+              ) : (
+                wishes.map(w => (
+                  <div key={w.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{w.title}</div>
+                      {w.description && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>{w.description}</div>}
+                    </div>
+                    <button
+                      onClick={() => upvoteWish(w.id, w.upvotes)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', color: '#818cf8', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}
+                    >
+                      <ThumbsUp size={13} />
+                      {w.upvotes}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
         </div>
