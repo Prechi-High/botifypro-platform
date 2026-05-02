@@ -5,7 +5,7 @@ import { redisGet, redisSet, redisDel } from './redis'
 import {
   sendMessage, handleStart, handleBalance, handleDeposit,
   handleWithdraw, handleWithdrawAmountSelected, handleHelp, handleBonus, handleReferralInfo, handleLeaderboard,
-  handleProPlan, handleProBonus, handleProPlanDetail
+  handleProPlan, handleProPlanDetail
 } from './commands'
 import { maybeServeAd } from './ads'
 import { handleReferral } from './referral'
@@ -460,7 +460,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (text === '💰 Balance') { await handleBalance(bot, botUser, chatId); return }
       if (text === '🔗 Referral') { await handleReferralInfo(bot, botUser, chatId); return }
       if (text === '📤 Withdraw') { await handleWithdraw(bot, botUser, chatId); return }
-      if (text === '🎁 Daily Bonus') { await handleBonus(bot, botUser, chatId); return }
+      if (text === '🎁 Daily Bonus') { const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } }); await handleBonus(bot, freshUser || botUser, chatId); return }
       if (text === '🏆 Leaderboard') { await handleLeaderboard(bot, botUser, chatId); return }
       if (text === '📥 Deposit') { await handleDeposit(bot, botUser, chatId); return }
       if (text === '⭐ VIP Plan') { await handleProPlan(bot, botUser, chatId); return }
@@ -471,7 +471,6 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       // Sub-menu reply keyboard buttons
       if (text === '⬅️ Back') { const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } }); await handleStart(bot, freshUser || botUser, chatId); return }
       if (text === '⬅️ Back to Plans') { const page = parseInt(await redisGet(`invest_page:${botUser.id}`) || '0', 10); await handleProPlan(bot, botUser, chatId, page); return }
-      if (text === '🎁 Claim Daily Bonus') { await handleProBonus(bot, botUser, chatId); return }
       // Investment plan pagination
       if (text === 'Next ▶️') {
         const page = parseInt(await redisGet(`invest_page:${botUser.id}`) || '0', 10)
@@ -632,7 +631,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       else if (data === 'cmd_start') { await handleStart(bot, botUser, cbChatId) }
       else if (data === 'cmd_help' || data === 'cmd_menu') { await handleHelp(bot, cbChatId) }
       else if (data === 'cmd_pro_plan') { await handleProPlan(bot, botUser, cbChatId) }
-      else if (data === 'cmd_pro_bonus') { await handleProBonus(bot, botUser, cbChatId) }
+      else if (data === 'cmd_pro_bonus') { const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } }); await handleBonus(bot, freshUser || botUser, cbChatId) }
       else if (data === 'cmd_pro_deposit') {
         const settings = bot.settings as any
         if (!settings?.proOxapayConfigured || !settings?.proOxapayMerchantKey) {

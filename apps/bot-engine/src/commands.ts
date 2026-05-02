@@ -45,7 +45,7 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
   allButtons.push({ text: '🔗 Referral' })
   if (settings.withdrawEnabled) allButtons.push({ text: '📤 Withdraw' })
   if (settings.dailyBonusEnabled || settings.bonusEnabled) allButtons.push({ text: '🎁 Daily Bonus' })
-  if (settings.leaderboardEnabled) allButtons.push({ text: '🏆 Leaderboard' })
+  // Leaderboard is a sub-command of Referral — NOT shown on main keyboard
   if (settings.depositEnabled) allButtons.push({ text: '📥 Deposit' })
 
   const investSettings = settings as any
@@ -109,13 +109,72 @@ export async function handleHelp(bot: any, chatId: number) {
 }
 
 export async function handleBonus(bot: any, botUser: any, chatId: number) {
-  const settings = bot.settings
+  const settings = bot.settings as any
+  const sym = settings?.currencySymbol || '🪙'
+  const currencyName = settings?.currencyName || 'coins'
+
+  // Check if user has an active pro/investment plan
+  const isProMember = Boolean(botUser.isProMember)
+  const proExpiry = botUser.proExpiresAt ? new Date(botUser.proExpiresAt) : null
+  const hasActivePlan = isProMember && proExpiry && proExpiry > new Date()
+
+  if (hasActivePlan && settings?.proPlanEnabled) {
+    // Pro user — use their plan's daily bonus amount
+    const activePlanId = (botUser as any).activePlanId
+    let dailyBonus = Number(settings.proPlanDailyBonus || 50)
+    let planTierEnabled = Boolean(settings.proTierReferralEnabled)
+    let planTier1 = Number(settings.proTier1Percent || 40)
+    let planTier2 = Number(settings.proTier2Percent || 20)
+    let planTier3 = Number(settings.proTier3Percent || 5)
+
+    if (activePlanId) {
+      try {
+        const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: activePlanId } })
+        if (plan) {
+          dailyBonus = Number(plan.dailyBonus)
+          planTierEnabled = Boolean(plan.tierEnabled)
+          planTier1 = Number(plan.tier1Percent)
+          planTier2 = Number(plan.tier2Percent)
+          planTier3 = Number(plan.tier3Percent)
+        }
+      } catch {}
+    }
+
+    const bonusKey = `pro_bonus:${bot.id}:${botUser.id}`
+    const claimed = await redisGet(bonusKey)
+    if (claimed) {
+      const ttl = await redisTtl(bonusKey)
+      const hours = Math.floor(Math.max(0, ttl) / 3600)
+      const minutes = Math.floor((Math.max(0, ttl) % 3600) / 60)
+      await sendMessage(bot.botToken, chatId, `⏳ VIP bonus available again in ${hours}h ${minutes}m`)
+      return
+    }
+
+    await prisma.botUser.update({ where: { id: botUser.id }, data: { balance: { increment: dailyBonus } } })
+    await redisSet(bonusKey, '1', 86400)
+
+    // 3-tier referral commission
+    if (planTierEnabled && botUser.referredBy) {
+      await payTierCommission(bot, botUser, dailyBonus, {
+        ...settings, proTierReferralEnabled: true,
+        proTier1Percent: planTier1, proTier2Percent: planTier2, proTier3Percent: planTier3
+      }, 1)
+    }
+
+    const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id }, select: { balance: true } })
+    await sendMessage(
+      bot.botToken, chatId,
+      `⭐ <b>VIP Daily Bonus Claimed!</b>\n\n+${dailyBonus} ${sym} ${currencyName} added!\n💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
+    )
+    return
+  }
+
+  // Normal user — use standard daily bonus
   if (!settings?.dailyBonusEnabled && !settings?.bonusEnabled) {
     await sendMessage(bot.botToken, chatId, '🎁 Daily bonus is not enabled on this bot.')
     return
   }
-  const sym = settings?.currencySymbol || '🪙'
-  const currencyName = settings?.currencyName || 'coins'
+
   const rate = Math.max(1, Number(settings?.usdToCurrencyRate || 1000))
   const bonusAmount = settings?.dailyBonusAmount
     ? Number(settings.dailyBonusAmount)
@@ -133,6 +192,7 @@ export async function handleBonus(bot: any, botUser: any, chatId: number) {
     await sendMessage(bot.botToken, chatId, `⏳ You can claim your bonus again in ${hours}h ${minutes}m ${secs}s`)
     return
   }
+
   await prisma.botUser.update({ where: { id: botUser.id }, data: { balance: { increment: bonusAmount } } })
   await redisSet(bonusKey, '1', 86400)
   const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id }, select: { balance: true } })
@@ -390,63 +450,6 @@ export async function handleProPlanDetail(bot: any, botUser: any, chatId: number
   )
 }
 
-export async function handleProBonus(bot: any, botUser: any, chatId: number) {
-  const settings = bot.settings as any
-  if (!settings?.proPlanEnabled) return
-
-  const isProMember = Boolean(botUser.isProMember)
-  const proExpiry = botUser.proExpiresAt ? new Date(botUser.proExpiresAt) : null
-  const isActive = isProMember && proExpiry && proExpiry > new Date()
-
-  if (!isActive) {
-    await sendMessage(bot.botToken, chatId, '⭐ You need an active VIP plan to claim this bonus.')
-    return
-  }
-
-  const sym = settings?.currencySymbol || '🪙'
-
-  // Get the user's active plan for the correct bonus amount
-  const activePlanId = (botUser as any).activePlanId
-  let dailyBonus = Number(settings.proPlanDailyBonus || 50)
-  let planTierEnabled = Boolean(settings.proTierReferralEnabled)
-  let planTier1 = Number(settings.proTier1Percent || 40)
-  let planTier2 = Number(settings.proTier2Percent || 20)
-  let planTier3 = Number(settings.proTier3Percent || 5)
-
-  if (activePlanId) {
-    const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: activePlanId } })
-    if (plan) {
-      dailyBonus = Number(plan.dailyBonus)
-      planTierEnabled = Boolean(plan.tierEnabled)
-      planTier1 = Number(plan.tier1Percent)
-      planTier2 = Number(plan.tier2Percent)
-      planTier3 = Number(plan.tier3Percent)
-    }
-  }
-
-  const bonusKey = `pro_bonus:${bot.id}:${botUser.id}`
-  const claimed = await redisGet(bonusKey)
-  if (claimed) {
-    const ttl = await redisTtl(bonusKey)
-    const hours = Math.floor(Math.max(0, ttl) / 3600)
-    const minutes = Math.floor((Math.max(0, ttl) % 3600) / 60)
-    await sendMessage(bot.botToken, chatId, `⏳ VIP bonus available again in ${hours}h ${minutes}m`)
-    return
-  }
-
-  await prisma.botUser.update({ where: { id: botUser.id }, data: { balance: { increment: dailyBonus } } })
-  await redisSet(bonusKey, '1', 86400)
-
-  if (planTierEnabled && botUser.referredBy) {
-    await payTierCommission(bot, botUser, dailyBonus, { ...settings, proTierReferralEnabled: true, proTier1Percent: planTier1, proTier2Percent: planTier2, proTier3Percent: planTier3 }, 1)
-  }
-
-  const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id }, select: { balance: true } })
-  await sendMessage(
-    bot.botToken, chatId,
-    `⭐ <b>VIP Daily Bonus Claimed!</b>\n\n+${dailyBonus} ${sym} added!\n💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
-  )
-}
 
 async function payTierCommission(bot: any, botUser: any, bonusAmount: number, settings: any, currentLevel: number) {
   if (currentLevel > 3 || !botUser.referredBy) return

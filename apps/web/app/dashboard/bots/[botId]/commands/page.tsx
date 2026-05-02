@@ -257,7 +257,13 @@ export default function CommandsPage() {
         const { error } = await supabase.from('investment_plans').update(payload).eq('id', plan.id)
         if (error) throw error
       } else {
-        const { data, error } = await supabase.from('investment_plans').insert(payload).select().single()
+        // Generate ID client-side — Supabase doesn't auto-generate cuid() defaults
+        const newId = crypto.randomUUID()
+        const { data, error } = await supabase
+          .from('investment_plans')
+          .insert({ id: newId, ...payload })
+          .select()
+          .single()
         if (error) throw error
         setInvestmentPlans(prev => prev.map((p, i) => i === index ? { ...p, id: data.id } : p))
       }
