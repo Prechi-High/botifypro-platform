@@ -107,6 +107,23 @@ model BotSettings {
   oxapayPayoutConfigured  Boolean @default(false) @map("oxapay_payout_configured")
   oxapayPayoutApiKeyEncrypted String? @map("oxapay_payout_api_key_encrypted")
   oxapayPayoutApiKeyLast4 String? @map("oxapay_payout_api_key_last4")
+
+  // ── Pro/VIP Investment Plan ──────────────────────────────────────────────────
+  proPlanEnabled          Boolean @default(false) @map("pro_plan_enabled")
+  proPlanDepositMin       Float   @default(10) @map("pro_plan_deposit_min")
+  proPlanDurationDays     Int     @default(30) @map("pro_plan_duration_days")
+  proPlanDailyBonus       Float   @default(50) @map("pro_plan_daily_bonus")
+  proPlanReferralReward   Float   @default(200) @map("pro_plan_referral_reward")
+  // Multi-tier referral (up to 3 levels)
+  proTierReferralEnabled  Boolean @default(false) @map("pro_tier_referral_enabled")
+  proTier1Percent         Float   @default(40) @map("pro_tier1_percent")
+  proTier2Percent         Float   @default(20) @map("pro_tier2_percent")
+  proTier3Percent         Float   @default(5) @map("pro_tier3_percent")
+  // OxaPay white-label deposit for pro users
+  proOxapayMerchantKey    String? @map("pro_oxapay_merchant_key")
+  proOxapaySecretKey      String? @map("pro_oxapay_secret_key")
+  proOxapayConfigured     Boolean @default(false) @map("pro_oxapay_configured")
+
   @@map("bot_settings")
 }
 
@@ -127,6 +144,11 @@ model BotUser {
   lastAdReceivedAt DateTime?     @map("last_ad_received_at")
   lastBonusClaimed DateTime?     @map("last_bonus_claimed")
   totalEarned      Decimal       @default(0) @map("total_earned")
+  // Pro/VIP plan fields
+  isProMember      Boolean       @default(false) @map("is_pro_member")
+  proExpiresAt     DateTime?     @map("pro_expires_at")
+  proDepositAmount Decimal       @default(0) @map("pro_deposit_amount")
+  lastProBonusClaimed DateTime?  @map("last_pro_bonus_claimed")
   transactions     Transaction[]
   depositTransactions DepositTransaction[]
   adImpressions    AdImpression[]

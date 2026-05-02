@@ -4,7 +4,8 @@ import { logger } from './logger'
 import { redisGet, redisSet, redisDel } from './redis'
 import {
   sendMessage, handleStart, handleBalance, handleDeposit,
-  handleWithdraw, handleWithdrawAmountSelected, handleHelp, handleBonus, handleReferralInfo, handleLeaderboard
+  handleWithdraw, handleWithdrawAmountSelected, handleHelp, handleBonus, handleReferralInfo, handleLeaderboard,
+  handleProPlan, handleProBonus
 } from './commands'
 import { maybeServeAd } from './ads'
 import { handleReferral } from './referral'
@@ -461,6 +462,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (text === '🎁 Daily Bonus') { await handleBonus(bot, botUser, chatId); return }
       if (text === '🏆 Leaderboard') { await handleLeaderboard(bot, botUser, chatId); return }
       if (text === '📥 Deposit') { await handleDeposit(bot, botUser, chatId); return }
+      if (text === '⭐ VIP Plan') { await handleProPlan(bot, botUser, chatId); return }
       if (text === '❓ Help' || text === '📋 Menu') { await handleHelp(bot, chatId); return }
 
       if (text.startsWith('/start')) {
@@ -536,6 +538,39 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       else if (data === 'cmd_leaderboard') { await handleLeaderboard(bot, botUser, cbChatId) }
       else if (data === 'cmd_start') { await handleStart(bot, botUser, cbChatId) }
       else if (data === 'cmd_help' || data === 'cmd_menu') { await handleHelp(bot, cbChatId) }
+      else if (data === 'cmd_pro_plan') { await handleProPlan(bot, botUser, cbChatId) }
+      else if (data === 'cmd_pro_bonus') { await handleProBonus(bot, botUser, cbChatId) }
+      else if (data === 'cmd_pro_deposit') {
+        const settings = bot.settings as any
+        if (!settings?.proOxapayConfigured || !settings?.proOxapayMerchantKey) {
+          await sendMessage(bot.botToken, cbChatId, '❌ VIP deposit not configured. Contact bot owner.')
+        } else {
+          const minDeposit = Number(settings.proPlanDepositMin || 10)
+          try {
+            const response = await axios.post(
+              'https://api.oxapay.com/v1/payment/white-label',
+              {
+                amount: minDeposit, currency: 'USD', pay_currency: 'USDT', network: 'TRC20',
+                lifetime: 30, fee_paid_by_payer: 0, under_paid_coverage: 2,
+                callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/${bot.id}`,
+                description: `VIP botId:${bot.id} userId:${botUser.id}`
+              },
+              { headers: { 'merchant_api_key': settings.proOxapayMerchantKey, 'Content-Type': 'application/json' } }
+            )
+            if (response.data?.status === 200) {
+              const inv = response.data.data
+              await redisSet(`pro_deposit:${bot.id}:${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId: cbChatId, botToken: bot.botToken }), 1800)
+              await sendMessage(bot.botToken, cbChatId,
+                `💳 <b>VIP Activation Deposit</b>\n\nSend exactly <b>${inv.pay_amount} USDT</b> to:\n<code>${inv.address}</code>\n\n🌐 Network: <b>TRC20</b>\n⏱ Expires in: <b>30 minutes</b>\n\n✅ VIP activates automatically once confirmed.`
+              )
+            } else {
+              await sendMessage(bot.botToken, cbChatId, '❌ Could not generate deposit. Try again later.')
+            }
+          } catch {
+            await sendMessage(bot.botToken, cbChatId, '❌ Deposit failed. Try again later.')
+          }
+        }
+      }
       // Withdrawal amount selection — no longer used (amounts entered as free text)
       // kept for backward compat with any in-flight sessions
       // Use saved address

@@ -48,10 +48,15 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
   if (settings.dailyBonusEnabled || settings.bonusEnabled) allButtons.push({ text: '🎁 Daily Bonus' })
   if (settings.leaderboardEnabled) allButtons.push({ text: '🏆 Leaderboard' })
   if (settings.depositEnabled) allButtons.push({ text: '📥 Deposit' })
+  // Pro plan button — only shown if pro plan is enabled by bot creator
+  if ((settings as any).proPlanEnabled) allButtons.push({ text: '⭐ VIP Plan' })
 
+  // Pro bot owners get 6 buttons per row (3x2), free gets 4 (2x2)
+  const isPro = bot.creator?.plan === 'pro'
+  const buttonsPerRow = isPro ? 3 : 2
   const keyboard: any[][] = []
-  for (let i = 0; i < allButtons.length; i += 2) {
-    keyboard.push(allButtons.slice(i, i + 2))
+  for (let i = 0; i < allButtons.length; i += buttonsPerRow) {
+    keyboard.push(allButtons.slice(i, i + buttonsPerRow))
   }
 
   const replyMarkup = { keyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
@@ -350,5 +355,144 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
       `${addressLabel}\n\n<i>${hint}</i>\n\n⏱ You have 10 minutes.`,
       { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
     )
+  }
+}
+
+export async function handleProPlan(bot: any, botUser: any, chatId: number) {
+  const settings = bot.settings as any
+  if (!settings?.proPlanEnabled) {
+    await sendMessage(bot.botToken, chatId, '⭐ VIP Plan is not available on this bot.')
+    return
+  }
+
+  const sym = settings?.currencySymbol || '🪙'
+  const minDeposit = Number(settings.proPlanDepositMin || 10)
+  const durationDays = Number(settings.proPlanDurationDays || 30)
+  const dailyBonus = Number(settings.proPlanDailyBonus || 50)
+  const referralReward = Number(settings.proPlanReferralReward || 200)
+
+  const isProMember = Boolean(botUser.isProMember)
+  const proExpiry = botUser.proExpiresAt ? new Date(botUser.proExpiresAt) : null
+  const isActive = isProMember && proExpiry && proExpiry > new Date()
+
+  if (isActive) {
+    const daysLeft = Math.ceil((proExpiry!.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    await sendMessage(
+      bot.botToken, chatId,
+      `⭐ <b>Your VIP Plan is Active!</b>\n\n` +
+      `• Days remaining: <b>${daysLeft}</b>\n` +
+      `• Daily bonus: <b>${dailyBonus} ${sym}</b>\n` +
+      `• Referral reward: <b>${referralReward} ${sym}</b> per invite\n\n` +
+      `Keep referring to earn more!`,
+      {
+        inline_keyboard: [
+          [{ text: '🎁 Claim VIP Daily Bonus', callback_data: 'cmd_pro_bonus' }],
+          [{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }]
+        ]
+      }
+    )
+    return
+  }
+
+  // Not a pro member — show upgrade info
+  const proOxapayConfigured = Boolean(settings.proOxapayConfigured)
+
+  await sendMessage(
+    bot.botToken, chatId,
+    `⭐ <b>VIP / Investment Plan</b>\n\n` +
+    `Upgrade to VIP and unlock exclusive benefits:\n\n` +
+    `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
+    `• 🔗 Referral reward: <b>${referralReward} ${sym}</b> per invite\n` +
+    `• ⏱ Duration: <b>${durationDays} days</b>\n\n` +
+    `<b>Minimum deposit: $${minDeposit} USDT</b>\n\n` +
+    (proOxapayConfigured
+      ? `Tap the button below to make your deposit and activate VIP.`
+      : `Contact the bot owner to activate VIP.`),
+    proOxapayConfigured ? {
+      inline_keyboard: [
+        [{ text: '💳 Deposit to Activate VIP', callback_data: 'cmd_pro_deposit' }],
+        [{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }]
+      ]
+    } : {
+      inline_keyboard: [[{ text: '⬅️ Back to Menu', callback_data: 'cmd_menu' }]]
+    }
+  )
+}
+
+export async function handleProBonus(bot: any, botUser: any, chatId: number) {
+  const settings = bot.settings as any
+  if (!settings?.proPlanEnabled) return
+
+  const isProMember = Boolean(botUser.isProMember)
+  const proExpiry = botUser.proExpiresAt ? new Date(botUser.proExpiresAt) : null
+  const isActive = isProMember && proExpiry && proExpiry > new Date()
+
+  if (!isActive) {
+    await sendMessage(bot.botToken, chatId, '⭐ You need an active VIP plan to claim this bonus.')
+    return
+  }
+
+  const sym = settings?.currencySymbol || '🪙'
+  const dailyBonus = Number(settings.proPlanDailyBonus || 50)
+  const bonusKey = `pro_bonus:${bot.id}:${botUser.id}`
+  const claimed = await redisGet(bonusKey)
+
+  if (claimed) {
+    const ttl = await redisTtl(bonusKey)
+    const hours = Math.floor(Math.max(0, ttl) / 3600)
+    const minutes = Math.floor((Math.max(0, ttl) % 3600) / 60)
+    await sendMessage(bot.botToken, chatId, `⏳ VIP bonus available again in ${hours}h ${minutes}m`)
+    return
+  }
+
+  await prisma.botUser.update({
+    where: { id: botUser.id },
+    data: { balance: { increment: dailyBonus } }
+  })
+  await redisSet(bonusKey, '1', 86400)
+
+  // 3-tier referral commission
+  if (settings.proTierReferralEnabled && botUser.referredBy) {
+    await payTierCommission(bot, botUser, dailyBonus, settings, 1)
+  }
+
+  const updatedUser = await prisma.botUser.findUnique({ where: { id: botUser.id }, select: { balance: true } })
+  await sendMessage(
+    bot.botToken, chatId,
+    `⭐ <b>VIP Daily Bonus Claimed!</b>\n\n` +
+    `+${dailyBonus} ${sym} added!\n` +
+    `💰 New balance: <b>${updatedUser?.balance} ${sym}</b>`
+  )
+}
+
+async function payTierCommission(bot: any, botUser: any, bonusAmount: number, settings: any, currentLevel: number) {
+  if (currentLevel > 3 || !botUser.referredBy) return
+
+  const percentKey = currentLevel === 1 ? 'proTier1Percent' : currentLevel === 2 ? 'proTier2Percent' : 'proTier3Percent'
+  const percent = Number(settings[percentKey] || 0)
+  if (percent <= 0) return
+
+  const commission = Math.floor(bonusAmount * (percent / 100))
+  if (commission <= 0) return
+
+  // Find the referrer
+  const referrer = await prisma.botUser.findUnique({ where: { id: botUser.referredBy } })
+  if (!referrer) return
+
+  await prisma.botUser.update({
+    where: { id: referrer.id },
+    data: { balance: { increment: commission } }
+  })
+
+  const sym = settings?.currencySymbol || '🪙'
+  await sendMessage(
+    bot.botToken,
+    Number(referrer.telegramUserId),
+    `💸 <b>Tier ${currentLevel} Commission!</b>\n\n+${commission} ${sym} from your referral's VIP bonus.`
+  )
+
+  // Recurse up the chain
+  if (referrer.referredBy && currentLevel < 3) {
+    await payTierCommission(bot, referrer, bonusAmount, settings, currentLevel + 1)
   }
 }

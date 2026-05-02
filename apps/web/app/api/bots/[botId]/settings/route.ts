@@ -166,6 +166,17 @@ export async function GET(request: Request, context: RouteContext) {
         faucetpayPayoutCurrency: settings.faucetpayPayoutCurrency || 'USDT',
         oxapayConfigured: Boolean(settings.oxapayPayoutConfigured),
         oxapayMaskedKey: settings.oxapayPayoutApiKeyLast4 ? `••••••••${settings.oxapayPayoutApiKeyLast4}` : '',
+        // Pro plan
+        proPlanEnabled: Boolean((settings as any).proPlanEnabled),
+        proPlanDepositMin: Number((settings as any).proPlanDepositMin) || 10,
+        proPlanDurationDays: Number((settings as any).proPlanDurationDays) || 30,
+        proPlanDailyBonus: Number((settings as any).proPlanDailyBonus) || 50,
+        proPlanReferralReward: Number((settings as any).proPlanReferralReward) || 200,
+        proTierReferralEnabled: Boolean((settings as any).proTierReferralEnabled),
+        proTier1Percent: Number((settings as any).proTier1Percent) || 40,
+        proTier2Percent: Number((settings as any).proTier2Percent) || 20,
+        proTier3Percent: Number((settings as any).proTier3Percent) || 5,
+        proOxapayConfigured: Boolean((settings as any).proOxapayConfigured),
       },
     })
   } catch (error: any) {
@@ -223,7 +234,19 @@ export async function PUT(request: Request, context: RouteContext) {
         withdrawEnabled: withdrawMode !== null,
         withdrawProvider: withdrawMode === 'automatic' ? withdrawProvider : bot.settings.withdrawProvider || 'faucetpay',
         withdrawalPassphrase: withdrawMode === 'manual' ? String(body.withdrawalPassphrase || '').trim() : null,
-      },
+        // Pro plan fields (only saved if pro user)
+        ...(userPlan === 'pro' ? {
+          proPlanEnabled: Boolean(body.proPlanEnabled),
+          proPlanDepositMin: Number(body.proPlanDepositMin || 10),
+          proPlanDurationDays: Number(body.proPlanDurationDays || 30),
+          proPlanDailyBonus: Number(body.proPlanDailyBonus || 50),
+          proPlanReferralReward: Number(body.proPlanReferralReward || 200),
+          proTierReferralEnabled: Boolean(body.proTierReferralEnabled),
+          proTier1Percent: Number(body.proTier1Percent || 40),
+          proTier2Percent: Number(body.proTier2Percent || 20),
+          proTier3Percent: Number(body.proTier3Percent || 5),
+        } : {}),
+      } as any,
     })
 
     return NextResponse.json({

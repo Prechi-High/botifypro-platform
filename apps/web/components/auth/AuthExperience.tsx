@@ -123,22 +123,10 @@ const ADVERTISER_SLIDES = [
     headline: 'Bigger Budget, Bigger Savings',
     sub: 'The more you spend, the more audience you unlock. Volume discounts apply automatically on large campaigns.',
     Visual: () => (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0', width: '100%', maxWidth: '300px', margin: '0 auto' }}>
-        {[
-          { label: '$20 budget',  reach: '20,000 users',  pct: 30 },
-          { label: '$50 budget',  reach: '55,000 users',  pct: 60 },
-          { label: '$100 budget', reach: '120,000 users', pct: 100 },
-        ].map(({ label, reach, pct }, i) => (
-          <div key={i} style={{ animation: `authFloat ${2.5 + i * 0.3}s ease-in-out ${i * 0.2}s infinite` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px', fontFamily: 'Inter, sans-serif' }}>
-              <span style={{ color: 'rgba(255,255,255,0.6)' }}>{label}</span>
-              <span style={{ color: '#39FF14', fontWeight: 700 }}>{reach}</span>
-            </div>
-            <div style={{ height: '6px', borderRadius: '999px', background: 'rgba(57,255,20,0.1)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #39FF14, #00CC44)', borderRadius: '999px', boxShadow: '0 0 8px rgba(57,255,20,0.4)' }} />
-            </div>
-          </div>
-        ))}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+        <div style={{ width: '80px', height: '80px', borderRadius: '20px', background: 'rgba(57,255,20,0.08)', border: '1.5px solid rgba(57,255,20,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(57,255,20,0.15)', animation: 'authFloat 3s ease-in-out infinite' }}>
+          <Coins size={36} color="#39FF14" />
+        </div>
       </div>
     ),
   },

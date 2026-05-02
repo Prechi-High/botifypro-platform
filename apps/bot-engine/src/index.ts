@@ -433,6 +433,63 @@ app.post('/api/payments/oxapay-deposit-callback', async (req: Request, res: Resp
   }
 })
 
+// OxaPay Pro/VIP deposit webhook
+app.post('/webhooks/oxapay-pro/:botId', async (req: Request, res: Response) => {
+  res.status(200).json({ ok: true })
+  try {
+    const { botId } = req.params
+    const body = req.body
+    const trackId = body?.data?.track_id || body?.track_id
+    const status = body?.data?.status || body?.status
+    const amount = body?.data?.amount || body?.amount
+
+    logger.info('OxaPay Pro webhook received', { botId, trackId, status })
+    if (status !== 'Paid' && status !== 'paid') return
+
+    const stored = await import('./redis').then(r => r.redisGet(`pro_deposit:${botId}:${trackId}`))
+    if (!stored) { logger.warn('OxaPay Pro webhook - unknown trackId', { trackId, botId }); return }
+
+    const { botUserId, chatId, botToken } = JSON.parse(stored)
+
+    const bot = await prisma.bot.findUnique({ where: { id: botId }, include: { settings: true, creator: true } })
+    if (!bot) return
+
+    const settings = bot.settings as any
+    if (settings?.proOxapaySecretKey) {
+      const hmac = crypto.createHmac('sha512', settings.proOxapaySecretKey).update(JSON.stringify(body)).digest('hex')
+      if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
+    }
+
+    const durationDays = Number(settings?.proPlanDurationDays || 30)
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
+
+    await prisma.botUser.update({
+      where: { id: botUserId },
+      data: {
+        isProMember: true,
+        proExpiresAt: expiresAt,
+        proDepositAmount: { increment: Number(amount || 0) },
+      } as any
+    })
+
+    await import('./redis').then(r => r.redisDel(`pro_deposit:${botId}:${trackId}`))
+
+    const sym = settings?.currencySymbol || '🪙'
+    const dailyBonus = Number(settings?.proPlanDailyBonus || 50)
+    const { sendMessage } = await import('./commands')
+    await sendMessage(botToken, Number(chatId),
+      `⭐ <b>VIP Plan Activated!</b>\n\n` +
+      `Your deposit was confirmed. You are now a VIP member!\n\n` +
+      `• Daily bonus: <b>${dailyBonus} ${sym}</b>\n` +
+      `• Expires: <b>${expiresAt.toLocaleDateString()}</b>\n\n` +
+      `Tap ⭐ VIP Plan to claim your daily bonus!`
+    )
+    logger.info('Pro plan activated', { botId, botUserId, expiresAt })
+  } catch (err: any) {
+    logger.error('oxapay-pro webhook error', { error: err?.message })
+  }
+})
+
 app.post('/api/bots/:botId/broadcast', async (req: Request, res: Response) => {
   try {
     const { botId } = req.params
