@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowUpDown, Search, RefreshCw } from 'lucide-react'
 
-type Tab = 'all' | 'pending' | 'deposits'
+type Tab = 'all' | 'deposits'
 
 export default function AdminTransactionsPage() {
   const supabase = createClient()
@@ -23,8 +23,7 @@ export default function AdminTransactionsPage() {
         .order('created_at', { ascending: false })
         .limit(200)
 
-      if (tab === 'pending') query = query.eq('status', 'pending')
-      else if (tab === 'deposits') query = query.eq('type', 'deposit')
+      if (tab === 'deposits') query = query.eq('type', 'deposit')
 
       const { data } = await query
       setTxns(data || [])
@@ -64,7 +63,7 @@ export default function AdminTransactionsPage() {
       </div>
 
       <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-        {([['all','All'],['pending','Pending Withdrawals'],['deposits','Deposits']] as [Tab,string][]).map(([k,l]) => (
+        {([['all','All Transactions'],['deposits','Deposits']] as [Tab,string][]).map(([k,l]) => (
           <button key={k} onClick={()=>setTab(k)} style={{ padding:'7px 14px', borderRadius:'8px', border:`1px solid ${tab===k?'rgba(57,255,20,0.4)':'rgba(255,255,255,0.08)'}`, background:tab===k?'rgba(57,255,20,0.1)':'transparent', color:tab===k?'var(--accent)':'var(--text-secondary)', fontSize:'13px', fontWeight:tab===k?600:400, cursor:'pointer' }}>{l}</button>
         ))}
       </div>

@@ -706,6 +706,65 @@ app.get('/api/campaigns/:id/stats', async (req: Request, res: Response) => {
   }
 })
 
+// Admin broadcast to all bots or specific bot
+app.post('/api/admin/broadcast', async (req: Request, res: Response) => {
+  try {
+    const { text, imageUrl, buttonText, buttonUrl, botId } = req.body
+    if (!text) return res.status(400).json({ error: 'text is required' })
+
+    // Get bots to broadcast to
+    const whereClause: any = { isActive: true, isPaused: false }
+    if (botId) whereClause.id = botId
+
+    const bots = await prisma.bot.findMany({ where: whereClause, select: { id: true, botToken: true } })
+
+    const replyMarkup = buttonText && buttonUrl
+      ? { inline_keyboard: [[{ text: buttonText, url: buttonUrl }]] }
+      : undefined
+
+    let totalSent = 0
+    let totalFailed = 0
+
+    for (const bot of bots) {
+      const users = await prisma.botUser.findMany({
+        where: { botId: bot.id, isBanned: false },
+        select: { telegramUserId: true }
+      })
+
+      for (const user of users) {
+        try {
+          if (imageUrl) {
+            await axios.post(`https://api.telegram.org/bot${bot.botToken}/sendPhoto`, {
+              chat_id: Number(user.telegramUserId),
+              photo: imageUrl,
+              caption: text,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
+            })
+          } else {
+            await axios.post(`https://api.telegram.org/bot${bot.botToken}/sendMessage`, {
+              chat_id: Number(user.telegramUserId),
+              text,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup ? JSON.stringify(replyMarkup) : undefined
+            })
+          }
+          totalSent++
+          await new Promise(r => setTimeout(r, 50))
+        } catch {
+          totalFailed++
+        }
+      }
+    }
+
+    logger.info('Admin broadcast sent', { botId: botId || 'all', totalSent, totalFailed })
+    return res.json({ success: true, sent: totalSent, failed: totalFailed })
+  } catch (err: any) {
+    logger.error('Admin broadcast error', { error: err.message })
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   logger.info('1-TouchBot Bot Engine starting', { port: PORT })
