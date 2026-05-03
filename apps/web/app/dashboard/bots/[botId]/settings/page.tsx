@@ -67,6 +67,11 @@ export default function BotSettingsPage() {
   const [withdrawFeePercent, setWithdrawFeePercent] = useState(0)
   const [withdrawalPassphrase, setWithdrawalPassphrase] = useState('')
   const [showPassphrase, setShowPassphrase] = useState(false)
+  const [passphraseConfigured, setPassphraseConfigured] = useState(false)
+  const [showPassphraseDialog, setShowPassphraseDialog] = useState(false)
+  const [newPassphraseInput, setNewPassphraseInput] = useState('')
+  const [passphrasePassword, setPassphrasePassword] = useState('')
+  const [savingPassphrase, setSavingPassphrase] = useState(false)
   const [faucetpayConfigured, setFaucetpayConfigured] = useState(false)
   const [faucetpayMaskedKey, setFaucetpayMaskedKey] = useState('')
   const [faucetpayPayoutCurrency, setFaucetpayPayoutCurrency] = useState('USDT')
@@ -117,6 +122,7 @@ export default function BotSettingsPage() {
         setWithdrawMode(data.manualWithdrawal ? 'manual' : data.withdrawEnabled ? 'automatic' : null)
         setWithdrawProvider(data.withdrawProvider === 'oxapay' ? 'oxapay' : 'faucetpay')
         setWithdrawalPassphrase(data.withdrawalPassphrase || '')
+        setPassphraseConfigured(Boolean(data.passphraseConfigured))
         setFaucetpayConfigured(Boolean(data.faucetpayConfigured))
         setFaucetpayMaskedKey(data.faucetpayMaskedKey || '')
         setFaucetpayPayoutCurrency(data.faucetpayPayoutCurrency || 'USDT')
@@ -265,8 +271,8 @@ export default function BotSettingsPage() {
           withdrawFeePercent,
           withdrawMode,
           withdrawProvider,
-          withdrawalPassphrase,
-          // Pro plan
+          // Passphrase is handled separately — only send if first-time set (not configured yet)
+          ...(!passphraseConfigured && withdrawalPassphrase ? { withdrawalPassphrase } : {}),
         }),
       })
       const payload = await res.json()
@@ -279,6 +285,35 @@ export default function BotSettingsPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function savePassphrase() {
+    if (!newPassphraseInput.trim()) { toast.error('Enter a new passphrase'); return }
+    if (!passphrasePassword.trim()) { toast.error('Enter your login password'); return }
+    setSavingPassphrase(true)
+    try {
+      const res = await fetch(`/api/bots/${botId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          welcomeEnabled, welcomeMessage, captchaEnabled, currencyName, currencySymbol,
+          usdToCurrencyRate, requireChannelJoin, requiredChannels, minWithdrawUsd,
+          withdrawFeePercent, withdrawMode, withdrawProvider,
+          newPassphrase: newPassphraseInput,
+          currentPassword: passphrasePassword,
+        }),
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload.error || 'Failed to update passphrase')
+      setPassphraseConfigured(true)
+      setNewPassphraseInput('')
+      setPassphrasePassword('')
+      setShowPassphraseDialog(false)
+      toast.success('Passphrase updated!')
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update passphrase')
+    }
+    setSavingPassphrase(false)
   }
 
   function openKeyDialog(provider: 'faucetpay' | 'oxapay', mode: 'set' | 'replace' | 'remove') {
@@ -774,34 +809,39 @@ export default function BotSettingsPage() {
                     Withdrawal Secret Passphrase
                     <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>
                   </label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type={showPassphrase ? 'text' : 'password'}
-                      value={withdrawalPassphrase}
-                      onChange={e => setWithdrawalPassphrase(e.target.value)}
-                      className="input-field"
-                      placeholder="Enter a secret passphrase"
-                      style={{ paddingRight: '44px' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassphrase(!showPassphrase)}
-                      style={{
-                        position: 'absolute', right: '12px', top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'none', border: 'none',
-                        cursor: 'pointer', color: 'var(--text-muted)',
-                        fontSize: '16px'
-                      }}
-                    >
-                      {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
+                  {passphraseConfigured ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ flex: 1, padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '14px', color: 'var(--text-muted)', letterSpacing: '4px' }}>
+                        ••••••••••••
+                      </div>
+                      <button type="button" className="btn-ghost" onClick={() => setShowPassphraseDialog(true)} style={{ whiteSpace: 'nowrap' }}>
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showPassphrase ? 'text' : 'password'}
+                        value={withdrawalPassphrase}
+                        onChange={e => setWithdrawalPassphrase(e.target.value)}
+                        className="input-field"
+                        placeholder="Enter a secret passphrase"
+                        style={{ paddingRight: '44px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassphrase(!showPassphrase)}
+                        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                      >
+                        {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  )}
                   <div style={{ fontSize: '12px', color: '#FBBF24', marginTop: '6px', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                    <AlertTriangle size={13} style={{ marginTop: '2px', flexShrink: 0 }} /> 
-                    <span>This passphrase is required when approving withdrawals manually. Keep it safe — it cannot be recovered if lost.</span>
+                    <AlertTriangle size={13} style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <span>Required when approving withdrawals manually. Once set, it cannot be viewed — only changed with your login password.</span>
                   </div>
-                  {!withdrawalPassphrase && (
+                  {!passphraseConfigured && !withdrawalPassphrase && (
                     <div style={{ fontSize: '12px', color: '#FCA5A5', marginTop: '6px', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                       <AlertTriangle size={13} style={{ marginTop: '1px' }} />
                       Passphrase is required for manual withdrawal mode
@@ -811,6 +851,31 @@ export default function BotSettingsPage() {
               )}
             </div>
           </div>
+
+          {/* Passphrase change dialog */}
+          {showPassphraseDialog && (
+            <div onClick={e => { if (e.target === e.currentTarget) { setShowPassphraseDialog(false); setNewPassphraseInput(''); setPassphrasePassword('') } }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 1001 }}>
+              <div style={{ width: '100%', maxWidth: '440px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>Change Withdrawal Passphrase</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Enter your new passphrase and your login password to confirm the change.
+                </div>
+                <div>
+                  <label style={labelStyle}>New passphrase</label>
+                  <input type="password" value={newPassphraseInput} onChange={e => setNewPassphraseInput(e.target.value)} className="input-field" placeholder="Enter new passphrase" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Your login password</label>
+                  <input type="password" value={passphrasePassword} onChange={e => setPassphrasePassword(e.target.value)} className="input-field" placeholder="Enter your password" />
+                </div>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn-ghost" onClick={() => { setShowPassphraseDialog(false); setNewPassphraseInput(''); setPassphrasePassword('') }} disabled={savingPassphrase}>Cancel</button>
+                  <button type="button" className="btn-primary" onClick={savePassphrase} disabled={savingPassphrase}>{savingPassphrase ? 'Saving...' : 'Update Passphrase'}</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {keyDialog && (
             <div style={{

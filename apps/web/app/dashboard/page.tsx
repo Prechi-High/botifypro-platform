@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Users, Terminal, CheckSquare, RefreshCw, Send, CircleHelp, Megaphone, X, ArrowRight, Zap } from 'lucide-react'
+import { Bot, Users, Terminal, RefreshCw, Send, CircleHelp, Megaphone, X, ArrowRight, Zap } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -13,7 +13,6 @@ type Stats = {
   activeUsers: number
   newUsers: number
   commands: number
-  workingBots: number
 }
 
 type HourlyData = { hour: string; users: number }
@@ -109,7 +108,7 @@ export default function DashboardHome() {
   const router = useRouter()
   const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<Stats>({ totalBots: 0, activeBots: 0, activeUsers: 0, newUsers: 0, commands: 0, workingBots: 0 })
+  const [stats, setStats] = useState<Stats>({ totalBots: 0, activeBots: 0, activeUsers: 0, newUsers: 0, commands: 0 })
   const [hourlyData, setHourlyData] = useState<HourlyData[]>(buildSixHourSlots())
   const [chartStats, setChartStats] = useState({ totalUsers: 0, peakHour: 0, avgPerHour: 0, activeHours: 0 })
   const [topBots, setTopBots] = useState<TopBot[]>([])
@@ -140,7 +139,6 @@ export default function DashboardHome() {
       const bots = botsRes.data || []
       const botIds = bots.map((b: any) => b.id)
       const totalBots = bots.length
-      const workingBots = bots.filter((b: any) => b.is_active).length
       const activeBots = bots.filter((b: any) => b.is_active && !b.is_paused).length
 
       let activeUsers = 0
@@ -150,14 +148,12 @@ export default function DashboardHome() {
       const slots = buildSixHourSlots()
 
       if (botIds.length > 0) {
-        // Active users in last 6h
-        const since6h = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-        const activeRes = await supabase
+        // All users (total count, not just active)
+        const allUsersRes = await supabase
           .from('bot_users')
           .select('id', { count: 'exact', head: true })
           .in('bot_id', botIds)
-          .gte('last_active', since6h)
-        activeUsers = activeRes.count || 0
+        activeUsers = allUsersRes.count || 0
 
         // New users joined today
         const todayStart = new Date()
@@ -232,7 +228,7 @@ export default function DashboardHome() {
         topBotsData.sort((a, b) => b.users - a.users)
       }
 
-      setStats({ totalBots, activeBots, activeUsers, newUsers, commands, workingBots })
+      setStats({ totalBots, activeBots, activeUsers, newUsers, commands })
       setHourlyData(slots)
       setTopBots(topBotsData)
     } catch (e: any) {
@@ -285,9 +281,9 @@ export default function DashboardHome() {
       iconBg: 'rgba(16,185,129,0.18)',
     },
     {
-      label: 'ACTIVE USERS',
+      label: 'ALL USERS',
       value: stats.activeUsers,
-      sub: 'Active in last 6 hours',
+      sub: 'Total bot users across all bots',
       icon: Users,
       iconColor: '#60A5FA',
       iconBg: 'rgba(59,130,246,0.18)',
@@ -307,14 +303,6 @@ export default function DashboardHome() {
       icon: Terminal,
       iconColor: '#FBBF24',
       iconBg: 'rgba(245,158,11,0.18)',
-    },
-    {
-      label: 'WORKING',
-      value: stats.workingBots,
-      sub: `${stats.totalBots > 0 ? Math.round((stats.workingBots / stats.totalBots) * 100) : 0}% of total bots`,
-      icon: CheckSquare,
-      iconColor: '#F472B6',
-      iconBg: 'rgba(244,114,182,0.18)',
     },
   ]
 

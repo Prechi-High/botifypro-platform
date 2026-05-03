@@ -5,7 +5,28 @@ export async function middleware(request: NextRequest) {
 
   const isDashboard = pathname.startsWith('/dashboard')
   const isAuthPage = pathname === '/login' || pathname === '/signup'
+  const isAdminRoute = pathname.startsWith('/admin')
+  const isAdminLogin = pathname === '/admin/login'
 
+  // ── Admin route protection ────────────────────────────────────────────────
+  if (isAdminRoute && !isAdminLogin) {
+    const adminSession = request.cookies.get('admin_session')
+    if (!adminSession || adminSession.value !== 'authenticated') {
+      return NextResponse.redirect(new URL('/admin/login', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // If already logged in as admin and visiting login page, redirect to admin
+  if (isAdminLogin) {
+    const adminSession = request.cookies.get('admin_session')
+    if (adminSession?.value === 'authenticated') {
+      return NextResponse.redirect(new URL('/admin', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // ── Dashboard route protection ────────────────────────────────────────────
   if (!isDashboard && !isAuthPage) {
     return NextResponse.next()
   }
@@ -22,14 +43,12 @@ export async function middleware(request: NextRequest) {
   })
 
   if (isDashboard && !hasSession) {
-    // Preserve the intended destination so we can redirect back after login
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
   if (isAuthPage && hasSession) {
-    // If already logged in and visiting auth page, check for redirect param
     const redirect = request.nextUrl.searchParams.get('redirect')
     const dest = redirect && redirect.startsWith('/dashboard') ? redirect : '/dashboard'
     return NextResponse.redirect(new URL(dest, request.url))
@@ -41,6 +60,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/dashboard/:path*',
+    '/admin/:path*',
     '/login',
     '/signup',
   ],

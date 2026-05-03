@@ -20,6 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobile, setMobile]   = useState(false)
   const [email, setEmail]     = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free')
   const [theme, setTheme]     = useState<'dark' | 'light'>('dark')
   const pathname              = usePathname()
   const supabase              = createClient()
@@ -54,10 +55,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (cancelled) return
       if (user?.email) setEmail(user.email)
       if (!user?.id) { setIsAdmin(false); return }
-      const { data: profile } = await supabase.from('users').select('role, email').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('users').select('role, email, plan').eq('id', user.id).single()
       if (cancelled) return
       const pe = String(profile?.email || user.email || '').toLowerCase()
       setIsAdmin(profile?.role === 'admin' || pe === adminEmail)
+      setUserPlan(profile?.plan === 'pro' ? 'pro' : 'free')
     })
     return () => { cancelled = true }
   }, [])
@@ -146,9 +148,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
         </div>
 
-        {/* Email */}
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', padding: '0 2px' }}>
-          {email || '—'}
+        {/* Email + Plan */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter, sans-serif', flex: 1, minWidth: 0 }}>
+            {email || '—'}
+          </div>
+          <span style={{
+            flexShrink: 0, marginLeft: '6px',
+            fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em',
+            padding: '2px 7px', borderRadius: '999px',
+            background: userPlan === 'pro' ? 'rgba(57,255,20,0.12)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${userPlan === 'pro' ? 'rgba(57,255,20,0.3)' : 'rgba(255,255,255,0.12)'}`,
+            color: userPlan === 'pro' ? 'var(--accent)' : 'var(--text-muted)',
+          }}>
+            {userPlan === 'pro' ? 'PRO' : 'FREE'}
+          </span>
         </div>
 
         {/* Logout */}

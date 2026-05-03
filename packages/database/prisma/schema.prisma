@@ -275,6 +275,19 @@ model PlatformSettings {
   cpm48hr               Float   @default(1.0) @map("cpm_48hr")
   cpm72hr               Float   @default(0.9) @map("cpm_72hr")
   cpm7day               Float   @default(0.8) @map("cpm_7day")
+  // Admin auth
+  adminPassword         String  @default("$2b$10$placeholder") @map("admin_password")
+  // Pro plan deposit (OxaPay white-label)
+  proOxapayMerchantKey  String? @map("pro_oxapay_merchant_key")
+  proOxapayCallbackUrl  String? @map("pro_oxapay_callback_url")
+  // Advertising deposit (OxaPay white-label)
+  adsOxapayMerchantKey  String? @map("ads_oxapay_merchant_key")
+  adsOxapayCallbackUrl  String? @map("ads_oxapay_callback_url")
+  // Balance button customization
+  balanceButtonText     String  @default("Advertise with AdsGalaxy") @map("balance_button_text")
+  balanceButtonUrl      String  @default("https://t.me/Ads_Galaxy_bot") @map("balance_button_url")
+  // Pricing
+  proPlanPrice          Float   @default(10) @map("pro_plan_price")
   updatedAt             DateTime @updatedAt @map("updated_at")
   @@map("platform_settings")
 }

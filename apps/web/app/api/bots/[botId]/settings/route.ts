@@ -78,12 +78,13 @@ async function getWebhookStatus(botId: string, fallback: boolean) {
 
 async function getOwnedBot(request: Request, botId: string) {
   let userId: string | null = null
+  let userEmail: string | null = null
 
   // Primary: use the SSR client (works when cookies are fresh)
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) userId = user.id
+    if (user) { userId = user.id; userEmail = user.email || null }
   } catch {}
 
   // Fallback: decode JWT directly from cookie using service role client
@@ -96,7 +97,7 @@ async function getOwnedBot(request: Request, botId: string) {
           process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
         const { data: { user } } = await serviceClient.auth.getUser(jwt)
-        if (user) userId = user.id
+        if (user) { userId = user.id; userEmail = user.email || null }
       } catch {}
     }
   }
@@ -122,7 +123,7 @@ async function getOwnedBot(request: Request, botId: string) {
     return { error: NextResponse.json({ error: 'Bot not found' }, { status: 404 }) }
   }
 
-  return { bot, user: { id: userId } }
+  return { bot, user: { id: userId, email: userEmail || '' } }
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -161,6 +162,7 @@ export async function GET(request: Request, context: RouteContext) {
         withdrawEnabled: Boolean(settings.withdrawEnabled),
         withdrawProvider: settings.withdrawProvider || 'faucetpay',
         withdrawalPassphrase: settings.withdrawalPassphrase || '',
+        passphraseConfigured: Boolean(settings.withdrawalPassphrase),
         faucetpayConfigured: Boolean(settings.faucetpayConfigured),
         faucetpayMaskedKey: settings.faucetpayApiKeyLast4 ? `••••••••${settings.faucetpayApiKeyLast4}` : '',
         faucetpayPayoutCurrency: settings.faucetpayPayoutCurrency || 'USDT',
@@ -214,9 +216,37 @@ export async function PUT(request: Request, context: RouteContext) {
       }
     }
 
-    if (withdrawMode === 'manual' && !String(body.withdrawalPassphrase || '').trim()) {
+    if (withdrawMode === 'manual' && !String(body.withdrawalPassphrase || '').trim() && !bot.settings.withdrawalPassphrase) {
       return NextResponse.json({ error: 'Withdrawal passphrase is required for manual mode' }, { status: 400 })
     }
+
+    // Passphrase update: only update if a new one is explicitly provided
+    // If switching back to manual and passphrase already exists, keep the existing one
+    let passphraseUpdate: string | null | undefined = undefined // undefined = don't touch it
+    if (body.newPassphrase && String(body.newPassphrase).trim()) {
+      // New passphrase provided — verify login password first
+      if (!body.currentPassword) {
+        return NextResponse.json({ error: 'Current password required to change passphrase' }, { status: 400 })
+      }
+      const serviceClient = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const { error: signInError } = await serviceClient.auth.signInWithPassword({
+        email: result.user.email || '',
+        password: body.currentPassword,
+      })
+      if (signInError) {
+        return NextResponse.json({ error: 'Incorrect password' }, { status: 401 })
+      }
+      passphraseUpdate = String(body.newPassphrase).trim()
+    } else if (withdrawMode === 'manual' && !bot.settings.withdrawalPassphrase) {
+      // First time setting passphrase — use the provided value
+      if (body.withdrawalPassphrase && String(body.withdrawalPassphrase).trim()) {
+        passphraseUpdate = String(body.withdrawalPassphrase).trim()
+      }
+    }
+    // If switching to automatic, do NOT clear the passphrase (keep it for when they switch back)
 
     const updated = await prisma.botSettings.update({
       where: { botId },
@@ -233,7 +263,8 @@ export async function PUT(request: Request, context: RouteContext) {
         manualWithdrawal: withdrawMode === 'manual',
         withdrawEnabled: withdrawMode !== null,
         withdrawProvider: withdrawMode === 'automatic' ? withdrawProvider : bot.settings.withdrawProvider || 'faucetpay',
-        withdrawalPassphrase: withdrawMode === 'manual' ? String(body.withdrawalPassphrase || '').trim() : null,
+        // Only update passphrase if explicitly changed — never reset it
+        ...(passphraseUpdate !== undefined ? { withdrawalPassphrase: passphraseUpdate } : {}),
         // Pro plan fields (only saved if pro user)
         ...(userPlan === 'pro' ? {
           proPlanEnabled: Boolean(body.proPlanEnabled),
