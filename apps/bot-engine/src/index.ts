@@ -219,9 +219,18 @@ app.post('/api/payments/create-topup-invoice', async (req: Request, res: Respons
     if (!userId || !amountUsd || Number(amountUsd) < 5) {
       return res.status(400).json({ error: 'userId and amountUsd (min $5) are required' })
     }
-    const merchantKey = process.env.OXAPAY_MERCHANT_KEY
+
+    // Try platform_settings first, then fall back to env var
+    let merchantKey = process.env.OXAPAY_MERCHANT_KEY
+    try {
+      const platformSettings = await (prisma as any).platformSettings.findFirst()
+      if (platformSettings?.adsOxapayMerchantKey) {
+        merchantKey = platformSettings.adsOxapayMerchantKey
+      }
+    } catch {}
+
     if (!merchantKey) {
-      return res.status(500).json({ error: 'Payment gateway not configured' })
+      return res.status(500).json({ error: 'Payment gateway not configured. Set OxaPay key in Admin Settings.' })
     }
     const response = await axios.post(
       'https://api.oxapay.com/v1/payment/white-label',

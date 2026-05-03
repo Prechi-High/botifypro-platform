@@ -84,13 +84,23 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
   const sym = bot.settings?.currencySymbol || '🪙'
   const currencyName = bot.settings?.currencyName || 'coins'
+
+  // Fetch platform-level balance button config
+  let balanceBtnText = '📢 Advertise with AdsGalaxy'
+  let balanceBtnUrl = 'https://t.me/Ads_Galaxy_bot'
+  try {
+    const platformSettings = await (prisma as any).platformSettings.findFirst()
+    if (platformSettings?.balanceButtonText) balanceBtnText = platformSettings.balanceButtonText
+    if (platformSettings?.balanceButtonUrl) balanceBtnUrl = platformSettings.balanceButtonUrl
+  } catch {}
+
   await sendMessage(
     bot.botToken, chatId,
     `🏦 <b>Account Balance Overview</b>\n\n` +
     `• User ID: ${botUser.telegramUserId}\n` +
     `• Balance: ${botUser.balance} ${sym} ${currencyName}\n\n` +
     `✅ Keep growing. Withdraw anytime!`,
-    { inline_keyboard: [[{ text: '📢 Advertise with AdsGalaxy', url: 'https://t.me/Ads_Galaxy_bot' }]] }
+    { inline_keyboard: [[{ text: balanceBtnText, url: balanceBtnUrl }]] }
   )
 }
 
