@@ -923,8 +923,7 @@ export default function BotSettingsPage() {
                       if (error) throw error
                       setProOxapayConfigured(true)
                       setProOxapayKeyInput('')
-                      setProOxapaySecretInput('')
-                      toast.success('OxaPay keys saved ✓')
+                      toast.success('OxaPay keys saved \u2713')
                     } catch (e: any) {
                       toast.error(e?.message || 'Failed to save')
                     }
