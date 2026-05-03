@@ -80,7 +80,6 @@ export default function BotSettingsPage() {
   // Pro/VIP Investment Plan
   const [proOxapayConfigured, setProOxapayConfigured] = useState(false)
   const [proOxapayKeyInput, setProOxapayKeyInput] = useState('')
-  const [proOxapaySecretInput, setProOxapaySecretInput] = useState('')
   const [savingProOxapay, setSavingProOxapay] = useState(false)
 
   useEffect(() => {
@@ -906,33 +905,20 @@ export default function BotSettingsPage() {
                     placeholder={proOxapayConfigured ? '••••••••••••' : 'Paste OxaPay merchant key'}
                   />
                 </div>
-                <div>
-                  <label style={labelStyle}>OxaPay Secret Key <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>(used to verify payment callbacks from OxaPay)</span></label>
-                  <input
-                    type="password"
-                    value={proOxapaySecretInput}
-                    onChange={e => setProOxapaySecretInput(e.target.value)}
-                    className="input-field"
-                    placeholder={proOxapayConfigured ? '••••••••••••' : 'Paste OxaPay secret key'}
-                  />
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    This is the HMAC secret from your OxaPay merchant dashboard. It lets the bot verify that payment notifications are genuinely from OxaPay.
-                  </div>
-                </div>
+
                 <div style={{ background: 'rgba(57,255,20,0.06)', border: '1px solid rgba(57,255,20,0.15)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
                   <div style={{ fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>Callback URL (add this in OxaPay dashboard):</div>
                   {`${process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'}/webhooks/oxapay-pro/${botId}`}
                 </div>
                 <button
                   type="button"
-                  disabled={savingProOxapay || (!proOxapayKeyInput.trim() && !proOxapaySecretInput.trim())}
+                  disabled={savingProOxapay || !proOxapayKeyInput.trim()}
                   className="btn-ghost"
                   onClick={async () => {
                     setSavingProOxapay(true)
                     try {
                       const updates: any = { pro_oxapay_configured: true }
                       if (proOxapayKeyInput.trim()) updates.pro_oxapay_merchant_key = proOxapayKeyInput
-                      if (proOxapaySecretInput.trim()) updates.pro_oxapay_secret_key = proOxapaySecretInput
                       const { error } = await supabase.from('bot_settings').update(updates).eq('bot_id', botId)
                       if (error) throw error
                       setProOxapayConfigured(true)

@@ -455,8 +455,8 @@ app.post('/webhooks/oxapay-pro/:botId', async (req: Request, res: Response) => {
     if (!bot) return
 
     const settings = bot.settings as any
-    if (settings?.proOxapaySecretKey) {
-      const hmac = crypto.createHmac('sha512', settings.proOxapaySecretKey).update(JSON.stringify(body)).digest('hex')
+    if (settings?.proOxapayMerchantKey) {
+      const hmac = crypto.createHmac('sha512', settings.proOxapayMerchantKey).update(JSON.stringify(body)).digest('hex')
       if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
     }
 
