@@ -117,7 +117,10 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
       `✅ <b>Withdrawal Submitted</b>\n\n` +
       `Amount: ${currencyAmount} ${sym} ${currencyName}\n` +
       `≈ $${netUsd.toFixed(4)} USD\n` +
-      `Address: <code>${address}</code>\n\n⏳ Will be processed manually by bot owner within 24-48 hours.`
+      `Payment method: <b>Manual review by bot owner</b>\n` +
+      `Payout address: <code>${address}</code>\n\n` +
+      `⏳ Your request will be processed manually within 24-48 hours.\n` +
+      `You will be notified once your payment is sent.`
     )
     return
   }

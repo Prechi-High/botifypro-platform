@@ -78,15 +78,6 @@ export default function BotSettingsPage() {
   const [submittingPaymentKey, setSubmittingPaymentKey] = useState(false)
 
   // Pro/VIP Investment Plan
-  const [proPlanEnabled, setProPlanEnabled] = useState(false)
-  const [proPlanDepositMin, setProPlanDepositMin] = useState(10)
-  const [proPlanDurationDays, setProPlanDurationDays] = useState(30)
-  const [proPlanDailyBonus, setProPlanDailyBonus] = useState(50)
-  const [proPlanReferralReward, setProPlanReferralReward] = useState(200)
-  const [proTierReferralEnabled, setProTierReferralEnabled] = useState(false)
-  const [proTier1Percent, setProTier1Percent] = useState(40)
-  const [proTier2Percent, setProTier2Percent] = useState(20)
-  const [proTier3Percent, setProTier3Percent] = useState(5)
   const [proOxapayConfigured, setProOxapayConfigured] = useState(false)
   const [proOxapayKeyInput, setProOxapayKeyInput] = useState('')
   const [proOxapaySecretInput, setProOxapaySecretInput] = useState('')
@@ -134,15 +125,6 @@ export default function BotSettingsPage() {
         setOxapayMaskedKey(data.oxapayMaskedKey || '')
 
         // Pro plan
-        setProPlanEnabled(Boolean(data.proPlanEnabled))
-        setProPlanDepositMin(Number(data.proPlanDepositMin) || 10)
-        setProPlanDurationDays(Number(data.proPlanDurationDays) || 30)
-        setProPlanDailyBonus(Number(data.proPlanDailyBonus) || 50)
-        setProPlanReferralReward(Number(data.proPlanReferralReward) || 200)
-        setProTierReferralEnabled(Boolean(data.proTierReferralEnabled))
-        setProTier1Percent(Number(data.proTier1Percent) || 40)
-        setProTier2Percent(Number(data.proTier2Percent) || 20)
-        setProTier3Percent(Number(data.proTier3Percent) || 5)
         setProOxapayConfigured(Boolean(data.proOxapayConfigured))
       } catch (e: any) {
         if (cancelled) return
@@ -286,15 +268,6 @@ export default function BotSettingsPage() {
           withdrawProvider,
           withdrawalPassphrase,
           // Pro plan
-          proPlanEnabled,
-          proPlanDepositMin,
-          proPlanDurationDays,
-          proPlanDailyBonus,
-          proPlanReferralReward,
-          proTierReferralEnabled,
-          proTier1Percent,
-          proTier2Percent,
-          proTier3Percent,
         }),
       })
       const payload = await res.json()
@@ -915,133 +888,71 @@ export default function BotSettingsPage() {
             </div>
           )}
 
-          {/* Pro/VIP Investment Plan — Pro bot creators only */}
+          {/* VIP Plan — OxaPay Deposit Config only */}
           {userPlan === 'pro' && (
             <div style={sectionCardStyle}>
-              <h3 style={sectionTitle}><Zap size={16} style={{marginRight:'8px',color:'#F59E0B'}} />VIP / Investment Plan</h3>
+              <h3 style={sectionTitle}><Zap size={16} style={{marginRight:'8px',color:'#F59E0B'}} />VIP Plan — Deposit Configuration</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.5 }}>
-                Allow your bot users to upgrade to a VIP/Pro plan by making a deposit. VIP users earn a separate daily bonus and referral rewards.
+                Configure OxaPay so bot users can deposit to activate investment plans. The bot will auto-generate a unique deposit address per user.
               </p>
-
-              <ToggleRow
-                label="Enable VIP/Pro Plan"
-                desc="Bot users can deposit to unlock VIP benefits"
-                enabled={proPlanEnabled}
-                onToggle={() => setProPlanEnabled(!proPlanEnabled)}
-              />
-
-              {proPlanEnabled && (
-                <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={labelStyle}>Min deposit to activate (USD)</label>
-                      <input type="number" min="1" step="1" value={proPlanDepositMin} onChange={e => setProPlanDepositMin(Number(e.target.value))} className="input-field" />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Plan duration (days)</label>
-                      <input type="number" min="1" step="1" value={proPlanDurationDays} onChange={e => setProPlanDurationDays(Number(e.target.value))} className="input-field" />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Daily bonus for VIP users ({currencySymbol})</label>
-                      <input type="number" min="0" step="1" value={proPlanDailyBonus} onChange={e => setProPlanDailyBonus(Number(e.target.value))} className="input-field" />
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Separate from normal daily bonus</div>
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Referral reward per invite ({currencySymbol})</label>
-                      <input type="number" min="0" step="1" value={proPlanReferralReward} onChange={e => setProPlanReferralReward(Number(e.target.value))} className="input-field" />
-                    </div>
-                  </div>
-
-                  {/* 3-Tier Referral */}
-                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
-                    <ToggleRow
-                      label="3-Tier Referral Commission"
-                      desc="VIP users earn % when their referrals claim bonuses (up to 3 levels)"
-                      enabled={proTierReferralEnabled}
-                      onToggle={() => setProTierReferralEnabled(!proTierReferralEnabled)}
-                    />
-                    {proTierReferralEnabled && (
-                      <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                        <div>
-                          <label style={labelStyle}>Level 1 (%)</label>
-                          <input type="number" min="0" max="100" step="1" value={proTier1Percent} onChange={e => setProTier1Percent(Number(e.target.value))} className="input-field" />
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Direct referrals</div>
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Level 2 (%)</label>
-                          <input type="number" min="0" max="100" step="1" value={proTier2Percent} onChange={e => setProTier2Percent(Number(e.target.value))} className="input-field" />
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>2nd level</div>
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Level 3 (%)</label>
-                          <input type="number" min="0" max="100" step="1" value={proTier3Percent} onChange={e => setProTier3Percent(Number(e.target.value))} className="input-field" />
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>3rd level</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* OxaPay White-label Deposit */}
-                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Hand size={14} color="var(--accent)" /> OxaPay Deposit (for VIP upgrades)
-                    </div>
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: 1.5 }}>
-                      Users pay via OxaPay white-label to activate their VIP plan. Enter your OxaPay merchant key and the bot will auto-generate a callback URL for you to add in OxaPay.
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <div>
-                        <label style={labelStyle}>OxaPay Merchant Key</label>
-                        <input
-                          type="password"
-                          value={proOxapayKeyInput}
-                          onChange={e => setProOxapayKeyInput(e.target.value)}
-                          className="input-field"
-                          placeholder={proOxapayConfigured ? '••••••••••••' : 'Paste OxaPay merchant key'}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>OxaPay Secret Key (for webhook verification)</label>
-                        <input
-                          type="password"
-                          value={proOxapaySecretInput}
-                          onChange={e => setProOxapaySecretInput(e.target.value)}
-                          className="input-field"
-                          placeholder={proOxapayConfigured ? '••••••••••••' : 'Paste OxaPay secret key'}
-                        />
-                      </div>
-                      <div style={{ background: 'rgba(57,255,20,0.06)', border: '1px solid rgba(57,255,20,0.15)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                        Callback URL: {`${process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'}/webhooks/oxapay-pro/${botId}`}
-                      </div>
-                      <button
-                        type="button"
-                        disabled={savingProOxapay || (!proOxapayKeyInput.trim() && !proOxapaySecretInput.trim())}
-                        className="btn-ghost"
-                        onClick={async () => {
-                          setSavingProOxapay(true)
-                          try {
-                            const { error } = await supabase.from('bot_settings').update({
-                              pro_oxapay_merchant_key: proOxapayKeyInput || undefined,
-                              pro_oxapay_secret_key: proOxapaySecretInput || undefined,
-                              pro_oxapay_configured: true,
-                            }).eq('bot_id', botId)
-                            if (error) throw error
-                            setProOxapayConfigured(true)
-                            setProOxapayKeyInput('')
-                            setProOxapaySecretInput('')
-                            toast.success('OxaPay keys saved ✓')
-                          } catch (e: any) {
-                            toast.error(e?.message || 'Failed to save')
-                          }
-                          setSavingProOxapay(false)
-                        }}
-                      >
-                        {savingProOxapay ? 'Saving...' : proOxapayConfigured ? 'Update OxaPay Keys' : 'Save OxaPay Keys'}
-                      </button>
-                    </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div>
+                  <label style={labelStyle}>OxaPay Merchant Key</label>
+                  <input
+                    type="password"
+                    value={proOxapayKeyInput}
+                    onChange={e => setProOxapayKeyInput(e.target.value)}
+                    className="input-field"
+                    placeholder={proOxapayConfigured ? '••••••••••••' : 'Paste OxaPay merchant key'}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>OxaPay Secret Key <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>(used to verify payment callbacks from OxaPay)</span></label>
+                  <input
+                    type="password"
+                    value={proOxapaySecretInput}
+                    onChange={e => setProOxapaySecretInput(e.target.value)}
+                    className="input-field"
+                    placeholder={proOxapayConfigured ? '••••••••••••' : 'Paste OxaPay secret key'}
+                  />
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    This is the HMAC secret from your OxaPay merchant dashboard. It lets the bot verify that payment notifications are genuinely from OxaPay.
                   </div>
                 </div>
-              )}
+                <div style={{ background: 'rgba(57,255,20,0.06)', border: '1px solid rgba(57,255,20,0.15)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>Callback URL (add this in OxaPay dashboard):</div>
+                  {`${process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'}/webhooks/oxapay-pro/${botId}`}
+                </div>
+                <button
+                  type="button"
+                  disabled={savingProOxapay || (!proOxapayKeyInput.trim() && !proOxapaySecretInput.trim())}
+                  className="btn-ghost"
+                  onClick={async () => {
+                    setSavingProOxapay(true)
+                    try {
+                      const updates: any = { pro_oxapay_configured: true }
+                      if (proOxapayKeyInput.trim()) updates.pro_oxapay_merchant_key = proOxapayKeyInput
+                      if (proOxapaySecretInput.trim()) updates.pro_oxapay_secret_key = proOxapaySecretInput
+                      const { error } = await supabase.from('bot_settings').update(updates).eq('bot_id', botId)
+                      if (error) throw error
+                      setProOxapayConfigured(true)
+                      setProOxapayKeyInput('')
+                      setProOxapaySecretInput('')
+                      toast.success('OxaPay keys saved ✓')
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to save')
+                    }
+                    setSavingProOxapay(false)
+                  }}
+                >
+                  {savingProOxapay ? 'Saving...' : proOxapayConfigured ? 'Update OxaPay Keys' : 'Save OxaPay Keys'}
+                </button>
+                {proOxapayConfigured && (
+                  <div style={{ fontSize: '12px', color: '#86EFAC', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    ✅ OxaPay configured. Users can now deposit to activate investment plans.
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

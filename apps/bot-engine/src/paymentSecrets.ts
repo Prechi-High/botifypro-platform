@@ -1,9 +1,9 @@
 import crypto from 'crypto'
 
 function getSecretKey() {
-  const secret = process.env.PAYMENT_KEYS_SECRET || process.env.SECRET_ENCRYPTION_KEY
+  const secret = process.env.PAYMENT_KEYS_SECRET || process.env.SECRET_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY
   if (!secret) {
-    throw new Error('PAYMENT_KEYS_SECRET is not configured')
+    throw new Error('PAYMENT_KEYS_SECRET is not configured. Add PAYMENT_KEYS_SECRET to your .env file.')
   }
   return crypto.createHash('sha256').update(secret).digest()
 }

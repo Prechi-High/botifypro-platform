@@ -449,7 +449,7 @@ app.post('/webhooks/oxapay-pro/:botId', async (req: Request, res: Response) => {
     const stored = await import('./redis').then(r => r.redisGet(`pro_deposit:${botId}:${trackId}`))
     if (!stored) { logger.warn('OxaPay Pro webhook - unknown trackId', { trackId, botId }); return }
 
-    const { botUserId, chatId, botToken } = JSON.parse(stored)
+    const { botUserId, chatId, botToken, planId } = JSON.parse(stored)
 
     const bot = await prisma.bot.findUnique({ where: { id: botId }, include: { settings: true, creator: true } })
     if (!bot) return
@@ -460,7 +460,22 @@ app.post('/webhooks/oxapay-pro/:botId', async (req: Request, res: Response) => {
       if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
     }
 
-    const durationDays = Number(settings?.proPlanDurationDays || 30)
+    // Get plan details — use specific plan if planId stored, else fall back to settings defaults
+    let planName = 'VIP Plan'
+    let durationDays = Number(settings?.proPlanDurationDays || 30)
+    let dailyBonus = Number(settings?.proPlanDailyBonus || 50)
+
+    if (planId) {
+      try {
+        const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: planId } })
+        if (plan) {
+          planName = plan.name
+          durationDays = Number(plan.durationDays)
+          dailyBonus = Number(plan.dailyBonus)
+        }
+      } catch {}
+    }
+
     const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
 
     await prisma.botUser.update({
@@ -469,22 +484,22 @@ app.post('/webhooks/oxapay-pro/:botId', async (req: Request, res: Response) => {
         isProMember: true,
         proExpiresAt: expiresAt,
         proDepositAmount: { increment: Number(amount || 0) },
+        ...(planId ? { activePlanId: planId } as any : {}),
       } as any
     })
 
     await import('./redis').then(r => r.redisDel(`pro_deposit:${botId}:${trackId}`))
 
     const sym = settings?.currencySymbol || '🪙'
-    const dailyBonus = Number(settings?.proPlanDailyBonus || 50)
     const { sendMessage } = await import('./commands')
     await sendMessage(botToken, Number(chatId),
-      `⭐ <b>VIP Plan Activated!</b>\n\n` +
-      `Your deposit was confirmed. You are now a VIP member!\n\n` +
-      `• Daily bonus: <b>${dailyBonus} ${sym}</b>\n` +
-      `• Expires: <b>${expiresAt.toLocaleDateString()}</b>\n\n` +
-      `Tap ⭐ VIP Plan to claim your daily bonus!`
+      `🎉 <b>Congratulations! You have successfully upgraded to ${planName}!</b>\n\n` +
+      `Your deposit was confirmed. You are now an active member!\n\n` +
+      `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
+      `• ⏱ Plan expires: <b>${expiresAt.toLocaleDateString()}</b>\n\n` +
+      `Tap 🎁 Daily Bonus to claim your first bonus!`
     )
-    logger.info('Pro plan activated', { botId, botUserId, expiresAt })
+    logger.info('Pro plan activated', { botId, botUserId, planName, expiresAt })
   } catch (err: any) {
     logger.error('oxapay-pro webhook error', { error: err?.message })
   }
