@@ -99,7 +99,9 @@ export default function AdminSettingsPage() {
         const { error } = await supabase.from('platform_settings').update(updates).eq('id', settingsId)
         if (error) throw error
       } else {
-        const { data, error } = await supabase.from('platform_settings').insert(updates).select().single()
+        // Generate ID client-side — Supabase doesn't auto-generate cuid() defaults
+        const newId = crypto.randomUUID()
+        const { data, error } = await supabase.from('platform_settings').insert({ id: newId, ...updates }).select().single()
         if (error) throw error
         setSettingsId(data.id)
       }

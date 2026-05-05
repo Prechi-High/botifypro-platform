@@ -306,6 +306,20 @@ export default function CommandsPage() {
     if (!wishTitle.trim()) { toast.error('Title is required'); return }
     if (!userId) { toast.error('You must be logged in to submit'); return }
     setAddingWish(true)
+    // Check if user already submitted a wish this month
+    const monthStart = new Date()
+    monthStart.setDate(1)
+    monthStart.setHours(0, 0, 0, 0)
+    const { count: thisMonthCount } = await supabase
+      .from('command_wishlist')
+      .select('*', { count: 'exact', head: true })
+      .eq('created_by', userId)
+      .gte('created_at', monthStart.toISOString())
+    if ((thisMonthCount || 0) >= 1) {
+      toast.error('You can only submit one feature request per month.')
+      setAddingWish(false)
+      return
+    }
     const { error } = await supabase.from('command_wishlist').insert({
       title: wishTitle.trim(),
       description: wishDesc.trim() || null,

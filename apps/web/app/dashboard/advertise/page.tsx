@@ -45,7 +45,7 @@ export default function AdvertisePage() {
           supabase.from('users').select('advertiser_balance').eq('id', uid).single(),
           supabase
             .from('ad_campaigns')
-            .select('id, title, budget_usd, spent_usd, status, target_audience_count, impressions_count, activity_window, created_at')
+            .select('id, title, budget_usd, spent_usd, status, rejection_reason, target_audience_count, impressions_count, activity_window, created_at')
             .eq('advertiser_id', uid)
             .order('created_at', { ascending: false }),
         ])
@@ -171,6 +171,12 @@ export default function AdvertisePage() {
                   <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '999px', height: '4px', overflow: 'hidden' }}>
                     <div style={{ background: '#3b82f6', height: '100%', width: `${pct}%`, borderRadius: '999px', transition: 'width 0.3s' }} />
                   </div>
+                  {c.status === 'rejected' && c.rejection_reason && (
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#FCA5A5', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '6px', padding: '6px 10px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                      <span style={{ flexShrink: 0 }}>✕</span>
+                      <span><strong>Rejection reason:</strong> {c.rejection_reason}</span>
+                    </div>
+                  )}
                 </div>
               )
             })}

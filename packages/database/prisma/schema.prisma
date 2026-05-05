@@ -244,6 +244,7 @@ model AdCampaign {
   impressionsCount    Int       @default(0) @map("impressions_count")
   activityWindow      String    @map("activity_window")
   status              String    @default("pending_approval")
+  rejectionReason     String?   @map("rejection_reason")
   approvedAt          DateTime? @map("approved_at")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")

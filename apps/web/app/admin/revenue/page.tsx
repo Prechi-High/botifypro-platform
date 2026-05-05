@@ -70,8 +70,6 @@ export default function AdminRevenuePage() {
           {[
             ['TOTAL DEPOSITS', `$${overview.totalDeposits.toFixed(2)}`, '#34D399'],
             ['TOTAL WITHDRAWN', `$${overview.totalWithdrawn.toFixed(2)}`, '#FBBF24'],
-            ['NET REVENUE', `$${overview.netRevenue.toFixed(2)}`, '#818CF8'],
-            ['FEES COLLECTED', `$${overview.feesCollected.toFixed(2)}`, '#60A5FA'],
           ].map(([l,v,c])=>(
             <div key={l} style={card}>
               <div style={{ fontSize:'10px', fontWeight:700, color:'var(--accent)', letterSpacing:'0.1em', marginBottom:'8px' }}>{l}</div>

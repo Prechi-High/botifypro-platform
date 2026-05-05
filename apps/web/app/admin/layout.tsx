@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, Users, Bot, ArrowUpDown, Megaphone,
+  LayoutDashboard, Users, Bot, Megaphone,
   TrendingUp, ScrollText, Radio, Settings, List,
   LogOut, Menu, X, ChevronRight, Shield
 } from 'lucide-react'
@@ -12,7 +12,6 @@ const NAV = [
   { icon: LayoutDashboard, label: 'Overview',         href: '/admin' },
   { icon: Users,           label: 'Users',            href: '/admin/users' },
   { icon: Bot,             label: 'Bots',             href: '/admin/bots' },
-  { icon: ArrowUpDown,     label: 'Transactions',     href: '/admin/transactions' },
   { icon: Megaphone,       label: 'Advertising',      href: '/admin/advertising' },
   { icon: TrendingUp,      label: 'Revenue',          href: '/admin/revenue' },
   { icon: ScrollText,      label: 'System Logs',      href: '/admin/logs' },

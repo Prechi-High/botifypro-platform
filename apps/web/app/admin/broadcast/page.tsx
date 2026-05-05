@@ -5,7 +5,6 @@ import { Radio, Send, Image, Link, X } from 'lucide-react'
 
 export default function AdminBroadcastPage() {
   const supabase = createClient()
-  const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [bots, setBots] = useState<any[]>([])
@@ -56,7 +55,7 @@ export default function AdminBroadcastPage() {
       if (imageUrl) body.imageUrl = imageUrl
       if (buttonText && buttonUrl) { body.buttonText = buttonText; body.buttonUrl = buttonUrl }
 
-      const res = await fetch(`${BOT_ENGINE_URL}/api/admin/broadcast`, {
+      const res = await fetch(`/api/admin/broadcast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
