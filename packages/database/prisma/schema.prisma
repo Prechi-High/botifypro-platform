@@ -126,6 +126,8 @@ model BotSettings {
   proOxapayMerchantKey    String? @map("pro_oxapay_merchant_key")
   proOxapaySecretKey      String? @map("pro_oxapay_secret_key")
   proOxapayConfigured     Boolean @default(false) @map("pro_oxapay_configured")
+  // Balance display
+  mergeBalanceAndDeposit  Boolean @default(false) @map("merge_balance_and_deposit")
 
   @@map("bot_settings")
 }

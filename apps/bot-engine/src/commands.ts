@@ -84,6 +84,7 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
 export async function handleBalance(bot: any, botUser: any, chatId: number) {
   const sym = bot.settings?.currencySymbol || '🪙'
   const currencyName = bot.settings?.currencyName || 'coins'
+  const settings = bot.settings as any
 
   // Fetch platform-level balance button config
   let balanceBtnText = '📢 Advertise with AdsGalaxy'
@@ -94,11 +95,45 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
     if (platformSettings?.balanceButtonUrl) balanceBtnUrl = platformSettings.balanceButtonUrl
   } catch {}
 
+  // Determine balance display
+  const regularBalance = Number(botUser.balance || 0)
+  const depositBalance = Number((botUser as any).proDepositAmount || 0)
+  const mergeBalances = Boolean(settings?.mergeBalanceAndDeposit)
+
+  let balanceText = ''
+  if (mergeBalances) {
+    const total = regularBalance + depositBalance
+    balanceText = `• Balance: <b>${total.toLocaleString()} ${sym} ${currencyName}</b>`
+  } else {
+    balanceText = `• Balance: <b>${regularBalance.toLocaleString()} ${sym} ${currencyName}</b>`
+    if (depositBalance > 0) {
+      balanceText += `\n• Deposit Balance: <b>${depositBalance.toLocaleString()} ${sym}</b>`
+    }
+  }
+
+  // Show pro plan info if active
+  let proInfo = ''
+  const isProMember = Boolean((botUser as any).isProMember)
+  const proExpiry = (botUser as any).proExpiresAt ? new Date((botUser as any).proExpiresAt) : null
+  if (isProMember && proExpiry && proExpiry > new Date()) {
+    const daysLeft = Math.ceil((proExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    const activePlanId = (botUser as any).activePlanId
+    let planName = 'VIP Plan'
+    if (activePlanId) {
+      try {
+        const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: activePlanId }, select: { name: true } })
+        if (plan?.name) planName = plan.name
+      } catch {}
+    }
+    proInfo = `\n• Plan: <b>${planName}</b> (${daysLeft} days left)`
+  }
+
   await sendMessage(
     bot.botToken, chatId,
     `🏦 <b>Account Balance Overview</b>\n\n` +
     `• User ID: ${botUser.telegramUserId}\n` +
-    `• Balance: ${botUser.balance} ${sym} ${currencyName}\n\n` +
+    balanceText +
+    proInfo + '\n\n' +
     `✅ Keep growing. Withdraw anytime!`,
     { inline_keyboard: [[{ text: balanceBtnText, url: balanceBtnUrl }]] }
   )

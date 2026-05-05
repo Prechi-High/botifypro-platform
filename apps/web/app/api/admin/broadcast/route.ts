@@ -18,6 +18,12 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
+    // Check if response is JSON before parsing
+    const contentType = res.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      const text = await res.text()
+      return NextResponse.json({ error: `Bot engine error (${res.status}): ${text.substring(0, 200)}` }, { status: 500 })
+    }
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch (error: any) {

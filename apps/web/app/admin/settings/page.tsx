@@ -81,6 +81,7 @@ export default function AdminSettingsPage() {
         balance_button_text: balanceButtonText,
         balance_button_url: balanceButtonUrl,
         pro_plan_price: proPlanPrice,
+        updated_at: new Date().toISOString(),
       }
       if (proOxapayKey.trim()) {
         updates.pro_oxapay_merchant_key = proOxapayKey.trim()
@@ -101,7 +102,7 @@ export default function AdminSettingsPage() {
       } else {
         // Generate ID client-side — Supabase doesn't auto-generate cuid() defaults
         const newId = crypto.randomUUID()
-        const { data, error } = await supabase.from('platform_settings').insert({ id: newId, ...updates }).select().single()
+        const { data, error } = await supabase.from('platform_settings').insert({ id: newId, updated_at: new Date().toISOString(), ...updates }).select().single()
         if (error) throw error
         setSettingsId(data.id)
       }
@@ -189,8 +190,9 @@ export default function AdminSettingsPage() {
           </div>
         </div>
         <div style={{ background:'rgba(57,255,20,0.06)', border:'1px solid rgba(57,255,20,0.15)', borderRadius:'8px', padding:'10px 12px', fontSize:'12px', color:'var(--text-secondary)', wordBreak:'break-all' }}>
-          <div style={{ fontWeight:600, marginBottom:'4px', color:'var(--text-primary)' }}>Auto-generated Callback URL:</div>
-          {BOT_ENGINE_URL}/webhooks/oxapay-pro/&#123;botId&#125;
+          <div style={{ fontWeight:600, marginBottom:'4px', color:'var(--text-primary)' }}>Callback URL (add this in OxaPay dashboard):</div>
+          {BOT_ENGINE_URL}/webhooks/oxapay-pro
+          <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'4px' }}>This is a static URL — the bot ID and user ID are passed automatically in the payment description.</div>
         </div>
       </div>
 
@@ -207,8 +209,9 @@ export default function AdminSettingsPage() {
           </div>
         </div>
         <div style={{ background:'rgba(57,255,20,0.06)', border:'1px solid rgba(57,255,20,0.15)', borderRadius:'8px', padding:'10px 12px', fontSize:'12px', color:'var(--text-secondary)', wordBreak:'break-all' }}>
-          <div style={{ fontWeight:600, marginBottom:'4px', color:'var(--text-primary)' }}>Auto-generated Callback URL:</div>
-          {BOT_ENGINE_URL}/webhooks/oxapay-ads/&#123;userId&#125;
+          <div style={{ fontWeight:600, marginBottom:'4px', color:'var(--text-primary)' }}>Callback URL (add this in OxaPay dashboard):</div>
+          {BOT_ENGINE_URL}/webhooks/oxapay-ads
+          <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'4px' }}>This is a static URL — the user ID is passed automatically in the payment description.</div>
         </div>
       </div>
 

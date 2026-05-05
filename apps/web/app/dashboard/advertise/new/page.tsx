@@ -128,6 +128,14 @@ export default function NewCampaignPage() {
     buttonUrl.startsWith('https://')
 
   async function create() {
+    // Explicit validation with user-facing messages
+    if (!title.trim()) { toast.error('Please enter an ad title'); return }
+    if (!message.trim()) { toast.error('Please enter an ad message'); return }
+    if (!imageUrl.startsWith('https://')) { toast.error('Please enter a valid image URL (must start with https://)'); return }
+    if (adBtnType === '') { toast.error('Please select a button type'); return }
+    if (!buttonUrl.startsWith('https://')) { toast.error('Please enter a valid button URL (must start with https://)'); return }
+    if (budgetUsd < minBudget) { toast.error(`Minimum budget is $${minBudget}`); return }
+    if (!hasEnoughBalance) { toast.error('Insufficient balance. Please top up your account.'); return }
     if (!canCreate) return
     setCreating(true)
     try {
@@ -354,9 +362,9 @@ export default function NewCampaignPage() {
 
         <button
           onClick={create}
-          disabled={creating || !canCreate}
-          className={canCreate && !creating ? 'btn-primary' : 'btn-ghost'}
-          style={{ padding: '13px', borderRadius: '10px', fontSize: '14px', opacity: creating || !canCreate ? 0.5 : 1, cursor: creating || !canCreate ? 'not-allowed' : 'pointer' }}
+          disabled={creating}
+          className="btn-primary"
+          style={{ padding: '13px', borderRadius: '10px', fontSize: '14px', opacity: creating ? 0.7 : 1, cursor: creating ? 'not-allowed' : 'pointer' }}
         >
           {creating ? 'Creating...' : <><Plus size={16} /> Create Campaign</>}
         </button>

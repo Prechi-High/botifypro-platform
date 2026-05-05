@@ -88,6 +88,7 @@ export default function CommandsPage() {
   // Investment / Pro Plan — global settings
   const [proPlanEnabled, setProPlanEnabled] = useState(false)
   const [proPlanButtonLabel, setProPlanButtonLabel] = useState('💎 Invest')
+  const [mergeBalanceAndDeposit, setMergeBalanceAndDeposit] = useState(false)
   const [savingProPlan, setSavingProPlan] = useState(false)
 
   // Investment plans list
@@ -136,6 +137,7 @@ export default function CommandsPage() {
           setCurrencyName(settings.currency_name || 'Coins')
           setProPlanEnabled(Boolean(settings.pro_plan_enabled))
           setProPlanButtonLabel(settings.pro_plan_button_label || '💎 Invest')
+          setMergeBalanceAndDeposit(Boolean(settings.merge_balance_and_deposit))
         }
 
         // Load investment plans
@@ -220,6 +222,7 @@ export default function CommandsPage() {
       const { error } = await supabase.from('bot_settings').update({
         pro_plan_enabled: proPlanEnabled,
         pro_plan_button_label: proPlanButtonLabel || '💎 Invest',
+        merge_balance_and_deposit: mergeBalanceAndDeposit,
       }).eq('bot_id', botId)
       if (error) throw error
       toast.success('Investment settings saved!')
@@ -320,7 +323,9 @@ export default function CommandsPage() {
       setAddingWish(false)
       return
     }
+    const wishId = crypto.randomUUID()
     const { error } = await supabase.from('command_wishlist').insert({
+      id: wishId,
       title: wishTitle.trim(),
       description: wishDesc.trim() || null,
       created_by: userId,
@@ -539,6 +544,17 @@ export default function CommandsPage() {
                     <button onClick={saveProPlanGlobal} disabled={savingProPlan} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center' }}>
                       {savingProPlan ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : 'Save settings'}
                     </button>
+                  </div>
+                </div>
+
+                {/* Balance display toggle — Pro only */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 14px', background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:'10px' }}>
+                  <div>
+                    <div style={{ fontSize:'13px', fontWeight:500, color:'var(--text-primary)' }}>Merge Balance &amp; Deposit</div>
+                    <div style={{ fontSize:'12px', color:'var(--text-muted)', marginTop:'2px' }}>Show one combined balance (regular + deposit) instead of separate values</div>
+                  </div>
+                  <div className={`toggle-track ${mergeBalanceAndDeposit ? 'on' : 'off'}`} onClick={() => setMergeBalanceAndDeposit(!mergeBalanceAndDeposit)} style={{ flexShrink:0 }}>
+                    <div className="toggle-thumb" />
                   </div>
                 </div>
 
