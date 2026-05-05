@@ -26,17 +26,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [open, setOpen] = useState(false)
   const [mobile, setMobile] = useState(false)
 
-  // Don't show the admin layout on the login page
-  if (pathname === '/admin/login') {
-    return <>{children}</>
-  }
-
   useEffect(() => {
     const check = () => setMobile(window.innerWidth <= 768)
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // Don't show the admin layout on the login page — AFTER all hooks
+  if (pathname === '/admin/login') {
+    return <>{children}</>
+  }
 
   function isActive(href: string) {
     if (href === '/admin') return pathname === '/admin'

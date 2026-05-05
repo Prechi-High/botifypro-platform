@@ -265,8 +265,16 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
     const { userId, email } = req.body || {}
     if (!userId) return res.status(400).json({ error: 'userId required' })
 
-    const merchantKey = process.env.OXAPAY_MERCHANT_KEY
-    if (!merchantKey) return res.status(500).json({ error: 'OxaPay not configured' })
+    // Try platform_settings first (set by admin), then fall back to env var
+    let merchantKey = process.env.OXAPAY_MERCHANT_KEY
+    try {
+      const platformSettings = await (prisma as any).platformSettings.findFirst()
+      if (platformSettings?.adsOxapayMerchantKey) {
+        merchantKey = platformSettings.adsOxapayMerchantKey
+      }
+    } catch {}
+
+    if (!merchantKey) return res.status(500).json({ error: 'OxaPay not configured. Set the OxaPay merchant key in Admin Settings.' })
 
     const user = await prisma.user.findUnique({
       where: { id: userId },

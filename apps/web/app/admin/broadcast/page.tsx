@@ -5,6 +5,7 @@ import { Radio, Send, Image, Link, X } from 'lucide-react'
 
 export default function AdminBroadcastPage() {
   const supabase = createClient()
+  const BOT_ENGINE_URL = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [bots, setBots] = useState<any[]>([])
@@ -51,30 +52,39 @@ export default function AdminBroadcastPage() {
     setSending(true)
     try {
       const body: any = { text }
-      if (selectedBot !== 'all') body.botId = selectedBot
       if (imageUrl) body.imageUrl = imageUrl
       if (buttonText && buttonUrl) { body.buttonText = buttonText; body.buttonUrl = buttonUrl }
 
-      const res = await fetch(`/api/admin/broadcast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (data.success || data.sent !== undefined) {
-        notify(`✓ Broadcast sent to ${data.sent || 0} users${data.failed ? ` (${data.failed} failed)` : ''}`)
-        setHistory(prev => [{
-          text, imageUrl: imagePreview, buttonText, buttonUrl,
-          target: selectedBot === 'all' ? 'All bots' : bots.find(b=>b.id===selectedBot)?.bot_name||'Bot',
-          sent: data.sent||0, failed: data.failed||0, date: new Date().toISOString()
-        }, ...prev.slice(0,9)])
-        setText('')
-        clearImage()
-        setButtonText('')
-        setButtonUrl('')
-      } else {
-        notify(data.error || 'Broadcast failed', false)
+      // Use the same per-bot broadcast endpoint that works for bot owners
+      const botsToSend = selectedBot === 'all' ? bots : bots.filter(b => b.id === selectedBot)
+      let totalSent = 0
+      let totalFailed = 0
+
+      for (const bot of botsToSend) {
+        try {
+          const res = await fetch(`${BOT_ENGINE_URL}/api/bots/${bot.id}/broadcast`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          const data = await res.json()
+          if (data.success) {
+            totalSent += data.sent || 0
+            totalFailed += data.failed || 0
+          }
+        } catch {}
       }
+
+      notify(`✓ Broadcast sent to ${totalSent} users${totalFailed ? ` (${totalFailed} failed)` : ''}`)
+      setHistory(prev => [{
+        text, imageUrl: imagePreview, buttonText, buttonUrl,
+        target: selectedBot === 'all' ? 'All bots' : bots.find(b=>b.id===selectedBot)?.bot_name||'Bot',
+        sent: totalSent, failed: totalFailed, date: new Date().toISOString()
+      }, ...prev.slice(0,9)])
+      setText('')
+      clearImage()
+      setButtonText('')
+      setButtonUrl('')
     } catch (e: any) {
       notify(e.message || 'Failed to send broadcast', false)
     }
