@@ -121,11 +121,6 @@ export default function AdminBroadcastPage() {
             />
             <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'4px' }}>{text.length} characters</div>
           </div>
-              style={{ minHeight:'120px', resize:'vertical', fontFamily:'monospace', fontSize:'13px' }}
-              placeholder="Type your broadcast message here..."
-            />
-            <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'4px' }}>{text.length} characters</div>
-          </div>
 
           {/* Image */}
           <div>
