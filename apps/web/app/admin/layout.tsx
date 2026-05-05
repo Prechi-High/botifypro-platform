@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Bot, Megaphone,
   TrendingUp, ScrollText, Radio, Settings, List,
@@ -22,7 +22,6 @@ const NAV = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [mobile, setMobile] = useState(false)
 
@@ -33,8 +32,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Don't show the admin layout on the login page — AFTER all hooks
-  if (pathname === '/admin/login') {
+  // On the login page, render children only — no sidebar
+  const isLoginPage = pathname === '/admin/login'
+  if (isLoginPage) {
     return <>{children}</>
   }
 
@@ -45,7 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function logout() {
     await fetch('/api/admin/auth/logout', { method: 'POST' })
-    router.push('/admin/login')
+    window.location.href = '/admin/login'
   }
 
   const Sidebar = () => (
