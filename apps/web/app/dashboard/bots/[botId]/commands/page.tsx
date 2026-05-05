@@ -345,9 +345,19 @@ export default function CommandsPage() {
 
   async function upvoteWish(id: string, current: number) {
     if (!userId) { toast.error('Log in to upvote'); return }
+    // Prevent double upvoting using localStorage
+    const storageKey = `upvoted_wish_${id}`
+    try {
+      if (localStorage.getItem(storageKey)) {
+        toast.error('You have already upvoted this request')
+        return
+      }
+    } catch {}
     const { error } = await supabase.from('command_wishlist').update({ upvotes: current + 1 }).eq('id', id)
-    if (!error) setWishes(prev => prev.map(w => w.id === id ? { ...w, upvotes: current + 1 } : w))
-    else toast.error(error.message)
+    if (!error) {
+      try { localStorage.setItem(storageKey, '1') } catch {}
+      setWishes(prev => prev.map(w => w.id === id ? { ...w, upvotes: current + 1 } : w))
+    } else toast.error(error.message)
   }
 
   return (

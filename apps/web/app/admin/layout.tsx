@@ -26,6 +26,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [open, setOpen] = useState(false)
   const [mobile, setMobile] = useState(false)
 
+  // Don't show the admin layout on the login page
+  if (pathname === '/admin/login') {
+    return <>{children}</>
+  }
+
   useEffect(() => {
     const check = () => setMobile(window.innerWidth <= 768)
     check()

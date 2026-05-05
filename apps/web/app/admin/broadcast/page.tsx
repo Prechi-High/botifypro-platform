@@ -111,13 +111,16 @@ export default function AdminBroadcastPage() {
 
           {/* Message */}
           <div>
-            <label style={label}>
-              Message <span style={{ fontSize:'11px', color:'var(--text-muted)', fontWeight:400 }}>(HTML: &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, &lt;a href=""&gt;link&lt;/a&gt;)</span>
-            </label>
+            <label style={label}>Message</label>
             <textarea
               value={text}
               onChange={e=>setText(e.target.value)}
               className="input-field"
+              style={{ minHeight:'120px', resize:'vertical', fontSize:'13px' }}
+              placeholder="Type your broadcast message here... You can use *bold*, _italic_ or plain text."
+            />
+            <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'4px' }}>{text.length} characters</div>
+          </div>
               style={{ minHeight:'120px', resize:'vertical', fontFamily:'monospace', fontSize:'13px' }}
               placeholder="Type your broadcast message here..."
             />
