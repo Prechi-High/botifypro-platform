@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Bot, LayoutDashboard, Megaphone,
+  Bot, LayoutDashboard,
   LogOut, Menu, X, ChevronRight, Zap, Shield,
   Sun, Moon
 } from 'lucide-react'
