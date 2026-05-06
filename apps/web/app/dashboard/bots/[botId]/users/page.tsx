@@ -531,14 +531,22 @@ export default function UsersPage() {
                       >
                         <td style={{ padding: '10px 12px', fontSize: '13px', color: '#94a3b8' }}>{i + 1}</td>
                         <td style={{ padding: '10px 12px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
+                            {u.is_pro_member && u.pro_expires_at && new Date(u.pro_expires_at) > new Date() && (
+                              <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: 'rgba(57,255,20,0.12)', border: '1px solid rgba(57,255,20,0.3)', color: '#39FF14', whiteSpace: 'nowrap' }}>PRO</span>
+                            )}
+                          </div>
                           <div style={{ fontSize: '11px', color: '#94a3b8' }}>ID: {String(u.telegram_user_id)}</div>
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: '13px', color: u.telegram_username ? '#2563eb' : '#cbd5e1' }}>
                           {u.telegram_username ? '@' + u.telegram_username : 'No username'}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: '500', fontFamily: 'monospace', color: '#1e293b' }}>
-                          {Number(u.balance || 0).toLocaleString()} {sym}
+                          <div>{Number(u.balance || 0).toLocaleString()} {sym}</div>
+                          {Number(u.pro_deposit_amount || 0) > 0 && (
+                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>Deposit: {Number(u.pro_deposit_amount).toLocaleString()} {sym}</div>
+                          )}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmt(u.joined_at)}</td>
                         <td style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>{ago(u.last_active)}</td>
@@ -571,7 +579,12 @@ export default function UsersPage() {
                 <div key={u.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                     <div>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{u.first_name || 'Unknown'}</div>
+                        {u.is_pro_member && u.pro_expires_at && new Date(u.pro_expires_at) > new Date() && (
+                          <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: 'rgba(57,255,20,0.12)', border: '1px solid rgba(57,255,20,0.3)', color: '#39FF14' }}>PRO</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: '12px', color: u.telegram_username ? '#2563eb' : '#cbd5e1', marginTop: '1px' }}>
                         {u.telegram_username ? '@' + u.telegram_username : 'No username'}
                       </div>
@@ -579,8 +592,11 @@ export default function UsersPage() {
                     </div>
                     <StatusBadge u={u} />
                   </div>
-                  <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
-                    <span><b style={{ color: '#1e293b', fontSize: '11px' }}>Total Balance: </b><b style={{ color: '#1e293b' }}>{Number(u.balance || 0).toLocaleString()}</b> {sym}</span>
+                  <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b', marginBottom: '10px', flexWrap: 'wrap' }}>
+                    <span><b style={{ color: '#1e293b', fontSize: '11px' }}>Balance: </b><b style={{ color: '#1e293b' }}>{Number(u.balance || 0).toLocaleString()}</b> {sym}</span>
+                    {Number(u.pro_deposit_amount || 0) > 0 && (
+                      <span><b style={{ color: '#1e293b', fontSize: '11px' }}>Deposit: </b><b style={{ color: '#1e293b' }}>{Number(u.pro_deposit_amount).toLocaleString()}</b> {sym}</span>
+                    )}
                     <span>Joined {fmt(u.joined_at)}</span>
                     <span>{ago(u.last_active)}</span>
                   </div>

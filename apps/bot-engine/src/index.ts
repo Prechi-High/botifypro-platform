@@ -283,30 +283,23 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
 
     if (!user) return res.status(404).json({ error: 'User not found' })
 
-    if (user.depositAddress) {
-      return res.json({
-        success: true,
-        address: user.depositAddress,
-        trackId: user.depositTrackId,
-        network: 'TRON',
-        currency: 'USDT'
-      })
-    }
-
+    // Always generate a fresh white-label address for each deposit session
     const response = await axios.post(
-      'https://api.oxapay.com/v1/payment/static-address',
+      'https://api.oxapay.com/v1/payment/white-label',
       {
-        network: 'TRON',
-        to_currency: 'USDT',
-        auto_withdrawal: false,
-        callback_url: `${process.env.WEBHOOK_BASE_URL}/api/payments/oxapay-deposit-callback`,
-        email: email || user.email || `user_${userId}@1-touchbot.com`,
-        order_id: userId,
-        description: `Deposit for user ${userId}`
+        amount: 1,
+        currency: 'USD',
+        pay_currency: 'USDT',
+        network: 'TRC20',
+        lifetime: 60,
+        fee_paid_by_payer: 0,
+        under_paid_coverage: 2,
+        callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-ads/${userId}`,
+        description: `Advertiser deposit userId:${userId}`
       },
       {
         headers: {
-          merchant_api_key: merchantKey,
+          'merchant_api_key': merchantKey,
           'Content-Type': 'application/json'
         }
       }
@@ -314,10 +307,11 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
 
     const data = response.data?.data
     if (!data?.address) {
-      logger.error('OxaPay address generation failed', { response: response.data })
+      logger.error('OxaPay white-label address generation failed', { response: response.data })
       return res.status(500).json({ error: 'Failed to generate deposit address' })
     }
 
+    // Store the address for reuse (white-label gives a new address each time, store latest)
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -326,14 +320,14 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
       }
     })
 
-    logger.info('Deposit address generated', { userId, address: data.address })
+    logger.info('White-label deposit address generated', { userId, address: data.address })
 
     return res.json({
       success: true,
       address: data.address,
       trackId: String(data.track_id),
-      qrCode: data.qr_code,
-      network: 'TRON',
+      qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.address)}`,
+      network: 'TRC20',
       currency: 'USDT'
     })
   } catch (err: any) {

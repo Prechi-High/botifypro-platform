@@ -52,7 +52,14 @@ export default function AdminBroadcastPage() {
     setSending(true)
     try {
       const body: any = { text }
-      if (imageUrl) body.imageUrl = imageUrl
+      // Only include image if it's a URL (not base64) — base64 is too large for JSON
+      if (imageUrl && (imageUrl.startsWith('https://') || imageUrl.startsWith('http://'))) {
+        body.imageUrl = imageUrl
+      } else if (imageUrl && imageUrl.startsWith('data:')) {
+        notify('File uploads not supported for admin broadcast. Please use an image URL instead.', false)
+        setSending(false)
+        return
+      }
       if (buttonText && buttonUrl) { body.buttonText = buttonText; body.buttonUrl = buttonUrl }
 
       // Use the same per-bot broadcast endpoint that works for bot owners
@@ -135,9 +142,9 @@ export default function AdminBroadcastPage() {
           {/* Image */}
           <div>
             <label style={{ ...label, display:'flex', alignItems:'center', gap:'6px' }}>
-              <Image size={13} /> Image (optional)
+              <Image size={13} /> Image URL (optional)
             </label>
-            {imagePreview ? (
+            {imagePreview && !imagePreview.startsWith('data:') ? (
               <div style={{ position:'relative', display:'inline-block' }}>
                 <img src={imagePreview} alt="preview" style={{ maxWidth:'200px', maxHeight:'150px', borderRadius:'8px', border:'1px solid var(--border)' }} />
                 <button onClick={clearImage} style={{ position:'absolute', top:'-8px', right:'-8px', width:'22px', height:'22px', borderRadius:'50%', background:'#ef4444', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -145,19 +152,14 @@ export default function AdminBroadcastPage() {
                 </button>
               </div>
             ) : (
-              <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
+              <div>
                 <input
                   value={imageUrl}
                   onChange={e=>{ setImageUrl(e.target.value); setImagePreview(e.target.value) }}
                   className="input-field"
-                  placeholder="Paste image URL..."
-                  style={{ flex:1 }}
+                  placeholder="Paste image URL (https://...)"
                 />
-                <span style={{ fontSize:'12px', color:'var(--text-muted)' }}>or</span>
-                <button type="button" onClick={()=>fileInputRef.current?.click()} className="btn-ghost" style={{ whiteSpace:'nowrap', fontSize:'12px' }}>
-                  Upload file
-                </button>
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageFile} style={{ display:'none' }} />
+                <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'4px' }}>Only HTTPS image URLs are supported</div>
               </div>
             )}
           </div>

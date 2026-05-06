@@ -157,27 +157,6 @@ export default function AdminOverviewPage() {
         </div>
       )}
 
-      {/* Pending Withdrawals */}
-      {pendingWithdrawals.length > 0 && (
-        <div style={card}>
-          <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={15} color="#FBBF24" /> Pending Withdrawals ({pendingWithdrawals.length})
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {pendingWithdrawals.map(w => (
-              <div key={w.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px' }}>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{w.bot_users?.first_name || 'User'}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>${Number(w.amount_usd).toFixed(4)} · {new Date(w.created_at).toLocaleDateString()}</div>
-                </div>
-                <span style={{ fontSize: '11px', color: '#FBBF24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '4px', padding: '2px 8px' }}>PENDING</span>
-              </div>
-            ))}
-          </div>
-          <a href="/admin/transactions" style={{ display: 'block', marginTop: '10px', fontSize: '12px', color: 'var(--accent)', textDecoration: 'none', textAlign: 'right' }}>View all transactions →</a>
-        </div>
-      )}
-
       {/* Recent Signups */}
       <div style={card}>
         <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Recent Signups</h3>

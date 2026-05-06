@@ -99,6 +99,9 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
   const regularBalance = Number(botUser.balance || 0)
   const depositBalance = Number((botUser as any).proDepositAmount || 0)
   const mergeBalances = Boolean(settings?.mergeBalanceAndDeposit)
+  const isProMember = Boolean((botUser as any).isProMember)
+  const proExpiry = (botUser as any).proExpiresAt ? new Date((botUser as any).proExpiresAt) : null
+  const hasActivePlan = isProMember && proExpiry && proExpiry > new Date()
 
   let balanceText = ''
   if (mergeBalances) {
@@ -106,17 +109,15 @@ export async function handleBalance(bot: any, botUser: any, chatId: number) {
     balanceText = `• Balance: <b>${total.toLocaleString()} ${sym} ${currencyName}</b>`
   } else {
     balanceText = `• Balance: <b>${regularBalance.toLocaleString()} ${sym} ${currencyName}</b>`
-    if (depositBalance > 0) {
+    if (hasActivePlan || depositBalance > 0) {
       balanceText += `\n• Deposit Balance: <b>${depositBalance.toLocaleString()} ${sym}</b>`
     }
   }
 
   // Show pro plan info if active
   let proInfo = ''
-  const isProMember = Boolean((botUser as any).isProMember)
-  const proExpiry = (botUser as any).proExpiresAt ? new Date((botUser as any).proExpiresAt) : null
-  if (isProMember && proExpiry && proExpiry > new Date()) {
-    const daysLeft = Math.ceil((proExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  if (hasActivePlan) {
+    const daysLeft = Math.ceil((proExpiry!.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     const activePlanId = (botUser as any).activePlanId
     let planName = 'VIP Plan'
     if (activePlanId) {
@@ -481,7 +482,6 @@ export async function handleProPlanDetail(bot: any, botUser: any, chatId: number
     depositButtons.push([{ text: `💳 Deposit $${plan.activationAmount} to Activate` }])
   }
   depositButtons.push([{ text: '⬅️ Back to Plans' }])
-  depositButtons.push([{ text: '⬅️ Back' }])
 
   await redisSet(`invest_selected_plan:${botUser.id}`, plan.id, 600)
 
