@@ -90,7 +90,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: `1px solid ${isDark ? 'rgba(57,255,20,0.08)' : 'rgba(0,100,0,0.08)'}`,
       }}>
-        <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '138px', height: 'auto' }} />
+        <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '138px', height: 'auto', transform: 'scale(2)', transformOrigin: 'left center' }} />
         {mobile && (
           <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px', display: 'flex' }}>
             <X size={20} />
@@ -209,7 +209,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Menu size={22} />
             </button>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '120px', height: 'auto' }} />
+              <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '120px', height: 'auto', transform: 'scale(2)' }} />
             </div>
             <button onClick={toggleTheme} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
               {isDark ? <Sun size={20} /> : <Moon size={20} />}

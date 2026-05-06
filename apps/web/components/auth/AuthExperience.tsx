@@ -284,7 +284,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px 40px', position: 'relative', zIndex: 2 }}>
           {/* Logo */}
           <div style={{ marginBottom: '36px', animation: 'authFloat 4s ease-in-out infinite', filter: 'drop-shadow(0 0 20px rgba(57,255,20,0.2))' }}>
-            <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '150px', height: 'auto' }} />
+            <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '150px', height: 'auto', transform: 'scale(2)' }} />
           </div>
 
           {/* Slide */}
@@ -335,7 +335,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 16px', position: 'relative', zIndex: 2, animation: 'authSlideUp 0.3s cubic-bezier(0.22,1,0.36,1)' }}>
           {/* Logo */}
           <div style={{ marginBottom: '28px', animation: 'authFloat 4s ease-in-out infinite', filter: 'drop-shadow(0 0 16px rgba(57,255,20,0.2))' }}>
-            <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '130px', height: 'auto' }} />
+            <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '130px', height: 'auto', transform: 'scale(2)' }} />
           </div>
 
           <div style={{ width: '100%', maxWidth: '420px', borderRadius: '16px', background: '#0D110D', border: '1px solid rgba(57,255,20,0.15)', boxShadow: '0 0 60px rgba(57,255,20,0.06), 0 24px 80px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
@@ -430,7 +430,7 @@ export default function AuthExperience({ initialMode }: { initialMode: AuthMode 
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(8,10,8,0.95)', backdropFilter: 'blur(12px)' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ marginBottom: '20px', animation: 'authFloat 3s ease-in-out infinite', filter: 'drop-shadow(0 0 24px rgba(57,255,20,0.3))' }}>
-              <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '150px', height: 'auto' }} />
+              <img src="/platform-logo.png" alt="1-TouchBot" style={{ width: '150px', height: 'auto', transform: 'scale(2)' }} />
             </div>
             <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '20px', fontWeight: 800, color: '#FFFFFF', marginBottom: '8px' }}>{transitionLabel}</h2>
             <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#39FF14' }}>
