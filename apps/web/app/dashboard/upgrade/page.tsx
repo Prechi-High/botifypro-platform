@@ -1,11 +1,33 @@
 'use client'
 
-import { useState } from 'react'
-import { Zap, Check } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Zap, Check, Loader2 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import DepositModal from '@/components/ui/DepositModal'
 
 export default function UpgradePage() {
+  const supabase = useMemo(() => createClient(), [])
   const [showDeposit, setShowDeposit] = useState(false)
+  const [proPlanPrice, setProPlanPrice] = useState<number | null>(null)
+
+  useEffect(() => {
+    async function loadPrice() {
+      const { data } = await supabase
+        .from('platform_settings')
+        .select('pro_plan_price')
+        .single()
+      if (data?.pro_plan_price) {
+        setProPlanPrice(Number(data.pro_plan_price))
+      } else {
+        setProPlanPrice(10)
+      }
+    }
+    loadPrice()
+  }, [supabase])
+
+  const priceLabel = proPlanPrice === null
+    ? '...'
+    : `$${proPlanPrice}/month`
 
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '2rem' }}>
@@ -25,8 +47,17 @@ export default function UpgradePage() {
           marginBottom: '20px',
         }}
       >
-        <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-          Pro Plan - $10/month
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+            Pro Plan —
+          </div>
+          {proPlanPrice === null ? (
+            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: 'var(--text-muted)' }} />
+          ) : (
+            <div style={{ fontSize: '18px', fontWeight: 700, color: '#818cf8' }}>
+              {priceLabel}
+            </div>
+          )}
         </div>
         <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
           Billed monthly from your advertiser balance
@@ -47,17 +78,18 @@ export default function UpgradePage() {
 
         <button
           onClick={() => setShowDeposit(true)}
+          disabled={proPlanPrice === null}
           style={{
             marginTop: '16px',
             width: '100%',
             padding: '12px',
-            background: 'rgba(99,102,241,0.9)',
+            background: proPlanPrice === null ? 'rgba(99,102,241,0.4)' : 'rgba(99,102,241,0.9)',
             border: 'none',
             borderRadius: '10px',
             color: 'white',
             fontSize: '15px',
             fontWeight: 600,
-            cursor: 'pointer',
+            cursor: proPlanPrice === null ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -71,10 +103,12 @@ export default function UpgradePage() {
       <DepositModal
         isOpen={showDeposit}
         onClose={() => setShowDeposit(false)}
-        title="Deposit to Upgrade"
+        title={`Deposit to Upgrade — ${priceLabel}`}
         purpose="upgrade"
         onSuccess={() => {}}
       />
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }
