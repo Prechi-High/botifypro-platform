@@ -262,8 +262,15 @@ app.post('/api/payments/create-topup-invoice', async (req: Request, res: Respons
 
 app.post('/api/payments/get-deposit-address', async (req: Request, res: Response) => {
   try {
-    const { userId, email } = req.body || {}
+    const { userId, email, network: requestedNetwork, purpose: requestedPurpose } = req.body || {}
     if (!userId) return res.status(400).json({ error: 'userId required' })
+
+    const SUPPORTED_NETWORKS = ['TRC20', 'BEP20', 'ERC20', 'TON'] as const
+    type SupportedNetwork = typeof SUPPORTED_NETWORKS[number]
+    const network: SupportedNetwork = SUPPORTED_NETWORKS.includes(requestedNetwork) ? requestedNetwork : 'TRC20'
+
+    const SUPPORTED_PURPOSES = ['advertiser', 'upgrade'] as const
+    const purpose = SUPPORTED_PURPOSES.includes(requestedPurpose) ? requestedPurpose : 'advertiser'
 
     // Try platform_settings first (set by admin), then fall back to env var
     let merchantKey = process.env.OXAPAY_MERCHANT_KEY
@@ -283,19 +290,22 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
 
     if (!user) return res.status(404).json({ error: 'User not found' })
 
-    // Always generate a fresh white-label address for each deposit session
+    // Embed network + purpose in callback URL so the webhook can track both
+    const callbackUrl = `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-ads/${userId}?network=${network}&purpose=${purpose}`
+
+    // Always generate a fresh white-label address for each deposit session / network
     const response = await axios.post(
       'https://api.oxapay.com/v1/payment/white-label',
       {
         amount: 1,
         currency: 'USD',
         pay_currency: 'USDT',
-        network: 'TRC20',
+        network,
         lifetime: 60,
         fee_paid_by_payer: 0,
         under_paid_coverage: 2,
-        callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-ads/${userId}`,
-        description: `Advertiser deposit userId:${userId}`
+        callback_url: callbackUrl,
+        description: `deposit userId:${userId} network:${network} purpose:${purpose}`
       },
       {
         headers: {
@@ -311,7 +321,7 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
       return res.status(500).json({ error: 'Failed to generate deposit address' })
     }
 
-    // Store the address for reuse (white-label gives a new address each time, store latest)
+    // Store the latest address (white-label gives a fresh address each call)
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -320,14 +330,15 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
       }
     })
 
-    logger.info('White-label deposit address generated', { userId, address: data.address })
+    logger.info('White-label deposit address generated', { userId, network, purpose, address: data.address })
 
     return res.json({
       success: true,
       address: data.address,
       trackId: String(data.track_id),
       qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.address)}`,
-      network: 'TRC20',
+      network,
+      purpose,
       currency: 'USDT'
     })
   } catch (err: any) {
@@ -343,6 +354,9 @@ app.post('/webhooks/oxapay-ads/:userId', async (req: Request, res: Response) => 
   res.status(200).json({ ok: true })
   try {
     const { userId } = req.params
+    const network = String(req.query.network || 'TRC20')
+    const purpose = String(req.query.purpose || 'advertiser')
+
     const body = req.body
     const secretKey = process.env.OXAPAY_SECRET_KEY
     if (secretKey) {
@@ -352,17 +366,75 @@ app.post('/webhooks/oxapay-ads/:userId', async (req: Request, res: Response) => 
         return
       }
     }
-    const status = body?.data?.status || body?.status
-    const amount = body?.data?.amount || body?.amount
-    logger.info('OxaPay ads webhook received', { userId, status, amount })
+
+    const data = body?.data || body
+    const status = data?.status
+    const amount = data?.amount || data?.pay_amount
+    const trackId = String(data?.track_id || data?.txid || data?.transaction_id || '')
+
+    logger.info('OxaPay ads webhook received', { userId, status, amount, network, purpose, trackId })
+
     if (status !== 'Paid' && status !== 'paid') return
+
     const paidAmount = Number(amount)
     if (!paidAmount) return
-    await prisma.user.update({
-      where: { id: userId },
-      data: { advertiserBalance: { increment: paidAmount } },
-    })
-    logger.info('Advertiser balance topped up', { userId, paidAmount })
+
+    // Dedup: skip if we've already processed this transaction
+    if (trackId) {
+      const gatewayTxId = `ads-${trackId}`
+      const existing = await prisma.advertiserDepositTransaction.findUnique({ where: { gatewayTxId } })
+      if (existing) {
+        logger.info('Duplicate oxapay-ads webhook ignored', { gatewayTxId, userId })
+        return
+      }
+
+      // Credit balance and record transaction atomically
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: userId },
+          data: { advertiserBalance: { increment: paidAmount } },
+        }),
+        prisma.advertiserDepositTransaction.create({
+          data: {
+            userId,
+            amountUsd: paidAmount,
+            status: 'completed',
+            gateway: 'oxapay',
+            gatewayTxId,
+            network,
+            purpose,
+          }
+        })
+      ])
+
+      // Auto-upgrade to PRO when deposit was made from the upgrade page
+      if (purpose === 'upgrade') {
+        let proPlanPrice = 10
+        try {
+          const platformSettings = await (prisma as any).platformSettings.findFirst()
+          if (platformSettings?.proPlanPrice) proPlanPrice = Number(platformSettings.proPlanPrice)
+        } catch {}
+
+        if (paidAmount >= proPlanPrice) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { plan: 'pro' }
+          })
+          logger.info('User auto-upgraded to PRO', { userId, paidAmount, proPlanPrice })
+        } else {
+          logger.info('Upgrade deposit received but below plan price — balance credited only', { userId, paidAmount, proPlanPrice })
+        }
+      }
+    } else {
+      // No trackId — still credit the balance but log a warning
+      await prisma.user.update({
+        where: { id: userId },
+        data: { advertiserBalance: { increment: paidAmount } },
+      })
+      logger.warn('OxaPay ads webhook: no trackId in payload, transaction not recorded', { userId, paidAmount })
+    }
+
+    logger.info('Advertiser balance topped up', { userId, paidAmount, network, purpose })
   } catch (err: any) {
     logger.error('oxapay-ads webhook error', { error: err?.message })
   }
@@ -450,67 +522,100 @@ app.post('/webhooks/oxapay-pro/:botId', async (req: Request, res: Response) => {
   try {
     const { botId } = req.params
     const body = req.body
-    const trackId = body?.data?.track_id || body?.track_id
-    const status = body?.data?.status || body?.status
-    const amount = body?.data?.amount || body?.amount
+    const data = body?.data || body
+    const trackId = String(data?.track_id || data?.txid || data?.transaction_id || '')
+    const status = data?.status
+    const amount = data?.amount || data?.pay_amount
+    const network = String(data?.network || 'TRC20')
 
-    logger.info('OxaPay Pro webhook received', { botId, trackId, status })
+    logger.info('OxaPay Pro webhook received', { botId, trackId, status, network })
     if (status !== 'Paid' && status !== 'paid') return
 
-    const stored = await import('./redis').then(r => r.redisGet(`pro_deposit:${botId}:${trackId}`))
-    if (!stored) { logger.warn('OxaPay Pro webhook - unknown trackId', { trackId, botId }); return }
+    // Dedup: skip double-deliveries
+    if (trackId) {
+      const dedupKey = `pro_paid:${botId}:${trackId}`
+      const { redisGet, redisSet: rSet, redisDel } = await import('./redis')
+      const alreadyProcessed = await redisGet(dedupKey)
+      if (alreadyProcessed) {
+        logger.info('OxaPay Pro webhook: duplicate ignored', { botId, trackId })
+        return
+      }
+      await rSet(dedupKey, '1', 86400) // lock for 24h
 
-    const { botUserId, chatId, botToken, planId } = JSON.parse(stored)
+      const stored = await redisGet(`pro_deposit:${botId}:${trackId}`)
+      if (!stored) { logger.warn('OxaPay Pro webhook - unknown trackId', { trackId, botId }); return }
 
-    const bot = await prisma.bot.findUnique({ where: { id: botId }, include: { settings: true, creator: true } })
-    if (!bot) return
+      const { botUserId, chatId, botToken, planId } = JSON.parse(stored)
 
-    const settings = bot.settings as any
-    if (settings?.proOxapayMerchantKey) {
-      const hmac = crypto.createHmac('sha512', settings.proOxapayMerchantKey).update(JSON.stringify(body)).digest('hex')
-      if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
+      const bot = await prisma.bot.findUnique({ where: { id: botId }, include: { settings: true, creator: true } })
+      if (!bot) return
+
+      const settings = bot.settings as any
+      if (settings?.proOxapayMerchantKey) {
+        const hmac = crypto.createHmac('sha512', settings.proOxapayMerchantKey).update(JSON.stringify(body)).digest('hex')
+        if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
+      }
+
+      // Get plan details
+      let planName = 'VIP Plan'
+      let durationDays = Number(settings?.proPlanDurationDays || 30)
+      let dailyBonus = Number(settings?.proPlanDailyBonus || 50)
+
+      if (planId) {
+        try {
+          const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: planId } })
+          if (plan) {
+            planName = plan.name
+            durationDays = Number(plan.durationDays)
+            dailyBonus = Number(plan.dailyBonus)
+          }
+        } catch {}
+      }
+
+      const paidAmount = Number(amount || 0)
+      const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
+
+      // Activate VIP and save transaction record atomically
+      await prisma.$transaction([
+        prisma.botUser.update({
+          where: { id: botUserId },
+          data: {
+            isProMember: true,
+            proExpiresAt: expiresAt,
+            proDepositAmount: { increment: paidAmount },
+            ...(planId ? { activePlanId: planId } as any : {}),
+          } as any
+        }),
+        prisma.transaction.create({
+          data: {
+            botId,
+            botUserId,
+            type: 'vip_deposit',
+            amountCurrency: paidAmount,
+            amountUsd: paidAmount,
+            status: 'completed',
+            gateway: 'oxapay',
+            gatewayTxId: trackId,
+            depositAddress: String(data?.address || ''),
+          }
+        })
+      ])
+
+      await redisDel(`pro_deposit:${botId}:${trackId}`)
+
+      const sym = settings?.currencySymbol || '🪙'
+      const { sendMessage } = await import('./commands')
+      await sendMessage(botToken, Number(chatId),
+        `🎉 <b>Congratulations! You have successfully upgraded to ${planName}!</b>\n\n` +
+        `Your deposit was confirmed. You are now an active member!\n\n` +
+        `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
+        `• ⏱ Plan expires: <b>${expiresAt.toLocaleDateString()}</b>\n\n` +
+        `Tap 🎁 Daily Bonus to claim your first bonus!`
+      )
+      logger.info('Pro plan activated', { botId, botUserId, planName, expiresAt, network, paidAmount })
+    } else {
+      logger.warn('OxaPay Pro webhook: no trackId in payload', { botId })
     }
-
-    // Get plan details — use specific plan if planId stored, else fall back to settings defaults
-    let planName = 'VIP Plan'
-    let durationDays = Number(settings?.proPlanDurationDays || 30)
-    let dailyBonus = Number(settings?.proPlanDailyBonus || 50)
-
-    if (planId) {
-      try {
-        const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: planId } })
-        if (plan) {
-          planName = plan.name
-          durationDays = Number(plan.durationDays)
-          dailyBonus = Number(plan.dailyBonus)
-        }
-      } catch {}
-    }
-
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
-
-    await prisma.botUser.update({
-      where: { id: botUserId },
-      data: {
-        isProMember: true,
-        proExpiresAt: expiresAt,
-        proDepositAmount: { increment: Number(amount || 0) },
-        ...(planId ? { activePlanId: planId } as any : {}),
-      } as any
-    })
-
-    await import('./redis').then(r => r.redisDel(`pro_deposit:${botId}:${trackId}`))
-
-    const sym = settings?.currencySymbol || '🪙'
-    const { sendMessage } = await import('./commands')
-    await sendMessage(botToken, Number(chatId),
-      `🎉 <b>Congratulations! You have successfully upgraded to ${planName}!</b>\n\n` +
-      `Your deposit was confirmed. You are now an active member!\n\n` +
-      `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
-      `• ⏱ Plan expires: <b>${expiresAt.toLocaleDateString()}</b>\n\n` +
-      `Tap 🎁 Daily Bonus to claim your first bonus!`
-    )
-    logger.info('Pro plan activated', { botId, botUserId, planName, expiresAt })
   } catch (err: any) {
     logger.error('oxapay-pro webhook error', { error: err?.message })
   }

@@ -178,6 +178,8 @@ export async function handleOxapayWebhook(req: any, res: any, botId: string) {
     const usdAmount = Number(amount)
     const currencyAmount = usdAmount * Number(bot.settings?.usdToCurrencyRate || 1000)
 
+    const actualNetwork = String(body?.data?.network || body?.network || 'TRC20').toLowerCase()
+
     await prisma.$transaction([
       prisma.depositTransaction.create({
         data: {
@@ -187,8 +189,8 @@ export async function handleOxapayWebhook(req: any, res: any, botId: string) {
           amountUsd: usdAmount,
           amountCrypto: usdAmount,
           coin: String(currency || 'USDT'),
-          network: 'trc20',
-          recipientAddress: '',
+          network: actualNetwork,
+          recipientAddress: String(body?.data?.address || body?.address || ''),
           status: 'completed'
         }
       }),

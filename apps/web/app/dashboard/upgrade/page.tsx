@@ -72,6 +72,7 @@ export default function UpgradePage() {
         isOpen={showDeposit}
         onClose={() => setShowDeposit(false)}
         title="Deposit to Upgrade"
+        purpose="upgrade"
         onSuccess={() => {}}
       />
     </div>

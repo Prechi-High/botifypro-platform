@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Users, Terminal, RefreshCw, Send, CircleHelp, Zap } from 'lucide-react'
+import { Bot, Users, Terminal, RefreshCw, Send, CircleHelp, Zap, Megaphone, ArrowRight } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -104,6 +105,7 @@ function MiniLineChart({ data }: { data: HourlyData[] }) {
 
 export default function DashboardHome() {
   const supabase = useMemo(() => createClient(), [])
+  const router = useRouter()
   const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<Stats>({ totalBots: 0, activeBots: 0, activeUsers: 0, newUsers: 0, commands: 0 })
@@ -290,6 +292,27 @@ export default function DashboardHome() {
             <Bot size={15} /> My Bots
           </button>
         </Link>
+      </div>
+
+      {/* Advertising Banner */}
+      <div
+        onClick={() => router.push('/dashboard/advertise')}
+        style={{ cursor: 'pointer', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(57,255,20,0.08) 0%, rgba(57,255,20,0.04) 100%)', border: '1px solid rgba(57,255,20,0.2)', padding: '18px 20px', display: 'flex', alignItems: 'center', gap: '16px', transition: 'var(--transition)' }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(57,255,20,0.4)')}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(57,255,20,0.2)')}
+      >
+        <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'rgba(57,255,20,0.12)', border: '1px solid rgba(57,255,20,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Megaphone size={22} color="var(--accent)" />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif", marginBottom: '3px' }}>
+            Advertise on 1-TouchBot
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+            Reach thousands of active bot users across the network
+          </div>
+        </div>
+        <ArrowRight size={18} color="var(--accent)" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

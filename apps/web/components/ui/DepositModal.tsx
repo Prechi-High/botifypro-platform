@@ -9,17 +9,77 @@ interface DepositModalProps {
   onClose: () => void
   onSuccess?: (newBalance: number) => void
   title?: string
+  purpose?: 'advertiser' | 'upgrade'
 }
+
+const NETWORKS = [
+  {
+    id: 'TRC20',
+    label: 'TRC20',
+    chain: 'TRON',
+    chainColor: '#ff6b6b',
+    chainBg: 'rgba(255,0,0,0.1)',
+    chainBorder: 'rgba(255,0,0,0.2)',
+    tokenColor: '#10B981',
+    tokenBg: 'rgba(16,185,129,0.1)',
+    tokenBorder: 'rgba(16,185,129,0.2)',
+    fee: 'Very Low',
+    warning: 'Send USDT (TRC20) only. Do not send from exchanges that don\'t support TRC20.',
+  },
+  {
+    id: 'BEP20',
+    label: 'BEP20',
+    chain: 'BNB Chain',
+    chainColor: '#F0B90B',
+    chainBg: 'rgba(240,185,11,0.1)',
+    chainBorder: 'rgba(240,185,11,0.25)',
+    tokenColor: '#10B981',
+    tokenBg: 'rgba(16,185,129,0.1)',
+    tokenBorder: 'rgba(16,185,129,0.2)',
+    fee: 'Very Low',
+    warning: 'Send USDT (BEP20) only. Ensure your wallet supports BNB Chain (BSC).',
+  },
+  {
+    id: 'ERC20',
+    label: 'ERC20',
+    chain: 'Ethereum',
+    chainColor: '#627EEA',
+    chainBg: 'rgba(98,126,234,0.1)',
+    chainBorder: 'rgba(98,126,234,0.25)',
+    tokenColor: '#10B981',
+    tokenBg: 'rgba(16,185,129,0.1)',
+    tokenBorder: 'rgba(16,185,129,0.2)',
+    fee: 'Higher',
+    warning: 'Send USDT (ERC20) only. Ethereum gas fees apply — ensure your wallet has enough ETH for gas.',
+  },
+  {
+    id: 'TON',
+    label: 'TON',
+    chain: 'TON',
+    chainColor: '#0098EA',
+    chainBg: 'rgba(0,152,234,0.1)',
+    chainBorder: 'rgba(0,152,234,0.25)',
+    tokenColor: '#10B981',
+    tokenBg: 'rgba(16,185,129,0.1)',
+    tokenBorder: 'rgba(16,185,129,0.2)',
+    fee: 'Very Low',
+    warning: 'Send USDT on TON only. Compatible with TON wallets (e.g. Tonkeeper, @wallet on Telegram).',
+  },
+] as const
+
+type NetworkId = typeof NETWORKS[number]['id']
 
 export default function DepositModal({
   isOpen,
   onClose,
   onSuccess,
   title = 'Deposit USDT',
+  purpose = 'advertiser',
 }: DepositModalProps) {
   const supabase = useMemo(() => createClient(), [])
   const botEngineUrl = process.env.NEXT_PUBLIC_BOT_ENGINE_URL || 'https://engine.1-touchbot.com'
 
+  const [selectedNetwork, setSelectedNetwork] = useState<NetworkId>('TRC20')
   const [loading, setLoading] = useState(false)
   const [address, setAddress] = useState('')
   const [qrCode, setQrCode] = useState('')
@@ -31,13 +91,15 @@ export default function DepositModal({
 
   useEffect(() => {
     if (isOpen) {
-      loadAddress()
+      loadAddress(selectedNetwork)
     }
   }, [isOpen])
 
-  async function loadAddress() {
+  async function loadAddress(network: NetworkId) {
     setLoading(true)
     setError('')
+    setAddress('')
+    setQrCode('')
 
     try {
       const { data: auth } = await supabase.auth.getUser()
@@ -58,7 +120,7 @@ export default function DepositModal({
       const res = await fetch(`${botEngineUrl}/api/payments/get-deposit-address`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: uid, email: userEmail }),
+        body: JSON.stringify({ userId: uid, email: userEmail, network, purpose }),
       })
 
       const data = await res.json()
@@ -74,6 +136,12 @@ export default function DepositModal({
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleNetworkChange(network: NetworkId) {
+    if (network === selectedNetwork) return
+    setSelectedNetwork(network)
+    loadAddress(network)
   }
 
   async function copyAddress() {
@@ -110,6 +178,8 @@ export default function DepositModal({
 
   if (!isOpen) return null
 
+  const activeNet = NETWORKS.find(n => n.id === selectedNetwork)!
+
   return (
     <div
       onClick={(e) => {
@@ -133,9 +203,10 @@ export default function DepositModal({
           borderRadius: '20px',
           padding: '28px',
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: '440px',
         }}
       >
+        {/* Header */}
         <div
           style={{
             display: 'flex',
@@ -163,19 +234,73 @@ export default function DepositModal({
           </button>
         </div>
 
-        <div
-          style={{
-            padding: '12px 16px',
-            background: 'rgba(99,102,241,0.08)',
-            border: '1px solid rgba(99,102,241,0.2)',
-            borderRadius: '10px',
-            marginBottom: '20px',
-          }}
-        >
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>Current Balance</div>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
-            ${balance.toFixed(2)}{' '}
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>USD</span>
+        {/* Network selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              marginBottom: '10px',
+            }}
+          >
+            Select Network
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+            {NETWORKS.map(net => {
+              const isActive = selectedNetwork === net.id
+              return (
+                <button
+                  key={net.id}
+                  onClick={() => handleNetworkChange(net.id)}
+                  disabled={loading}
+                  style={{
+                    padding: '10px 6px',
+                    borderRadius: '10px',
+                    border: `1.5px solid ${isActive ? net.chainColor : 'var(--border)'}`,
+                    background: isActive ? net.chainBg : 'rgba(255,255,255,0.03)',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.15s',
+                    opacity: loading ? 0.6 : 1,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: isActive ? net.chainColor : 'var(--text-secondary)',
+                    }}
+                  >
+                    {net.id}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      color: isActive ? net.chainColor : 'var(--text-muted)',
+                      opacity: 0.85,
+                    }}
+                  >
+                    {net.chain}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      color: net.fee === 'Higher' ? '#FBBF24' : '#10B981',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {net.fee} fee
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -192,10 +317,11 @@ export default function DepositModal({
             }}
           >
             <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-            Generating your deposit address...
+            Generating {selectedNetwork} deposit address...
           </div>
         ) : address ? (
           <>
+            {/* Network badges */}
             <div
               style={{
                 fontSize: '13px',
@@ -203,33 +329,34 @@ export default function DepositModal({
                 marginBottom: '12px',
                 display: 'flex',
                 gap: '8px',
+                flexWrap: 'wrap',
               }}
             >
               <span
                 style={{
-                  background: 'rgba(255,0,0,0.1)',
-                  border: '1px solid rgba(255,0,0,0.2)',
-                  color: '#ff6b6b',
+                  background: activeNet.chainBg,
+                  border: `1px solid ${activeNet.chainBorder}`,
+                  color: activeNet.chainColor,
                   padding: '2px 8px',
                   borderRadius: '6px',
                   fontSize: '11px',
                   fontWeight: 600,
                 }}
               >
-                TRON
+                {activeNet.chain}
               </span>
               <span
                 style={{
-                  background: 'rgba(16,185,129,0.1)',
-                  border: '1px solid rgba(16,185,129,0.2)',
-                  color: '#10B981',
+                  background: activeNet.tokenBg,
+                  border: `1px solid ${activeNet.tokenBorder}`,
+                  color: activeNet.tokenColor,
                   padding: '2px 8px',
                   borderRadius: '6px',
                   fontSize: '11px',
                   fontWeight: 600,
                 }}
               >
-                USDT TRC20
+                USDT {activeNet.label}
               </span>
             </div>
 
@@ -311,7 +438,7 @@ export default function DepositModal({
                 marginBottom: '16px',
               }}
             >
-              Send USDT (TRC20) only. This is your permanent address and deposits are credited automatically.
+              ⚠️ This is a <b>temporary address</b> — valid for <b>60 minutes</b>. {activeNet.warning}
             </div>
 
             <button
@@ -341,7 +468,7 @@ export default function DepositModal({
               ) : (
                 <>
                   <RefreshCw size={15} />
-                  I've Made a Payment - Check Balance
+                  I've Sent Payment
                 </>
               )}
             </button>
@@ -349,6 +476,25 @@ export default function DepositModal({
         ) : (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', padding: '20px' }}>
             {error || 'Failed to load deposit address. Try again.'}
+            {error && (
+              <button
+                onClick={() => loadAddress(selectedNetwork)}
+                style={{
+                  display: 'block',
+                  margin: '12px auto 0',
+                  padding: '8px 16px',
+                  background: 'rgba(99,102,241,0.15)',
+                  border: '1px solid rgba(99,102,241,0.3)',
+                  borderRadius: '8px',
+                  color: '#818cf8',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Try Again
+              </button>
+            )}
           </div>
         )}
 

@@ -5,7 +5,8 @@ import { redisGet, redisSet, redisDel } from './redis'
 import {
   sendMessage, handleStart, handleBalance, handleDeposit,
   handleWithdraw, handleWithdrawAmountSelected, handleHelp, handleBonus, handleReferralInfo, handleLeaderboard,
-  handleProPlan, handleProPlanDetail
+  handleProPlan, handleProPlanDetail, showDepositNetworkSelection, showWithdrawNetworkSelection,
+  DEPOSIT_NETWORKS, WITHDRAW_NETWORKS
 } from './commands'
 import { maybeServeAd } from './ads'
 import { handleReferral } from './referral'
@@ -473,6 +474,78 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (text === '💎 Invest') { await handleProPlan(bot, botUser, chatId); return }
       // Sub-menu reply keyboard buttons
       if (text === '⬅️ Back') { const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } }); await handleStart(bot, freshUser || botUser, chatId); return }
+
+      // Network selection for deposit
+      const depositNetworkPending = await redisGet(`deposit_network_pending:\${botUser.id}`)
+      if (depositNetworkPending) {
+        const depositNet = DEPOSIT_NETWORKS.find(n => n.label === text)
+        if (depositNet) {
+          await redisDel(`deposit_network_pending:\${botUser.id}`)
+          const settings = bot.settings as any
+          const selectedPlanId = await redisGet(`invest_selected_plan:\${botUser.id}`)
+          const plan = selectedPlanId ? await (prisma as any).investmentPlan.findUnique({ where: { id: selectedPlanId } }) : null
+          const depositAmount = plan ? Number(plan.activationAmount) : Number(settings.proPlanDepositMin || 10)
+          try {
+            const response = await axios.post(
+              'https://api.oxapay.com/v1/payment/white-label',
+              {
+                amount: depositAmount, currency: 'USD',
+                pay_currency: depositNet.payCurrency, network: depositNet.network,
+                lifetime: 30, fee_paid_by_payer: 0, under_paid_coverage: 2,
+                callback_url: `\${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/\${bot.id}`,
+                description: `VIP botId:\${bot.id} userId:\${botUser.id} planId:\${selectedPlanId || ''}`
+              },
+              { headers: { 'merchant_api_key': settings.proOxapayMerchantKey, 'Content-Type': 'application/json' } }
+            )
+            if (response.data?.status === 200) {
+              const inv = response.data.data
+              await redisSet(`pro_deposit:\${bot.id}:\${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId, botToken: bot.botToken, planId: selectedPlanId || '' }), 1800)
+              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=\${encodeURIComponent(inv.address)}`
+              await sendMessage(bot.botToken, chatId,
+                `💳 <b>VIP Activation Deposit</b>\n\nNetwork: <b>\${depositNet.label}</b>\nSend exactly <b>\${inv.pay_amount} \${depositNet.payCurrency}</b> to:\n<code>\${inv.address}</code>\n\n⏱ Expires in: <b>30 minutes</b>\n📷 QR: \${qrUrl}\n\n✅ VIP activates automatically once confirmed.`,
+                { keyboard: [[{ text: '⬅️ Back to Plans' }]], resize_keyboard: true, persistent: true, one_time_keyboard: false }
+              )
+            } else {
+              await sendMessage(bot.botToken, chatId, '❌ Could not generate deposit address. Try again later.')
+            }
+          } catch {
+            await sendMessage(bot.botToken, chatId, '❌ Deposit failed. Try again later.')
+          }
+          return
+        }
+      }
+
+      // Network selection for withdrawal
+      const withdrawNetworkState = await redisGet('withdraw_state:' + botUser.id)
+      if (withdrawNetworkState === 'awaiting_network') {
+        const withdrawNet = WITHDRAW_NETWORKS.find(n => n.label === text)
+        if (withdrawNet) {
+          await redisSet('withdraw_network:' + botUser.id, withdrawNet.network, 600)
+          await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
+          const savedAddress = await redisGet(`withdraw_saved_address:\${botUser.id}`) || null
+          const sym = bot.settings?.currencySymbol || '🪙'
+          const savedAmount = await redisGet('withdraw_amount:' + botUser.id)
+          const amount = savedAmount ? Number(savedAmount) : 0
+          const rate = Number(bot.settings?.usdToCurrencyRate || 1000)
+          const netUsd = (amount / rate) * (1 - Number(bot.settings?.withdrawFeePercent || 0) / 100)
+          if (savedAddress) {
+            await sendMessage(bot.botToken, chatId,
+              `📤 <b>Withdrawal: \${amount.toLocaleString()} \${sym}</b>\n≈ \${netUsd.toFixed(4)} USD\nNetwork: <b>\${withdrawNet.label}</b>\n\nYou have a saved address:\n<code>\${savedAddress}</code>\n\nUse this address or enter a new one?`,
+              { inline_keyboard: [
+                [{ text: '✅ Use Saved Address', callback_data: 'withdraw_use_saved' }],
+                [{ text: '✏️ Enter New Address', callback_data: 'withdraw_new_address' }],
+                [{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]
+              ]}
+            )
+          } else {
+            await sendMessage(bot.botToken, chatId,
+              `📤 <b>Withdrawal: \${amount.toLocaleString()} \${sym}</b>\n≈ \${netUsd.toFixed(4)} USD\nNetwork: <b>\${withdrawNet.label}</b>\n\nEnter your <b>\${withdrawNet.label}</b> wallet address:\n<i>\${withdrawNet.hint}</i>\n\n⏱ You have 10 minutes.`,
+              { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
+            )
+          }
+          return
+        }
+      }
       if (text === '⬅️ Back to Plans') { const page = parseInt(await redisGet(`invest_page:${botUser.id}`) || '0', 10); await handleProPlan(bot, botUser, chatId, page); return }
       // Investment plan pagination
       if (text === 'Next ▶️') {
@@ -485,39 +558,16 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await handleProPlan(bot, botUser, chatId, Math.max(0, page - 1))
         return
       }
-      // Investment plan deposit button (dynamic: "💳 Deposit $X to Activate")
-      if (text.startsWith('💳 Deposit $') && text.endsWith('to Activate')) {
+      // Investment plan deposit button — show network selection first
+      if (text.startsWith('💳 Deposit ') && text.endsWith('to Activate')) {
         const settings = bot.settings as any
         if (!settings?.proOxapayConfigured || !settings?.proOxapayMerchantKey) {
           await sendMessage(bot.botToken, chatId, '❌ VIP deposit not configured. Contact bot owner.')
           return
         }
-        const selectedPlanId = await redisGet(`invest_selected_plan:${botUser.id}`)
-        const plan = selectedPlanId ? await (prisma as any).investmentPlan.findUnique({ where: { id: selectedPlanId } }) : null
-        const depositAmount = plan ? Number(plan.activationAmount) : Number(settings.proPlanDepositMin || 10)
-        try {
-          const response = await axios.post(
-            'https://api.oxapay.com/v1/payment/white-label',
-            {
-              amount: depositAmount, currency: 'USD', pay_currency: 'USDT', network: 'TRC20',
-              lifetime: 30, fee_paid_by_payer: 0, under_paid_coverage: 2,
-              callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/${bot.id}`,
-              description: `VIP botId:${bot.id} userId:${botUser.id} planId:${selectedPlanId || ''}`
-            },
-            { headers: { 'merchant_api_key': settings.proOxapayMerchantKey, 'Content-Type': 'application/json' } }
-          )
-          if (response.data?.status === 200) {
-            const inv = response.data.data
-            await redisSet(`pro_deposit:${bot.id}:${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId, botToken: bot.botToken, planId: selectedPlanId || '' }), 1800)
-            await sendMessage(bot.botToken, chatId,
-              `💳 <b>VIP Activation Deposit</b>\n\nSend exactly <b>${inv.pay_amount} USDT</b> to:\n<code>${inv.address}</code>\n\n🌐 Network: <b>TRC20</b>\n⏱ Expires in: <b>30 minutes</b>\n\n✅ VIP activates automatically once confirmed.`
-            )
-          } else {
-            await sendMessage(bot.botToken, chatId, '❌ Could not generate deposit. Try again later.')
-          }
-        } catch {
-          await sendMessage(bot.botToken, chatId, '❌ Deposit failed. Try again later.')
-        }
+        // Store that we're in deposit flow, then show network selection
+        await redisSet(`deposit_network_pending:\${botUser.id}`, 'pro', 600)
+        await showDepositNetworkSelection(bot.botToken, chatId)
         return
       }
       // Investment plan selection — button text is "💎 PlanName"
@@ -530,35 +580,12 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         }
       }
       if (text === '💳 Deposit to Activate') {
-        // Trigger OxaPay pro deposit via inline callback logic
         const settings = bot.settings as any
         if (!settings?.proOxapayConfigured || !settings?.proOxapayMerchantKey) {
           await sendMessage(bot.botToken, chatId, '❌ VIP deposit not configured. Contact bot owner.')
         } else {
-          const minDeposit = Number(settings.proPlanDepositMin || 10)
-          try {
-            const response = await axios.post(
-              'https://api.oxapay.com/v1/payment/white-label',
-              {
-                amount: minDeposit, currency: 'USD', pay_currency: 'USDT', network: 'TRC20',
-                lifetime: 30, fee_paid_by_payer: 0, under_paid_coverage: 2,
-                callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/${bot.id}`,
-                description: `VIP botId:${bot.id} userId:${botUser.id}`
-              },
-              { headers: { 'merchant_api_key': settings.proOxapayMerchantKey, 'Content-Type': 'application/json' } }
-            )
-            if (response.data?.status === 200) {
-              const inv = response.data.data
-              await redisSet(`pro_deposit:${bot.id}:${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId, botToken: bot.botToken }), 1800)
-              await sendMessage(bot.botToken, chatId,
-                `💳 <b>VIP Activation Deposit</b>\n\nSend exactly <b>${inv.pay_amount} USDT</b> to:\n<code>${inv.address}</code>\n\n🌐 Network: <b>TRC20</b>\n⏱ Expires in: <b>30 minutes</b>\n\n✅ VIP activates automatically once confirmed.`
-              )
-            } else {
-              await sendMessage(bot.botToken, chatId, '❌ Could not generate deposit. Try again later.')
-            }
-          } catch {
-            await sendMessage(bot.botToken, chatId, '❌ Deposit failed. Try again later.')
-          }
+          await redisSet(`deposit_network_pending:${botUser.id}`, 'pro', 600)
+          await showDepositNetworkSelection(bot.botToken, chatId)
         }
         return
       }
@@ -644,30 +671,8 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         if (!settings?.proOxapayConfigured || !settings?.proOxapayMerchantKey) {
           await sendMessage(bot.botToken, cbChatId, '❌ VIP deposit not configured. Contact bot owner.')
         } else {
-          const minDeposit = Number(settings.proPlanDepositMin || 10)
-          try {
-            const response = await axios.post(
-              'https://api.oxapay.com/v1/payment/white-label',
-              {
-                amount: minDeposit, currency: 'USD', pay_currency: 'USDT', network: 'TRC20',
-                lifetime: 30, fee_paid_by_payer: 0, under_paid_coverage: 2,
-                callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/${bot.id}`,
-                description: `VIP botId:${bot.id} userId:${botUser.id}`
-              },
-              { headers: { 'merchant_api_key': settings.proOxapayMerchantKey, 'Content-Type': 'application/json' } }
-            )
-            if (response.data?.status === 200) {
-              const inv = response.data.data
-              await redisSet(`pro_deposit:${bot.id}:${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId: cbChatId, botToken: bot.botToken }), 1800)
-              await sendMessage(bot.botToken, cbChatId,
-                `💳 <b>VIP Activation Deposit</b>\n\nSend exactly <b>${inv.pay_amount} USDT</b> to:\n<code>${inv.address}</code>\n\n🌐 Network: <b>TRC20</b>\n⏱ Expires in: <b>30 minutes</b>\n\n✅ VIP activates automatically once confirmed.`
-              )
-            } else {
-              await sendMessage(bot.botToken, cbChatId, '❌ Could not generate deposit. Try again later.')
-            }
-          } catch {
-            await sendMessage(bot.botToken, cbChatId, '❌ Deposit failed. Try again later.')
-          }
+          await redisSet(`deposit_network_pending:${botUser.id}`, 'pro', 600)
+          await showDepositNetworkSelection(bot.botToken, cbChatId)
         }
       }
       // Withdrawal amount selection — no longer used (amounts entered as free text)

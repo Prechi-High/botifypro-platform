@@ -239,6 +239,7 @@ export default function AdvertisePage() {
       <DepositModal
         isOpen={showDepositModal}
         onClose={() => setShowDepositModal(false)}
+        purpose="advertiser"
         onSuccess={(newBalance) => {
           setBalance(newBalance)
           toast.success(`Balance updated: $${newBalance.toFixed(2)} ✓`)

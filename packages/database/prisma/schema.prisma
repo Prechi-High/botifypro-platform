@@ -226,6 +226,8 @@ model AdvertiserDepositTransaction {
   status      String   @default("completed")
   gateway     String
   gatewayTxId String   @unique @map("gateway_tx_id")
+  network     String?
+  purpose     String?
   createdAt   DateTime @default(now()) @map("created_at")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
