@@ -516,106 +516,128 @@ app.post('/api/payments/oxapay-deposit-callback', async (req: Request, res: Resp
   }
 })
 
-// OxaPay Pro/VIP deposit webhook
+// Shared handler for OxaPay Pro/VIP deposit webhooks
+async function processOxapayProWebhook(botId: string, req: any) {
+  const body = req.body
+  const data = body?.data || body
+  const trackId = String(data?.track_id || data?.txid || data?.transaction_id || '')
+  const status = data?.status
+  const amount = data?.amount || data?.pay_amount
+  const network = String(data?.network || 'TRC20')
+
+  logger.info('OxaPay Pro webhook received', { botId, trackId, status, network })
+  if (status !== 'Paid' && status !== 'paid') return
+
+  if (!trackId) {
+    logger.warn('OxaPay Pro webhook: no trackId in payload', { botId })
+    return
+  }
+
+  const { redisGet, redisSet: rSet, redisDel } = await import('./redis')
+
+  // Dedup: skip double-deliveries
+  const dedupKey = `pro_paid:${botId}:${trackId}`
+  const alreadyProcessed = await redisGet(dedupKey)
+  if (alreadyProcessed) {
+    logger.info('OxaPay Pro webhook: duplicate ignored', { botId, trackId })
+    return
+  }
+  await rSet(dedupKey, '1', 86400)
+
+  const stored = await redisGet(`pro_deposit:${botId}:${trackId}`)
+  if (!stored) { logger.warn('OxaPay Pro webhook - unknown trackId', { trackId, botId }); return }
+
+  const { botUserId, chatId, botToken, planId } = JSON.parse(stored)
+
+  const bot = await prisma.bot.findUnique({ where: { id: botId }, include: { settings: true, creator: true } })
+  if (!bot) return
+
+  const settings = bot.settings as any
+  if (settings?.proOxapayMerchantKey) {
+    const hmac = crypto.createHmac('sha512', settings.proOxapayMerchantKey).update(JSON.stringify(body)).digest('hex')
+    if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
+  }
+
+  let planName = 'VIP Plan'
+  let durationDays = Number(settings?.proPlanDurationDays || 30)
+  let dailyBonus = Number(settings?.proPlanDailyBonus || 50)
+
+  if (planId) {
+    try {
+      const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: planId } })
+      if (plan) {
+        planName = plan.name
+        durationDays = Number(plan.durationDays)
+        dailyBonus = Number(plan.dailyBonus)
+      }
+    } catch {}
+  }
+
+  const paidAmount = Number(amount || 0)
+  const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
+
+  await prisma.$transaction([
+    prisma.botUser.update({
+      where: { id: botUserId },
+      data: {
+        isProMember: true,
+        proExpiresAt: expiresAt,
+        proDepositAmount: { increment: paidAmount },
+        ...(planId ? { activePlanId: planId } as any : {}),
+      } as any
+    }),
+    prisma.transaction.create({
+      data: {
+        botId,
+        botUserId,
+        type: 'vip_deposit',
+        amountCurrency: paidAmount,
+        amountUsd: paidAmount,
+        status: 'completed',
+        gateway: 'oxapay',
+        gatewayTxId: trackId,
+        depositAddress: String(data?.address || ''),
+      }
+    })
+  ])
+
+  await redisDel(`pro_deposit:${botId}:${trackId}`)
+
+  const sym = settings?.currencySymbol || '🪙'
+  const { sendMessage } = await import('./commands')
+  await sendMessage(botToken, Number(chatId),
+    `🎉 <b>Congratulations! You have successfully upgraded to ${planName}!</b>\n\n` +
+    `Your deposit was confirmed. You are now an active member!\n\n` +
+    `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
+    `• ⏱ Plan expires: <b>${expiresAt.toLocaleDateString()}</b>\n\n` +
+    `Tap 🎁 Daily Bonus to claim your first bonus!`
+  )
+  logger.info('Pro plan activated', { botId, botUserId, planName, expiresAt, network, paidAmount })
+}
+
+// Static callback URL handler — used when bot owner sets the merchant-level callback in OxaPay dashboard.
+// Extracts botId from the payment description field: "VIP botId:xxx userId:xxx ..."
+app.post('/webhooks/oxapay-pro', async (req: Request, res: Response) => {
+  res.status(200).json({ ok: true })
+  try {
+    const data = req.body?.data || req.body
+    const description = String(data?.description || '')
+    const botIdMatch = description.match(/botId:([^\s]+)/)
+    if (!botIdMatch) {
+      logger.warn('OxaPay Pro static webhook: could not extract botId from description', { description })
+      return
+    }
+    await processOxapayProWebhook(botIdMatch[1], req)
+  } catch (err: any) {
+    logger.error('oxapay-pro static webhook error', { error: err?.message })
+  }
+})
+
+// Per-bot callback URL handler — used when callback_url is set per-invoice in the API call.
 app.post('/webhooks/oxapay-pro/:botId', async (req: Request, res: Response) => {
   res.status(200).json({ ok: true })
   try {
-    const { botId } = req.params
-    const body = req.body
-    const data = body?.data || body
-    const trackId = String(data?.track_id || data?.txid || data?.transaction_id || '')
-    const status = data?.status
-    const amount = data?.amount || data?.pay_amount
-    const network = String(data?.network || 'TRC20')
-
-    logger.info('OxaPay Pro webhook received', { botId, trackId, status, network })
-    if (status !== 'Paid' && status !== 'paid') return
-
-    // Dedup: skip double-deliveries
-    if (trackId) {
-      const dedupKey = `pro_paid:${botId}:${trackId}`
-      const { redisGet, redisSet: rSet, redisDel } = await import('./redis')
-      const alreadyProcessed = await redisGet(dedupKey)
-      if (alreadyProcessed) {
-        logger.info('OxaPay Pro webhook: duplicate ignored', { botId, trackId })
-        return
-      }
-      await rSet(dedupKey, '1', 86400) // lock for 24h
-
-      const stored = await redisGet(`pro_deposit:${botId}:${trackId}`)
-      if (!stored) { logger.warn('OxaPay Pro webhook - unknown trackId', { trackId, botId }); return }
-
-      const { botUserId, chatId, botToken, planId } = JSON.parse(stored)
-
-      const bot = await prisma.bot.findUnique({ where: { id: botId }, include: { settings: true, creator: true } })
-      if (!bot) return
-
-      const settings = bot.settings as any
-      if (settings?.proOxapayMerchantKey) {
-        const hmac = crypto.createHmac('sha512', settings.proOxapayMerchantKey).update(JSON.stringify(body)).digest('hex')
-        if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
-      }
-
-      // Get plan details
-      let planName = 'VIP Plan'
-      let durationDays = Number(settings?.proPlanDurationDays || 30)
-      let dailyBonus = Number(settings?.proPlanDailyBonus || 50)
-
-      if (planId) {
-        try {
-          const plan = await (prisma as any).investmentPlan.findUnique({ where: { id: planId } })
-          if (plan) {
-            planName = plan.name
-            durationDays = Number(plan.durationDays)
-            dailyBonus = Number(plan.dailyBonus)
-          }
-        } catch {}
-      }
-
-      const paidAmount = Number(amount || 0)
-      const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
-
-      // Activate VIP and save transaction record atomically
-      await prisma.$transaction([
-        prisma.botUser.update({
-          where: { id: botUserId },
-          data: {
-            isProMember: true,
-            proExpiresAt: expiresAt,
-            proDepositAmount: { increment: paidAmount },
-            ...(planId ? { activePlanId: planId } as any : {}),
-          } as any
-        }),
-        prisma.transaction.create({
-          data: {
-            botId,
-            botUserId,
-            type: 'vip_deposit',
-            amountCurrency: paidAmount,
-            amountUsd: paidAmount,
-            status: 'completed',
-            gateway: 'oxapay',
-            gatewayTxId: trackId,
-            depositAddress: String(data?.address || ''),
-          }
-        })
-      ])
-
-      await redisDel(`pro_deposit:${botId}:${trackId}`)
-
-      const sym = settings?.currencySymbol || '🪙'
-      const { sendMessage } = await import('./commands')
-      await sendMessage(botToken, Number(chatId),
-        `🎉 <b>Congratulations! You have successfully upgraded to ${planName}!</b>\n\n` +
-        `Your deposit was confirmed. You are now an active member!\n\n` +
-        `• 💰 Daily bonus: <b>${dailyBonus} ${sym}</b> every day\n` +
-        `• ⏱ Plan expires: <b>${expiresAt.toLocaleDateString()}</b>\n\n` +
-        `Tap 🎁 Daily Bonus to claim your first bonus!`
-      )
-      logger.info('Pro plan activated', { botId, botUserId, planName, expiresAt, network, paidAmount })
-    } else {
-      logger.warn('OxaPay Pro webhook: no trackId in payload', { botId })
-    }
+    await processOxapayProWebhook(req.params.botId, req)
   } catch (err: any) {
     logger.error('oxapay-pro webhook error', { error: err?.message })
   }
