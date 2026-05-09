@@ -476,13 +476,13 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
       if (text === '⬅️ Back') { const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } }); await handleStart(bot, freshUser || botUser, chatId); return }
 
       // Network selection for deposit
-      const depositNetworkPending = await redisGet(`deposit_network_pending:\${botUser.id}`)
+      const depositNetworkPending = await redisGet(`deposit_network_pending:${botUser.id}`)
       if (depositNetworkPending) {
         const depositNet = DEPOSIT_NETWORKS.find(n => n.label === text)
         if (depositNet) {
-          await redisDel(`deposit_network_pending:\${botUser.id}`)
+          await redisDel(`deposit_network_pending:${botUser.id}`)
           const settings = bot.settings as any
-          const selectedPlanId = await redisGet(`invest_selected_plan:\${botUser.id}`)
+          const selectedPlanId = await redisGet(`invest_selected_plan:${botUser.id}`)
           const plan = selectedPlanId ? await (prisma as any).investmentPlan.findUnique({ where: { id: selectedPlanId } }) : null
           const depositAmount = plan ? Number(plan.activationAmount) : Number(settings.proPlanDepositMin || 10)
           try {
@@ -492,17 +492,17 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
                 amount: depositAmount, currency: 'USD',
                 pay_currency: depositNet.payCurrency, network: depositNet.network,
                 lifetime: 30, fee_paid_by_payer: 0, under_paid_coverage: 2,
-                callback_url: `\${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/\${bot.id}`,
-                description: `VIP botId:\${bot.id} userId:\${botUser.id} planId:\${selectedPlanId || ''}`
+                callback_url: `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-pro/${bot.id}`,
+                description: `VIP botId:${bot.id} userId:${botUser.id} planId:${selectedPlanId || ''}`
               },
               { headers: { 'merchant_api_key': settings.proOxapayMerchantKey, 'Content-Type': 'application/json' } }
             )
             if (response.data?.status === 200) {
               const inv = response.data.data
-              await redisSet(`pro_deposit:\${bot.id}:\${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId, botToken: bot.botToken, planId: selectedPlanId || '' }), 1800)
-              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=\${encodeURIComponent(inv.address)}`
+              await redisSet(`pro_deposit:${bot.id}:${inv.track_id}`, JSON.stringify({ botUserId: botUser.id, chatId, botToken: bot.botToken, planId: selectedPlanId || '' }), 1800)
+              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inv.address)}`
               await sendMessage(bot.botToken, chatId,
-                `💳 <b>VIP Activation Deposit</b>\n\nNetwork: <b>\${depositNet.label}</b>\nSend exactly <b>\${inv.pay_amount} \${depositNet.payCurrency}</b> to:\n<code>\${inv.address}</code>\n\n⏱ Expires in: <b>30 minutes</b>\n📷 QR: \${qrUrl}\n\n✅ VIP activates automatically once confirmed.`,
+                `💳 <b>VIP Activation Deposit</b>\n\nNetwork: <b>${depositNet.label}</b>\nSend exactly <b>${inv.pay_amount} ${depositNet.payCurrency}</b> to:\n<code>${inv.address}</code>\n\n⏱ Expires in: <b>30 minutes</b>\n📷 QR: ${qrUrl}\n\n✅ VIP activates automatically once confirmed.`,
                 { keyboard: [[{ text: '⬅️ Back to Plans' }]], resize_keyboard: true, persistent: true, one_time_keyboard: false }
               )
             } else {
@@ -522,7 +522,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         if (withdrawNet) {
           await redisSet('withdraw_network:' + botUser.id, withdrawNet.network, 600)
           await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
-          const savedAddress = await redisGet(`withdraw_saved_address:\${botUser.id}`) || null
+          const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`) || null
           const sym = bot.settings?.currencySymbol || '🪙'
           const savedAmount = await redisGet('withdraw_amount:' + botUser.id)
           const amount = savedAmount ? Number(savedAmount) : 0
@@ -530,7 +530,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           const netUsd = (amount / rate) * (1 - Number(bot.settings?.withdrawFeePercent || 0) / 100)
           if (savedAddress) {
             await sendMessage(bot.botToken, chatId,
-              `📤 <b>Withdrawal: \${amount.toLocaleString()} \${sym}</b>\n≈ \${netUsd.toFixed(4)} USD\nNetwork: <b>\${withdrawNet.label}</b>\n\nYou have a saved address:\n<code>\${savedAddress}</code>\n\nUse this address or enter a new one?`,
+              `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n≈ ${netUsd.toFixed(4)} USD\nNetwork: <b>${withdrawNet.label}</b>\n\nYou have a saved address:\n<code>${savedAddress}</code>\n\nUse this address or enter a new one?`,
               { inline_keyboard: [
                 [{ text: '✅ Use Saved Address', callback_data: 'withdraw_use_saved' }],
                 [{ text: '✏️ Enter New Address', callback_data: 'withdraw_new_address' }],
@@ -539,7 +539,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
             )
           } else {
             await sendMessage(bot.botToken, chatId,
-              `📤 <b>Withdrawal: \${amount.toLocaleString()} \${sym}</b>\n≈ \${netUsd.toFixed(4)} USD\nNetwork: <b>\${withdrawNet.label}</b>\n\nEnter your <b>\${withdrawNet.label}</b> wallet address:\n<i>\${withdrawNet.hint}</i>\n\n⏱ You have 10 minutes.`,
+              `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n≈ ${netUsd.toFixed(4)} USD\nNetwork: <b>${withdrawNet.label}</b>\n\nEnter your <b>${withdrawNet.label}</b> wallet address:\n<i>${withdrawNet.hint}</i>\n\n⏱ You have 10 minutes.`,
               { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
             )
           }
@@ -566,7 +566,7 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
           return
         }
         // Store that we're in deposit flow, then show network selection
-        await redisSet(`deposit_network_pending:\${botUser.id}`, 'pro', 600)
+        await redisSet(`deposit_network_pending:${botUser.id}`, 'pro', 600)
         await showDepositNetworkSelection(bot.botToken, chatId)
         return
       }
@@ -620,6 +620,8 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         await handleReferralInfo(bot, botUser, chatId)
       } else if (text.startsWith('/leaderboard')) {
         await handleLeaderboard(bot, botUser, chatId)
+      } else if (text.startsWith('/invest') || text.startsWith('/vip') || text.startsWith('/plans')) {
+        await handleProPlan(bot, botUser, chatId)
       } else if (text.startsWith('/help')) {
         await handleHelp(bot, chatId)
       } else if (text.startsWith('/')) {

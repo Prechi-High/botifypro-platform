@@ -4,6 +4,43 @@ import { logger } from './logger'
 import { redisGet, redisSet, redisTtl, redisDel } from './redis'
 import { getWithdrawalDestinationHint, getWithdrawProvider, hasAutomaticPayoutKey } from './payments/payouts'
 
+// ── Network definitions ───────────────────────────────────────────────────────
+export const DEPOSIT_NETWORKS = [
+  { label: '🟢 USDT TRC20 (Tron)', payCurrency: 'USDT', network: 'TRC20' },
+  { label: '🟡 USDT BEP20 (BSC)', payCurrency: 'USDT', network: 'BEP20' },
+  { label: '🔵 USDT ERC20 (Ethereum)', payCurrency: 'USDT', network: 'ERC20' },
+  { label: '🟣 USDT Polygon', payCurrency: 'USDT', network: 'POLYGON' },
+  { label: '⚪ USDT Arbitrum', payCurrency: 'USDT', network: 'ARBITRUM' },
+  { label: '🔴 USDT Solana', payCurrency: 'USDT', network: 'SOL' },
+]
+
+export const WITHDRAW_NETWORKS = [
+  { label: '🟢 TRC20 (Tron)', network: 'TRC20', hint: 'Address starts with T, 34 characters' },
+  { label: '🟡 BEP20 (BSC)', network: 'BEP20', hint: 'Address starts with 0x, 42 characters' },
+  { label: '🔵 ERC20 (Ethereum)', network: 'ERC20', hint: 'Address starts with 0x, 42 characters' },
+  { label: '🟣 Polygon', network: 'POLYGON', hint: 'Address starts with 0x, 42 characters' },
+  { label: '⚪ Arbitrum', network: 'ARBITRUM', hint: 'Address starts with 0x, 42 characters' },
+  { label: '🔴 Solana', network: 'SOL', hint: 'Base58 address, 32-44 characters' },
+]
+
+export async function showDepositNetworkSelection(botToken: string, chatId: number) {
+  const keyboard = DEPOSIT_NETWORKS.map(n => [{ text: n.label }])
+  keyboard.push([{ text: '⬅️ Back' }])
+  await sendMessage(botToken, chatId,
+    '💳 <b>Select Deposit Network</b>\n\nChoose the network you will send USDT from:',
+    { keyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
+  )
+}
+
+export async function showWithdrawNetworkSelection(botToken: string, chatId: number) {
+  const keyboard = WITHDRAW_NETWORKS.map(n => [{ text: n.label }])
+  keyboard.push([{ text: '⬅️ Back' }])
+  await sendMessage(botToken, chatId,
+    '💳 <b>Select Withdrawal Network</b>\n\nChoose the network to receive your USDT:',
+    { keyboard, resize_keyboard: true, persistent: true, one_time_keyboard: false }
+  )
+}
+
 export async function sendMessage(
   botToken: string,
   chatId: number,
@@ -369,13 +406,22 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
   const feeUsd = usdEquiv * (feePercent / 100)
   const netUsd = usdEquiv - feeUsd
   await redisSet('withdraw_amount:' + botUser.id, String(amount), 600)
-  await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
   const provider = getWithdrawProvider(settings)
+
+  // For OxaPay withdrawals, show network selection first
+  if (provider === 'oxapay') {
+    await redisSet('withdraw_state:' + botUser.id, 'awaiting_network', 600)
+    await showWithdrawNetworkSelection(bot.botToken, chatId)
+    return
+  }
+
+  // For FaucetPay/manual, go straight to address
+  await redisSet('withdraw_state:' + botUser.id, 'awaiting_address', 600)
   const savedAddress = await redisGet(`withdraw_saved_address:${botUser.id}`) || null
   if (savedAddress) {
     const providerNote = provider === 'faucetpay'
       ? `\n💳 Payment via: <b>FaucetPay (${settings?.faucetpayPayoutCurrency || 'USDT'})</b>`
-      : provider === 'oxapay' ? `\n💳 Payment via: <b>OxaPay (USDT TRC20)</b>` : ''
+      : ''
     await sendMessage(bot.botToken, chatId,
       `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n≈ ${netUsd.toFixed(4)} USD after fees${providerNote}\n\nYou have a saved address:\n<code>${savedAddress}</code>\n\nUse this address or enter a new one?`,
       { inline_keyboard: [
@@ -388,9 +434,7 @@ export async function handleWithdrawAmountSelected(bot: any, botUser: any, chatI
     const hint = getWithdrawalDestinationHint(settings)
     const addressLabel = provider === 'faucetpay'
       ? `📧 <b>FaucetPay is your payment method.</b>\n\nEnter your <b>FaucetPay email address</b> or a FaucetPay-linked wallet address to receive your payout:`
-      : provider === 'oxapay'
-        ? `💳 <b>OxaPay payout — USDT on TRC20 (Tron) network.</b>\n\nEnter your <b>USDT TRC20 wallet address</b>\n(starts with <b>T</b>, exactly 34 characters):`
-        : `📝 Enter your payout address or account details:`
+      : `📝 Enter your payout address or account details:`
     await sendMessage(bot.botToken, chatId,
       `📤 <b>Withdrawal: ${amount.toLocaleString()} ${sym}</b>\n≈ ${netUsd.toFixed(4)} USD after fees\n\n${addressLabel}\n\n<i>${hint}</i>\n\n⏱ You have 10 minutes.`,
       { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'cmd_cancel_withdraw' }]] }
@@ -407,10 +451,16 @@ export async function handleProPlan(bot: any, botUser: any, chatId: number, page
     return
   }
 
-  const plans = await (prisma as any).investmentPlan.findMany({
-    where: { botId: bot.id, isActive: true },
-    orderBy: { sortOrder: 'asc' }
-  })
+  let plans: any[] = []
+  try {
+    plans = await (prisma as any).investmentPlan.findMany({
+      where: { botId: bot.id, isActive: true },
+      orderBy: { sortOrder: 'asc' }
+    })
+  } catch {
+    await sendMessage(bot.botToken, chatId, '⚠️ Investment plans could not be loaded. Please try again later.')
+    return
+  }
 
   if (plans.length === 0) {
     await sendMessage(bot.botToken, chatId, '💎 No investment plans are available yet. Check back soon!', {
@@ -454,9 +504,15 @@ export async function handleProPlanDetail(bot: any, botUser: any, chatId: number
 
   // Strip "💎 " prefix to get the plan name — button format is now "💎 PlanName"
   const cleanName = planButtonText.replace(/^💎\s*/, '').trim()
-  const plan = await (prisma as any).investmentPlan.findFirst({
-    where: { botId: bot.id, isActive: true, name: cleanName }
-  })
+  let plan: any = null
+  try {
+    plan = await (prisma as any).investmentPlan.findFirst({
+      where: { botId: bot.id, isActive: true, name: cleanName }
+    })
+  } catch {
+    await sendMessage(bot.botToken, chatId, '⚠️ Could not load plan details. Please try again later.')
+    return
+  }
 
   if (!plan) {
     await sendMessage(bot.botToken, chatId, '❌ Plan not found. Please try again.')

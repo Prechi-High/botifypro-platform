@@ -8,6 +8,24 @@ import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, Zap, Hand, Eye, EyeOff, AlertTriangle, MessageSquare, Shield, Coins, Radio, ArrowUpFromLine, CheckCircle, XCircle } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
+const COIN_OPTIONS = [
+  { symbol: 'USDT',  name: 'USDT',     icon: '💵' },
+  { symbol: 'USDC',  name: 'USDC',     icon: '💵' },
+  { symbol: 'BTC',   name: 'Bitcoin',  icon: '₿'  },
+  { symbol: 'ETH',   name: 'Ethereum', icon: '⟠'  },
+  { symbol: 'BNB',   name: 'BNB',      icon: '🟡' },
+  { symbol: 'SOL',   name: 'Solana',   icon: '◎'  },
+  { symbol: 'TRX',   name: 'TRX',      icon: '🔴' },
+  { symbol: 'TON',   name: 'TON',      icon: '💎' },
+  { symbol: 'XRP',   name: 'XRP',      icon: '🔵' },
+  { symbol: 'ADA',   name: 'Cardano',  icon: '🔷' },
+  { symbol: 'DOGE',  name: 'Dogecoin', icon: '🐕' },
+  { symbol: 'SHIB',  name: 'SHIB',     icon: '🐶' },
+  { symbol: 'AVAX',  name: 'Avalanche',icon: '🔺' },
+  { symbol: 'MATIC', name: 'Polygon',  icon: '🟣' },
+  { symbol: 'LTC',   name: 'Litecoin', icon: '🪙' },
+]
+
 function ToggleRow({ label, desc, enabled, onToggle }: {
   label: string; desc: string; enabled: boolean; onToggle: () => void
 }) {
@@ -483,36 +501,61 @@ export default function BotSettingsPage() {
           {/* Currency */}
           <div style={sectionCardStyle}>
             <h3 style={sectionTitle}><Coins size={16} style={{marginRight:'8px',color:'#F59E0B'}} />Currency</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+              {/* Quick-pick coin dropdown */}
               <div>
-                <label style={labelStyle}>Currency name</label>
-                <input value={currencyName} onChange={e => setCurrencyName(e.target.value)} className="input-field" placeholder="Coins" />
+                <label style={labelStyle}>Quick-pick a coin type</label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%', cursor: 'pointer' }}
+                  value={COIN_OPTIONS.find(c => c.symbol === currencySymbol && c.name === currencyName)?.symbol || ''}
+                  onChange={e => {
+                    const coin = COIN_OPTIONS.find(c => c.symbol === e.target.value)
+                    if (coin) { setCurrencyName(coin.name); setCurrencySymbol(coin.symbol) }
+                  }}
+                >
+                  <option value="">— Select a coin (or set manually below) —</option>
+                  {COIN_OPTIONS.map(c => (
+                    <option key={c.symbol} value={c.symbol}>{c.icon} {c.name} ({c.symbol})</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Selecting a coin auto-fills the name &amp; symbol below.
+                </div>
               </div>
-              <div>
-                <label style={labelStyle}>Currency symbol</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    value={currencySymbol}
-                    onChange={e => setCurrencySymbol(e.target.value)}
-                    className="input-field"
-                    placeholder="🪙 or text"
-                    style={{ flex: 1 }}
-                  />
-                  <div style={{
-                    width: '42px', height: '42px', borderRadius: '8px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid var(--border)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '22px', flexShrink: 0
-                  }}>
-                    {currencySymbol || '🪙'}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle}>Currency name</label>
+                  <input value={currencyName} onChange={e => setCurrencyName(e.target.value)} className="input-field" placeholder="Coins" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Currency symbol</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      value={currencySymbol}
+                      onChange={e => setCurrencySymbol(e.target.value)}
+                      className="input-field"
+                      placeholder="🪙 or text"
+                      style={{ flex: 1 }}
+                    />
+                    <div style={{
+                      width: '42px', height: '42px', borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid var(--border)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '16px', fontWeight: 700, color: '#F59E0B', flexShrink: 0
+                    }}>
+                      {currencySymbol || '🪙'}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Override: type an emoji or short text
                   </div>
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Type an emoji or short text
-                </div>
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
+
+              <div>
                 <label style={labelStyle}>USD to currency rate</label>
                 <input type="number" value={usdToCurrencyRate} onChange={e => setUsdToCurrencyRate(Number(e.target.value))} className="input-field" />
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
