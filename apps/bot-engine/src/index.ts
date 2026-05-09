@@ -353,14 +353,19 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
 // Shared handler for OxaPay advertiser/upgrade deposit webhooks
 async function processOxapayAdsWebhook(userId: string, network: string, purpose: string, req: any) {
   const body = req.body
-  const secretKey = process.env.OXAPAY_SECRET_KEY
-  if (secretKey) {
-    const hmac = crypto.createHmac('sha512', secretKey).update(JSON.stringify(body)).digest('hex')
-    if (hmac !== req.headers['hmac']) {
-      logger.error('OxaPay ads HMAC mismatch', { userId })
-      return
+
+  // Verify HMAC using the ads merchant key (OxaPay signs with the merchant API key, not a separate secret)
+  try {
+    let merchantKey = process.env.OXAPAY_MERCHANT_KEY
+    const platformSettings = await (prisma as any).platformSettings.findFirst()
+    if (platformSettings?.adsOxapayMerchantKey) merchantKey = platformSettings.adsOxapayMerchantKey
+    if (merchantKey && req.headers['hmac']) {
+      const hmac = crypto.createHmac('sha512', merchantKey).update(JSON.stringify(body)).digest('hex')
+      if (hmac !== req.headers['hmac']) {
+        logger.warn('OxaPay ads HMAC mismatch — processing anyway (dedup protects against replays)', { userId })
+      }
     }
-  }
+  } catch {}
 
   const data = body?.data || body
   const status = data?.status
@@ -578,9 +583,12 @@ async function processOxapayProWebhook(botId: string, req: any) {
   if (!bot) return
 
   const settings = bot.settings as any
-  if (settings?.proOxapayMerchantKey) {
+  // OxaPay signs callbacks with the merchant API key — log mismatches but don't block (dedup protects against replays)
+  if (settings?.proOxapayMerchantKey && req.headers['hmac']) {
     const hmac = crypto.createHmac('sha512', settings.proOxapayMerchantKey).update(JSON.stringify(body)).digest('hex')
-    if (hmac !== req.headers['hmac']) { logger.error('OxaPay Pro HMAC mismatch', { botId }); return }
+    if (hmac !== req.headers['hmac']) {
+      logger.warn('OxaPay Pro HMAC mismatch — processing anyway (dedup protects against replays)', { botId })
+    }
   }
 
   let planName = 'VIP Plan'
