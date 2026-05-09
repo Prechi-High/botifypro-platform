@@ -350,91 +350,116 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
   }
 })
 
+// Shared handler for OxaPay advertiser/upgrade deposit webhooks
+async function processOxapayAdsWebhook(userId: string, network: string, purpose: string, req: any) {
+  const body = req.body
+  const secretKey = process.env.OXAPAY_SECRET_KEY
+  if (secretKey) {
+    const hmac = crypto.createHmac('sha512', secretKey).update(JSON.stringify(body)).digest('hex')
+    if (hmac !== req.headers['hmac']) {
+      logger.error('OxaPay ads HMAC mismatch', { userId })
+      return
+    }
+  }
+
+  const data = body?.data || body
+  const status = data?.status
+  const amount = data?.amount || data?.pay_amount
+  const trackId = String(data?.track_id || data?.txid || data?.transaction_id || '')
+
+  logger.info('OxaPay ads webhook received', { userId, status, amount, network, purpose, trackId })
+
+  if (status !== 'Paid' && status !== 'paid') return
+
+  const paidAmount = Number(amount)
+  if (!paidAmount) return
+
+  if (trackId) {
+    const gatewayTxId = `ads-${trackId}`
+    const existing = await prisma.advertiserDepositTransaction.findUnique({ where: { gatewayTxId } })
+    if (existing) {
+      logger.info('Duplicate oxapay-ads webhook ignored', { gatewayTxId, userId })
+      return
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { advertiserBalance: { increment: paidAmount } },
+      }),
+      prisma.advertiserDepositTransaction.create({
+        data: {
+          userId,
+          amountUsd: paidAmount,
+          status: 'completed',
+          gateway: 'oxapay',
+          gatewayTxId,
+          network,
+          purpose,
+        }
+      })
+    ])
+
+    // Auto-upgrade to PRO when deposit was made from the upgrade page
+    if (purpose === 'upgrade') {
+      let proPlanPrice = 10
+      try {
+        const platformSettings = await (prisma as any).platformSettings.findFirst()
+        if (platformSettings?.proPlanPrice) proPlanPrice = Number(platformSettings.proPlanPrice)
+      } catch {}
+
+      if (paidAmount >= proPlanPrice) {
+        await prisma.user.update({ where: { id: userId }, data: { plan: 'pro' } })
+        logger.info('User auto-upgraded to PRO', { userId, paidAmount, proPlanPrice })
+      } else {
+        logger.info('Upgrade deposit below plan price — balance credited only', { userId, paidAmount, proPlanPrice })
+      }
+    }
+  } else {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { advertiserBalance: { increment: paidAmount } },
+    })
+    logger.warn('OxaPay ads webhook: no trackId in payload, transaction not recorded', { userId, paidAmount })
+  }
+
+  logger.info('Advertiser balance topped up', { userId, paidAmount, network, purpose })
+}
+
+// Static callback URL handler — used when admin sets the merchant-level callback in OxaPay dashboard.
+// Extracts userId, network, and purpose from the payment description field.
+app.post('/webhooks/oxapay-ads', async (req: Request, res: Response) => {
+  res.status(200).json({ ok: true })
+  try {
+    const data = req.body?.data || req.body
+    const description = String(data?.description || '')
+
+    const userIdMatch = description.match(/userId:([^\s]+)/)
+    if (!userIdMatch) {
+      logger.warn('OxaPay ads static webhook: could not extract userId from description', { description })
+      return
+    }
+    const userId = userIdMatch[1]
+
+    const networkMatch = description.match(/network:([^\s]+)/)
+    const purposeMatch = description.match(/purpose:([^\s]+)/)
+    const network = networkMatch ? networkMatch[1] : 'TRC20'
+    const purpose = purposeMatch ? purposeMatch[1] : 'advertiser'
+
+    await processOxapayAdsWebhook(userId, network, purpose, req)
+  } catch (err: any) {
+    logger.error('oxapay-ads static webhook error', { error: err?.message })
+  }
+})
+
+// Per-user callback URL handler — used when callback_url is set per-invoice in the API call.
 app.post('/webhooks/oxapay-ads/:userId', async (req: Request, res: Response) => {
   res.status(200).json({ ok: true })
   try {
     const { userId } = req.params
     const network = String(req.query.network || 'TRC20')
     const purpose = String(req.query.purpose || 'advertiser')
-
-    const body = req.body
-    const secretKey = process.env.OXAPAY_SECRET_KEY
-    if (secretKey) {
-      const hmac = crypto.createHmac('sha512', secretKey).update(JSON.stringify(body)).digest('hex')
-      if (hmac !== req.headers['hmac']) {
-        logger.error('OxaPay ads HMAC mismatch', { userId })
-        return
-      }
-    }
-
-    const data = body?.data || body
-    const status = data?.status
-    const amount = data?.amount || data?.pay_amount
-    const trackId = String(data?.track_id || data?.txid || data?.transaction_id || '')
-
-    logger.info('OxaPay ads webhook received', { userId, status, amount, network, purpose, trackId })
-
-    if (status !== 'Paid' && status !== 'paid') return
-
-    const paidAmount = Number(amount)
-    if (!paidAmount) return
-
-    // Dedup: skip if we've already processed this transaction
-    if (trackId) {
-      const gatewayTxId = `ads-${trackId}`
-      const existing = await prisma.advertiserDepositTransaction.findUnique({ where: { gatewayTxId } })
-      if (existing) {
-        logger.info('Duplicate oxapay-ads webhook ignored', { gatewayTxId, userId })
-        return
-      }
-
-      // Credit balance and record transaction atomically
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: userId },
-          data: { advertiserBalance: { increment: paidAmount } },
-        }),
-        prisma.advertiserDepositTransaction.create({
-          data: {
-            userId,
-            amountUsd: paidAmount,
-            status: 'completed',
-            gateway: 'oxapay',
-            gatewayTxId,
-            network,
-            purpose,
-          }
-        })
-      ])
-
-      // Auto-upgrade to PRO when deposit was made from the upgrade page
-      if (purpose === 'upgrade') {
-        let proPlanPrice = 10
-        try {
-          const platformSettings = await (prisma as any).platformSettings.findFirst()
-          if (platformSettings?.proPlanPrice) proPlanPrice = Number(platformSettings.proPlanPrice)
-        } catch {}
-
-        if (paidAmount >= proPlanPrice) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: { plan: 'pro' }
-          })
-          logger.info('User auto-upgraded to PRO', { userId, paidAmount, proPlanPrice })
-        } else {
-          logger.info('Upgrade deposit received but below plan price — balance credited only', { userId, paidAmount, proPlanPrice })
-        }
-      }
-    } else {
-      // No trackId — still credit the balance but log a warning
-      await prisma.user.update({
-        where: { id: userId },
-        data: { advertiserBalance: { increment: paidAmount } },
-      })
-      logger.warn('OxaPay ads webhook: no trackId in payload, transaction not recorded', { userId, paidAmount })
-    }
-
-    logger.info('Advertiser balance topped up', { userId, paidAmount, network, purpose })
+    await processOxapayAdsWebhook(userId, network, purpose, req)
   } catch (err: any) {
     logger.error('oxapay-ads webhook error', { error: err?.message })
   }
