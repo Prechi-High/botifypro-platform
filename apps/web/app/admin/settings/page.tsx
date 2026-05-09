@@ -36,6 +36,7 @@ export default function AdminSettingsPage() {
 
   // Pricing
   const [proPlanPrice, setProPlanPrice] = useState(10)
+  const [minAdvertiserDeposit, setMinAdvertiserDeposit] = useState(1)
 
   // Admin password
   const [currentAdminPw, setCurrentAdminPw] = useState('')
@@ -62,6 +63,7 @@ export default function AdminSettingsPage() {
         setBalanceButtonText(data.balance_button_text || 'Advertise with AdsGalaxy')
         setBalanceButtonUrl(data.balance_button_url || 'https://t.me/Ads_Galaxy_bot')
         setProPlanPrice(Number(data.pro_plan_price||10))
+        setMinAdvertiserDeposit(Number(data.min_advertiser_deposit_usd||1))
       }
       setLoading(false)
     }
@@ -81,6 +83,7 @@ export default function AdminSettingsPage() {
         balance_button_text: balanceButtonText,
         balance_button_url: balanceButtonUrl,
         pro_plan_price: proPlanPrice,
+        min_advertiser_deposit_usd: minAdvertiserDeposit,
         updated_at: new Date().toISOString(),
       }
       if (proOxapayKey.trim()) {
@@ -230,9 +233,15 @@ export default function AdminSettingsPage() {
       {/* Pricing */}
       <div style={card}>
         <div><p style={sectionTitle}>Pricing</p></div>
-        <div style={{ maxWidth:'200px' }}>
-          <label style={label}>Pro Plan Price (USD/month)</label>
-          <input type="number" min="1" step="1" value={proPlanPrice} onChange={e=>setProPlanPrice(Number(e.target.value))} className="input-field" />
+        <div style={{ display:'flex', gap:'16px', flexWrap:'wrap' }}>
+          <div style={{ maxWidth:'200px' }}>
+            <label style={label}>Pro Plan Price (USD/month)</label>
+            <input type="number" min="1" step="1" value={proPlanPrice} onChange={e=>setProPlanPrice(Number(e.target.value))} className="input-field" />
+          </div>
+          <div style={{ maxWidth:'200px' }}>
+            <label style={label}>Min Advertiser Deposit (USD)</label>
+            <input type="number" min="1" step="0.01" value={minAdvertiserDeposit} onChange={e=>setMinAdvertiserDeposit(Number(e.target.value))} className="input-field" />
+          </div>
         </div>
       </div>
 

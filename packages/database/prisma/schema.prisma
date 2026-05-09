@@ -292,7 +292,8 @@ model PlatformSettings {
   balanceButtonText     String  @default("Advertise with AdsGalaxy") @map("balance_button_text")
   balanceButtonUrl      String  @default("https://t.me/Ads_Galaxy_bot") @map("balance_button_url")
   // Pricing
-  proPlanPrice          Float   @default(10) @map("pro_plan_price")
+  proPlanPrice              Float   @default(10) @map("pro_plan_price")
+  minAdvertiserDepositUsd   Float   @default(1) @map("min_advertiser_deposit_usd")
   updatedAt             DateTime @updatedAt @map("updated_at")
   @@map("platform_settings")
 }

@@ -289,15 +289,6 @@ export default function DepositModal({
                   >
                     {net.chain}
                   </span>
-                  <span
-                    style={{
-                      fontSize: '9px',
-                      color: net.fee === 'Higher' ? '#FBBF24' : '#10B981',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {net.fee} fee
-                  </span>
                 </button>
               )
             })}

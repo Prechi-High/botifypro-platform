@@ -24,6 +24,7 @@ export default function AdminSettingsPage() {
 
   const [platformFeePercent, setPlatformFeePercent] = useState(10)
   const [proPlanPrice, setProPlanPrice] = useState(10)
+  const [minAdvertiserDeposit, setMinAdvertiserDeposit] = useState(1)
 
   function notify(msg: string, ok = true) {
     setToast({msg, ok})
@@ -46,6 +47,7 @@ export default function AdminSettingsPage() {
         setCpmRate7d(Number(data.cpm_7day || 0.005))
         setPlatformFeePercent(Number(data.platform_fee_percent || 10))
         setProPlanPrice(Number(data.pro_plan_price || 10))
+        setMinAdvertiserDeposit(Number(data.min_advertiser_deposit_usd || 1))
       }
       setLoading(false)
     }
@@ -66,6 +68,7 @@ export default function AdminSettingsPage() {
       cpm_7day: cpmRate7d,
       platform_fee_percent: platformFeePercent,
       pro_plan_price: proPlanPrice,
+      min_advertiser_deposit_usd: minAdvertiserDeposit,
       updated_at: new Date().toISOString()
     })
     if (error) notify(error.message, false)
@@ -182,6 +185,10 @@ export default function AdminSettingsPage() {
                 <input type="number" min="1" value={proPlanPrice} onChange={e => setProPlanPrice(Number(e.target.value))}
                   style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
                 'Monthly price for Pro plan charged from advertiser balance')}
+              {field('Min Advertiser Deposit (USD)',
+                <input type="number" min="1" step="0.01" value={minAdvertiserDeposit} onChange={e => setMinAdvertiserDeposit(Number(e.target.value))}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
+                'Minimum deposit amount for advertising balance top-ups')}
             </>)}
           </>
         )}

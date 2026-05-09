@@ -274,11 +274,13 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
 
     // Try platform_settings first (set by admin), then fall back to env var
     let merchantKey = process.env.OXAPAY_MERCHANT_KEY
+    let proPlanPrice = 10
+    let minAdvertiserDeposit = 1
     try {
       const platformSettings = await (prisma as any).platformSettings.findFirst()
-      if (platformSettings?.adsOxapayMerchantKey) {
-        merchantKey = platformSettings.adsOxapayMerchantKey
-      }
+      if (platformSettings?.adsOxapayMerchantKey) merchantKey = platformSettings.adsOxapayMerchantKey
+      if (platformSettings?.proPlanPrice) proPlanPrice = Number(platformSettings.proPlanPrice)
+      if (platformSettings?.minAdvertiserDepositUsd) minAdvertiserDeposit = Number(platformSettings.minAdvertiserDepositUsd)
     } catch {}
 
     if (!merchantKey) return res.status(500).json({ error: 'OxaPay not configured. Set the OxaPay merchant key in Admin Settings.' })
@@ -290,6 +292,9 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
 
     if (!user) return res.status(404).json({ error: 'User not found' })
 
+    // Use purpose-based minimum: upgrade deposits use proPlanPrice, advertiser deposits use admin-configured minimum
+    const invoiceAmount = purpose === 'upgrade' ? proPlanPrice : minAdvertiserDeposit
+
     // Embed network + purpose in callback URL so the webhook can track both
     const callbackUrl = `${process.env.WEBHOOK_BASE_URL}/webhooks/oxapay-ads/${userId}?network=${network}&purpose=${purpose}`
 
@@ -297,7 +302,7 @@ app.post('/api/payments/get-deposit-address', async (req: Request, res: Response
     const response = await axios.post(
       'https://api.oxapay.com/v1/payment/white-label',
       {
-        amount: 1,
+        amount: invoiceAmount,
         currency: 'USD',
         pay_currency: 'USDT',
         network,

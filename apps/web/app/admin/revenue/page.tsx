@@ -17,18 +17,21 @@ export default function AdminRevenuePage() {
     setLoading(true)
     try {
       if (tab === 'overview') {
-        const [{ data: deposits }, { data: withdrawals }, { data: fees }] = await Promise.all([
+        const [{ data: deposits }, { data: withdrawals }, { data: fees }, { data: advertiserDeps }] = await Promise.all([
           supabase.from('transactions').select('amount_usd').eq('type', 'deposit').eq('status', 'completed'),
           supabase.from('transactions').select('amount_usd').eq('type', 'withdrawal').eq('status', 'completed'),
           supabase.from('transactions').select('platform_fee_amount').eq('status', 'completed'),
+          supabase.from('advertiser_deposit_transactions').select('amount_usd').eq('status', 'completed'),
         ])
-        const totalDeposits = (deposits||[]).reduce((s:number,t:any)=>s+Number(t.amount_usd||0),0)
+        const botDeposits = (deposits||[]).reduce((s:number,t:any)=>s+Number(t.amount_usd||0),0)
+        const advertiserTotal = (advertiserDeps||[]).reduce((s:number,t:any)=>s+Number(t.amount_usd||0),0)
+        const totalDeposits = botDeposits + advertiserTotal
         const totalWithdrawn = (withdrawals||[]).reduce((s:number,t:any)=>s+Number(t.amount_usd||0),0)
         const feesCollected = (fees||[]).reduce((s:number,t:any)=>s+Number(t.platform_fee_amount||0),0)
         setOverview({ totalDeposits, totalWithdrawn, netRevenue: totalDeposits - totalWithdrawn, feesCollected })
       } else if (tab === 'advertiser') {
         const { data } = await supabase.from('advertiser_deposit_transactions')
-          .select('id, amount_usd, status, gateway, gateway_tx_id, created_at, users(email)')
+          .select('id, amount_usd, status, gateway, gateway_tx_id, network, purpose, created_at, users(email)')
           .order('created_at', { ascending: false }).limit(200)
         setAdvertiserDeposits(data||[])
       } else if (tab === 'pro') {
@@ -88,7 +91,7 @@ export default function AdminRevenuePage() {
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'12px' }}>
                 <thead>
                   <tr style={{ borderBottom:'1px solid var(--border)' }}>
-                    {['Date','Advertiser','Amount','Gateway','Status'].map(h=>(
+                    {['Date','Advertiser','Amount','Network','Purpose','Status'].map(h=>(
                       <th key={h} style={{ padding:'8px 10px', textAlign:'left', fontSize:'11px', fontWeight:700, color:'var(--accent)', letterSpacing:'0.08em' }}>{h}</th>
                     ))}
                   </tr>
@@ -99,7 +102,14 @@ export default function AdminRevenuePage() {
                       <td style={{ padding:'9px 10px', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{new Date(d.created_at).toLocaleString()}</td>
                       <td style={{ padding:'9px 10px', color:'var(--text-secondary)' }}>{d.users?.email||'—'}</td>
                       <td style={{ padding:'9px 10px', color:'#34D399', fontWeight:600 }}>${Number(d.amount_usd).toFixed(2)}</td>
-                      <td style={{ padding:'9px 10px', color:'var(--text-muted)' }}>{d.gateway}</td>
+                      <td style={{ padding:'9px 10px', color:'var(--text-muted)', fontSize:'11px' }}>{d.network||'TRC20'}</td>
+                      <td style={{ padding:'9px 10px' }}>
+                        <span style={{ fontSize:'11px', padding:'2px 7px', borderRadius:'4px',
+                          color: d.purpose==='upgrade' ? '#818cf8' : '#60A5FA',
+                          background: d.purpose==='upgrade' ? 'rgba(129,140,248,0.12)' : 'rgba(96,165,250,0.12)' }}>
+                          {d.purpose==='upgrade' ? 'Upgrade' : 'Advertiser'}
+                        </span>
+                      </td>
                       <td style={{ padding:'9px 10px' }}><span style={{ fontSize:'11px', color:'#34D399', background:'rgba(16,185,129,0.1)', padding:'2px 7px', borderRadius:'4px' }}>{d.status}</span></td>
                     </tr>
                   ))}
