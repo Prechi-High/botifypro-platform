@@ -315,6 +315,27 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
 
           await sendMessage(bot.botToken, chatId, '✅ Verified!')
           const freshUser = await prisma.botUser.findUnique({ where: { id: botUser.id } })
+
+          // If channels are still required, show the channel gate instead of welcome
+          if (needsChannels) {
+            const unverifiedAfterCaptcha: typeof channels = []
+            for (const ch of channels) {
+              const isMember = await checkChannelMembership(ch.id, Number(telegramUser.id), bot.botToken)
+              if (!isMember) unverifiedAfterCaptcha.push(ch)
+            }
+            if (unverifiedAfterCaptcha.length > 0) {
+              await showChannelGate(bot, chatId, unverifiedAfterCaptcha)
+              return
+            }
+            // All channels already joined — mark verified and proceed
+            await prisma.botUser.update({ where: { id: botUser.id }, data: { channelVerified: true } })
+            const pendingRef = await redisGet(`pending_referral:${botUser.id}`)
+            if (pendingRef) {
+              await redisDel(`pending_referral:${botUser.id}`)
+              await handleReferral(bot, freshUser || botUser, pendingRef, chatId)
+            }
+          }
+
           await handleStart(bot, freshUser || botUser, chatId)
           return
         } else if (incomingText && !incomingText.startsWith('/')) {

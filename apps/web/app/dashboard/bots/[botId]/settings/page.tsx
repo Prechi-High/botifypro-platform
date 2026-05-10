@@ -532,25 +532,18 @@ export default function BotSettingsPage() {
                 <div>
                   <label style={labelStyle}>Currency symbol</label>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input
-                      value={currencySymbol}
-                      onChange={e => setCurrencySymbol(e.target.value)}
-                      className="input-field"
-                      placeholder="🪙 or text"
-                      style={{ flex: 1 }}
-                    />
                     <div style={{
                       width: '42px', height: '42px', borderRadius: '8px',
                       background: 'rgba(255,255,255,0.05)',
                       border: '1px solid var(--border)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '16px', fontWeight: 700, color: '#F59E0B', flexShrink: 0
+                      fontSize: '20px', flexShrink: 0
                     }}>
                       {currencySymbol || '🪙'}
                     </div>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Override: type an emoji or short text
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Select a coin above to set the symbol.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -838,7 +831,7 @@ export default function BotSettingsPage() {
                   <Zap size={14} style={{ marginTop: '1px' }} />
                   {withdrawProvider === 'oxapay'
                     ? 'Withdrawals will be sent automatically with OxaPay in USDT on TRC20.'
-                    : `Withdrawals will be sent automatically with FaucetPay in ${faucetpayPayoutCurrency}. Users can submit a FaucetPay email or a linked payout address.`}
+                    : `Withdrawals will be sent automatically with FaucetPay in ${faucetpayPayoutCurrency}. Users can submit a FaucetPay email.`}
                 </div>
               )}
               {withdrawMode === 'manual' && (
