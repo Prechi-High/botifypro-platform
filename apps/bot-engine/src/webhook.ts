@@ -399,6 +399,9 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         if (withdrawState && isMenuButton) {
           await redisDel('withdraw_state:' + botUser.id)
           await redisDel('withdraw_amount:' + botUser.id)
+          await sendMessage(bot.botToken, chatId,
+            '⚠️ Withdrawal cancelled — you tapped a menu button instead of entering your address.'
+          )
           // Fall through to handle the button normally below
         } else if (withdrawState === 'awaiting_amount') {
           // Extract any number from the user's free text
@@ -456,6 +459,9 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
         if (withdrawState) {
           await redisDel('withdraw_state:' + botUser.id)
           await redisDel('withdraw_amount:' + botUser.id)
+          await sendMessage(bot.botToken, chatId,
+            '⚠️ Withdrawal cancelled because you used a command.'
+          )
         }
       }
 

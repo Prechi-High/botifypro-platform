@@ -96,7 +96,7 @@ export async function handleStart(bot: any, botUser: any, chatId: number) {
     } catch {}
   }
   const isPro = creatorPlan === 'pro'
-  if (isPro && investSettings.proPlanEnabled) {
+  if (isPro && investSettings.proPlanEnabled === true) {
     const investLabel = investSettings.proPlanButtonLabel || '💎 Invest'
     allButtons.push({ text: investLabel })
   }
