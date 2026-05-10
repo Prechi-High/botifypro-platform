@@ -199,7 +199,7 @@ export default function AdvertisePage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                       <button
                         onClick={() => setPreviewCampaign(c)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-card)', background: 'var(--bg-card)', color: 'var(--accent)', fontSize: '11px', cursor: 'pointer', fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif' }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-card)', background: 'var(--bg-card)', color: 'var(--accent)', fontSize: '11px', cursor: 'pointer', fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}
                       >
                         <Eye size={11} /> Preview
                       </button>
