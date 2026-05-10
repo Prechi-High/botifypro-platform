@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "env": {},
+      "disabled": true,
+      "autoApprove": []
+    },
+
+    "gsap": {
+      "command": "npx",
+      "args": ["-y", "@vinhnguyen/gsap-mcp"]
+    },
+
+    "animotion": {
+      "command": "npx",
+      "args": ["-y", "animotion-mcp"]
+    },
+
+    "lottie": {
+      "command": "npx",
+      "args": ["-y", "@lottiefiles/lottie-mcp"]
+    }
+  }
+}

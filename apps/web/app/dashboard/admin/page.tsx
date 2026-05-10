@@ -162,7 +162,7 @@ export default function AdminDashboard() {
       {/* Campaigns + Withdrawals */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         {/* Pending Campaigns */}
-        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px' }}>
+        <div className="glass" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: "'Space Grotesk', sans-serif" }}>
               <Megaphone size={15} color="var(--accent)" /> Pending Ad Campaigns
@@ -200,7 +200,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Pending Withdrawals */}
-        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px' }}>
+        <div className="glass" style={{ padding: '20px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: "'Space Grotesk', sans-serif" }}>
             <DollarSign size={15} color="#FBBF24" /> Pending Withdrawals
           </h3>
@@ -230,7 +230,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Recent signups */}
-      <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px' }}>
+      <div className="glass" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: "'Space Grotesk', sans-serif" }}>
             <Users size={15} color="#60A5FA" /> Recent Signups
