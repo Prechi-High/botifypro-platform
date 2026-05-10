@@ -508,10 +508,10 @@ export default function BotSettingsPage() {
                 <select
                   className="input-field"
                   style={{ width: '100%', cursor: 'pointer' }}
-                  value={COIN_OPTIONS.find(c => c.symbol === currencySymbol && c.name === currencyName)?.symbol || ''}
+                  value={COIN_OPTIONS.find(c => c.icon === currencySymbol && c.name === currencyName)?.symbol || ''}
                   onChange={e => {
                     const coin = COIN_OPTIONS.find(c => c.symbol === e.target.value)
-                    if (coin) { setCurrencyName(coin.name); setCurrencySymbol(coin.symbol) }
+                    if (coin) { setCurrencyName(coin.name); setCurrencySymbol(coin.icon) }
                   }}
                 >
                   <option value="">— Select a coin (or set manually below) —</option>
