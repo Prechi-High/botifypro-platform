@@ -17,7 +17,7 @@ import {
   validateWithdrawalDestination,
 } from './payments/payouts'
 
-export async function getOrCreateBotUser(botId: string, telegramUser: any) {
+export async function findBotUser(botId: string, telegramUser: any) {
   try {
     const telegramUserId = BigInt(telegramUser.id)
     const existing = await prisma.botUser.findUnique({
@@ -28,8 +28,17 @@ export async function getOrCreateBotUser(botId: string, telegramUser: any) {
         where: { id: existing.id },
         data: { lastActive: new Date(), telegramUsername: telegramUser.username || existing.telegramUsername }
       })
-      return existing
     }
+    return existing
+  } catch (error: any) {
+    logger.error('findBotUser failed', { error: error.message })
+    throw error
+  }
+}
+
+export async function createBotUser(botId: string, telegramUser: any) {
+  try {
+    const telegramUserId = BigInt(telegramUser.id)
     const newUser = await prisma.botUser.create({
       data: {
         botId, telegramUserId,
@@ -38,12 +47,19 @@ export async function getOrCreateBotUser(botId: string, telegramUser: any) {
         balance: 0, channelVerified: false, isBanned: false
       }
     })
-    logger.info('New bot user created', { botId, telegramUserId: telegramUser.id, firstName: telegramUser.first_name })
+    logger.info('New bot user registered', { botId, telegramUserId: telegramUser.id, firstName: telegramUser.first_name })
     return newUser
   } catch (error: any) {
-    logger.error('getOrCreateBotUser failed', { error: error.message })
+    logger.error('createBotUser failed', { error: error.message })
     throw error
   }
+}
+
+// Kept for backward compatibility
+export async function getOrCreateBotUser(botId: string, telegramUser: any) {
+  const existing = await findBotUser(botId, telegramUser)
+  if (existing) return existing
+  return createBotUser(botId, telegramUser)
 }
 
 export async function checkChannelMembership(
@@ -250,13 +266,150 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
 
     if (!telegramUser || !chatId) return
 
-    await getOrCreateBotUser(bot.id, telegramUser)
-    const botUser = await prisma.botUser.findUnique({
-      where: { botId_telegramUserId: {
-        botId: bot.id,
-        telegramUserId: BigInt(telegramUser.id)
-      }}
-    })
+    // ── USER LOOKUP ───────────────────────────────────────────────────────────
+    // Check if this user already exists in the DB
+    const existingUser = await findBotUser(bot.id, telegramUser)
+
+    // Determine which gates are active
+    const gatesEnabled = bot.settings?.captchaEnabled || (bot.settings?.requireChannelJoin && (await getChannels(bot)).length > 0)
+
+    // NEW USER PRE-REGISTRATION GATE
+    // If the user is new AND at least one gate is enabled, run them through
+    // the gates BEFORE creating a DB record to prevent spam registrations.
+    if (!existingUser && gatesEnabled) {
+      const tgId = String(telegramUser.id)
+      const preCaptchaKey = `pre_captcha:${bot.id}:${tgId}`
+      const preCaptchaDoneKey = `pre_captcha_done:${bot.id}:${tgId}`
+      const preChannelDoneKey = `pre_channel_done:${bot.id}:${tgId}`
+
+      const captchaRequired = bot.settings?.captchaEnabled
+      const channels = await getChannels(bot)
+      const channelRequired = bot.settings?.requireChannelJoin && channels.length > 0
+
+      const captchaDone = !captchaRequired || !!(await redisGet(preCaptchaDoneKey))
+      const channelDone = !channelRequired || !!(await redisGet(preChannelDoneKey))
+
+      // Store referral param from /start ref_xxx before gates are passed
+      const incomingStartText = update.message?.text?.trim() || ''
+      if (incomingStartText.startsWith('/start ')) {
+        const startParam = (incomingStartText.split(' ')[1] || '').trim()
+        if (startParam.startsWith('ref_')) {
+          await redisSet(`pending_referral:${tgId}`, startParam.replace('ref_', ''), 86400)
+        }
+      }
+
+      // Helper: finalize registration after all gates pass
+      const finalizeRegistration = async () => {
+        const newUser = await createBotUser(bot.id, telegramUser)
+        const pendingRef = await redisGet(`pending_referral:${tgId}`)
+        if (pendingRef) {
+          await redisDel(`pending_referral:${tgId}`)
+          await handleReferral(bot, newUser, pendingRef, chatId)
+        }
+        await handleStart(bot, newUser, chatId)
+      }
+
+      // ── PRE-REGISTRATION CAPTCHA ──────────────────────────────────────────
+      if (!captchaDone) {
+        if (update.callback_query) {
+          try {
+            await axios.post(`https://api.telegram.org/bot${bot.botToken}/answerCallbackQuery`,
+              { callback_query_id: update.callback_query.id, text: '🔐 Complete verification first' })
+          } catch {}
+          return
+        }
+
+        const captchaRaw = await redisGet(preCaptchaKey)
+        const incomingText = update.message?.text?.trim() || ''
+
+        if (!captchaRaw) {
+          const answer = Math.floor(Math.random() * 90) + 10
+          await redisSet(preCaptchaKey, JSON.stringify({ answer, attempts: 0 }), 300)
+          await sendMessage(bot.botToken, chatId,
+            `👋 <b>Quick Verification</b>\n\nType the number shown below to continue:\n\n` +
+            `🔢 <b>${answer}</b>\n\n<i>Just type the number exactly as shown.</i>`)
+          return
+        }
+
+        const { answer, attempts } = JSON.parse(captchaRaw)
+        const userAnswer = parseInt(incomingText, 10)
+
+        if (!isNaN(userAnswer) && userAnswer === answer) {
+          await redisDel(preCaptchaKey)
+          await redisSet(preCaptchaDoneKey, '1', 3600)
+          await sendMessage(bot.botToken, chatId, '✅ Verified!')
+
+          // Now check channels if required
+          if (channelRequired) {
+            const unverified: typeof channels = []
+            for (const ch of channels) {
+              const isMember = await checkChannelMembership(ch.id, Number(telegramUser.id), bot.botToken)
+              if (!isMember) unverified.push(ch)
+            }
+            if (unverified.length > 0) {
+              await showChannelGate(bot, chatId, unverified)
+              return
+            }
+            await redisSet(preChannelDoneKey, '1', 3600)
+          }
+
+          // All gates passed — register now
+          await finalizeRegistration()
+          return
+        } else if (incomingText && !incomingText.startsWith('/')) {
+          const newAttempts = attempts + 1
+          if (newAttempts >= 3) {
+            await redisDel(preCaptchaKey)
+            await sendMessage(bot.botToken, chatId, '❌ Too many wrong attempts. Send /start to try again.')
+            return
+          }
+          const newAnswer = Math.floor(Math.random() * 90) + 10
+          await redisSet(preCaptchaKey, JSON.stringify({ answer: newAnswer, attempts: newAttempts }), 300)
+          await sendMessage(bot.botToken, chatId,
+            `❌ Wrong answer. ${3 - newAttempts} attempt(s) remaining.\n\n🔢 <b>${newAnswer}</b>`)
+          return
+        } else {
+          if (update.message?.text) {
+            await sendMessage(bot.botToken, chatId, '🔐 Please complete verification first. Type the number shown above.')
+          }
+          return
+        }
+      }
+
+      // ── PRE-REGISTRATION CHANNEL GATE ─────────────────────────────────────
+      if (!channelDone) {
+        if (update.callback_query && update.callback_query.data !== 'cmd_check_channel') {
+          try {
+            await axios.post(`https://api.telegram.org/bot${bot.botToken}/answerCallbackQuery`,
+              { callback_query_id: update.callback_query.id, text: '📢 Join required channels first' })
+          } catch {}
+          return
+        }
+
+        const unverified: typeof channels = []
+        for (const ch of channels) {
+          const isMember = await checkChannelMembership(ch.id, Number(telegramUser.id), bot.botToken)
+          if (!isMember) unverified.push(ch)
+        }
+
+        if (unverified.length > 0) {
+          await showChannelGate(bot, chatId, unverified)
+          return
+        }
+
+        await redisSet(preChannelDoneKey, '1', 3600)
+        // All gates passed — register now
+        await finalizeRegistration()
+        return
+      }
+
+      // Both gates passed but user not yet in DB (edge case: Redis keys still alive)
+      await finalizeRegistration()
+      return
+    }
+
+    // No gates OR existing user — register immediately if new
+    const botUser = existingUser ?? await createBotUser(bot.id, telegramUser)
     if (!botUser) return
     if (botUser.isBanned) return
 
