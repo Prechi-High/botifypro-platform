@@ -8,7 +8,9 @@
       "Bash(DATABASE_URL=\"postgresql://postgres.nnlljpwrabcyochobflq:gETCHARGED123o@aws-1-eu-west-1.pooler.supabase.com:5432/postgres\" DIRECT_URL=\"postgresql://postgres.nnlljpwrabcyochobflq:gETCHARGED123o@aws-1-eu-west-1.pooler.supabase.com:5432/postgres\" npx prisma db push)",
       "Bash(Get-ChildItem \"C:\\\\Users\\\\hp\\\\Documents\\\\botifypro-platform\\\\apps\\\\web\\\\app\\\\dashboard\" -Recurse -Filter \"*.tsx\")",
       "Bash(Select-Object FullName)",
-      "Bash(Format-Table -HideTableHeaders)"
+      "Bash(Format-Table -HideTableHeaders)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)"
     ]
   }
 }
