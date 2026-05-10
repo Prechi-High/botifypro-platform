@@ -3,24 +3,17 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Megaphone, Plus, Wallet, Eye, X } from 'lucide-react'
+import { Megaphone, Plus, Wallet, Eye, X, AlertCircle, ChevronRight } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 import DepositModal from '@/components/ui/DepositModal'
 
-const sectionStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.03)',
-  border: '1px solid var(--border)',
-  borderRadius: '16px',
-  padding: '20px',
-}
-
 function statusStyle(s: string) {
-  if (s === 'active') return { bg: 'rgba(16,185,129,0.12)', color: '#10B981', border: 'rgba(16,185,129,0.25)' }
+  if (s === 'active') return { bg: 'rgba(57,255,20,0.1)', color: 'var(--accent)', border: 'rgba(57,255,20,0.25)' }
   if (s === 'pending_approval') return { bg: 'rgba(245,158,11,0.12)', color: '#FBBF24', border: 'rgba(245,158,11,0.25)' }
-  if (s === 'paused') return { bg: 'rgba(59,130,246,0.12)', color: '#60A5FA', border: 'rgba(96,165,250,0.25)' }
+  if (s === 'paused') return { bg: 'rgba(96,165,250,0.12)', color: '#60A5FA', border: 'rgba(96,165,250,0.25)' }
   if (s === 'completed') return { bg: 'rgba(148,163,184,0.12)', color: '#94a3b8', border: 'rgba(148,163,184,0.25)' }
   if (s === 'rejected') return { bg: 'rgba(239,68,68,0.12)', color: '#EF4444', border: 'rgba(239,68,68,0.25)' }
-  return { bg: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', border: 'var(--border)' }
+  return { bg: 'var(--bg-elevated)', color: 'var(--text-muted)', border: 'var(--border)' }
 }
 
 export default function AdvertisePage() {
@@ -65,48 +58,61 @@ export default function AdvertisePage() {
   }, [supabase])
 
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Ad Preview Modal */}
       {previewCampaign && (
-        <div onClick={e=>{ if(e.target===e.currentTarget) setPreviewCampaign(null) }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }}>
-          <div style={{ width:'100%', maxWidth:'480px', background:'var(--bg-surface, #0D110D)', border:'1px solid var(--border)', borderRadius:'16px', overflow:'hidden', maxHeight:'90vh', overflowY:'auto' }}>
-            <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <h3 style={{ margin:0, fontSize:'15px', fontWeight:700, color:'var(--text-primary)' }}>Ad Preview</h3>
-              <button onClick={()=>setPreviewCampaign(null)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}><X size={18}/></button>
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setPreviewCampaign(null) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+        >
+          <div style={{ width: '100%', maxWidth: '480px', background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: '20px', overflow: 'hidden', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ height: '2px', background: 'var(--accent-gradient)' }} />
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif" }}>Ad Preview</h3>
+              <button onClick={() => setPreviewCampaign(null)} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+                <X size={18} />
+              </button>
             </div>
-            <div style={{ padding:'18px', display:'flex', flexDirection:'column', gap:'14px' }}>
-              <div style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:'12px', padding:'14px' }}>
-                <div style={{ fontSize:'11px', color:'var(--accent)', fontWeight:700, marginBottom:'8px', letterSpacing:'0.1em' }}>HOW IT APPEARS IN TELEGRAM</div>
-                {previewCampaign.image_url && <img src={previewCampaign.image_url} alt="" style={{ width:'100%', borderRadius:'8px', marginBottom:'10px', maxHeight:'200px', objectFit:'cover' }} />}
-                <div style={{ fontSize:'14px', color:'var(--text-primary)', lineHeight:1.6 }} dangerouslySetInnerHTML={{ __html: (previewCampaign.message||'').replace(/\n/g,'<br/>') }} />
+            <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 700, marginBottom: '8px', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif", textTransform: 'uppercase' }}>
+                  HOW IT APPEARS IN TELEGRAM
+                </div>
+                {previewCampaign.image_url && (
+                  <img src={previewCampaign.image_url} alt="" style={{ width: '100%', borderRadius: '8px', marginBottom: '10px', maxHeight: '200px', objectFit: 'cover' }} />
+                )}
+                <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.6, fontFamily: 'Inter, sans-serif' }}
+                  dangerouslySetInnerHTML={{ __html: (previewCampaign.message || '').replace(/\n/g, '<br/>') }}
+                />
                 {previewCampaign.button_text && previewCampaign.button_url && (
-                  <div style={{ marginTop:'10px' }}>
-                    <a href={previewCampaign.button_url} target="_blank" rel="noopener noreferrer" style={{ display:'inline-block', padding:'8px 16px', background:'rgba(37,99,235,0.15)', border:'1px solid rgba(37,99,235,0.3)', borderRadius:'8px', color:'#60A5FA', textDecoration:'none', fontSize:'13px', fontWeight:500 }}>
+                  <div style={{ marginTop: '10px' }}>
+                    <a href={previewCampaign.button_url} target="_blank" rel="noopener noreferrer" className="btn-ghost" style={{ display: 'inline-block', padding: '8px 16px', fontSize: '13px', textDecoration: 'none' }}>
                       {previewCampaign.button_text}
                     </a>
                   </div>
                 )}
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 {[
-                  ['Status', previewCampaign.status?.replace('_',' ')],
+                  ['Status', previewCampaign.status?.replace('_', ' ')],
                   ['Activity Window', previewCampaign.activity_window],
                   ['Budget', `$${Number(previewCampaign.budget_usd).toFixed(2)}`],
                   ['Spent', `$${Number(previewCampaign.spent_usd).toFixed(2)}`],
                   ['Target Audience', Number(previewCampaign.target_audience_count).toLocaleString()],
                   ['Impressions', `${previewCampaign.impressions_count}/${previewCampaign.target_audience_count}`],
-                ].map(([l,v])=>(
-                  <div key={l} style={{ background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'8px 10px' }}>
-                    <div style={{ fontSize:'11px', color:'var(--text-muted)', marginBottom:'2px' }}>{l}</div>
-                    <div style={{ fontSize:'13px', color:'var(--text-primary)', fontWeight:500, textTransform:'capitalize' }}>{v}</div>
+                ].map(([l, v]) => (
+                  <div key={l} style={{ background: 'var(--bg-elevated)', borderRadius: '8px', padding: '8px 10px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'Inter, sans-serif' }}>{l}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600, textTransform: 'capitalize', fontFamily: "'Space Grotesk', sans-serif" }}>{v}</div>
                   </div>
                 ))}
               </div>
               {previewCampaign.rejection_reason && (
-                <div style={{ fontSize:'13px', color:'#FCA5A5', background:'rgba(239,68,68,0.06)', border:'1px solid rgba(239,68,68,0.15)', borderRadius:'8px', padding:'10px 12px' }}>
-                  <strong>Rejection reason:</strong> {previewCampaign.rejection_reason}
+                <div style={{ fontSize: '13px', color: '#FCA5A5', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', padding: '10px 12px', display: 'flex', gap: '8px', alignItems: 'flex-start', fontFamily: 'Inter, sans-serif' }}>
+                  <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+                  <span><strong>Rejection reason:</strong> {previewCampaign.rejection_reason}</span>
                 </div>
               )}
             </div>
@@ -115,64 +121,66 @@ export default function AdvertisePage() {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
         <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Megaphone size={22} color='#8b5cf6' />Advertise
+          <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Megaphone size={22} color="var(--accent)" /> Advertise
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', fontFamily: 'Inter, sans-serif', margin: '4px 0 0' }}>
             Manage your ad campaigns and wallet balance.
           </p>
         </div>
         <Link
-          href='/dashboard/advertise/new'
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#2563eb', color: 'white', padding: '9px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}
+          href="/dashboard/advertise/new"
+          className="btn-primary"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none', padding: '9px 16px', fontSize: '13px', borderRadius: 'var(--radius-md)', whiteSpace: 'nowrap' }}
         >
-          <Plus size={15} />New Campaign
+          <Plus size={15} /> New Campaign
         </Link>
       </div>
 
       {/* Wallet */}
-      <div style={{ ...sectionStyle, marginBottom: '16px' }}>
+      <div className="glass" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(139,92,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Wallet size={20} color='#8b5cf6' />
+          <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Wallet size={20} color="var(--accent)" />
           </div>
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>Advertiser wallet</div>
-            <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'Inter, sans-serif' }}>Advertiser wallet</div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif", lineHeight: 1 }}>
               {loading ? '—' : `$${balance.toFixed(2)}`}
             </div>
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
           <button
             onClick={() => setShowDepositModal(true)}
-            style={{
-              padding: '9px 18px', borderRadius: '8px', border: 'none',
-              background: 'rgba(99,102,241,0.9)',
-              color: 'white', fontSize: '13px', fontWeight: 600,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-            }}
+            className="btn-primary"
+            style={{ padding: '10px 20px', fontSize: '13px', borderRadius: 'var(--radius-md)' }}
           >
-            💳 Deposit USDT
+            <Wallet size={15} /> Deposit USDT
           </button>
         </div>
       </div>
 
       {/* Campaigns */}
-      <div style={sectionStyle}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 12px' }}>
-          Your campaigns
-        </h3>
+      <div className="glass" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif" }}>
+            Your campaigns
+          </h3>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+            {campaigns.length} total
+          </span>
+        </div>
 
         {loading ? (
-          <div className='skeleton' style={{ height: '80px', borderRadius: '10px' }} />
+          <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-md)' }} />
         ) : campaigns.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: '13px' }}>
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'Inter, sans-serif' }}>
             No campaigns yet.{' '}
-            <Link href='/dashboard/advertise/new' style={{ color: '#3b82f6', textDecoration: 'none' }}>
+            <Link href="/dashboard/advertise/new" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
               Create your first →
             </Link>
           </div>
@@ -183,49 +191,42 @@ export default function AdvertisePage() {
               const pct = c.target_audience_count > 0
                 ? Math.min(100, (Number(c.impressions_count) / Number(c.target_audience_count)) * 100)
                 : 0
-              const statusLabel = c.status === 'pending_approval' ? '⏳ Awaiting Approval' : c.status
+              const statusLabel = c.status === 'pending_approval' ? 'Awaiting Approval' : c.status
               return (
-                <div key={c.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '6px' }}>
-                    <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '14px' }}>{c.title}</div>
+                <div key={c.id} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '14px 16px', transition: 'var(--transition)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '14px', fontFamily: "'Space Grotesk', sans-serif" }}>{c.title}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                      <button onClick={() => setPreviewCampaign(c)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.08)', color: '#818cf8', fontSize: '11px', cursor: 'pointer', fontWeight: 500 }}>
+                      <button
+                        onClick={() => setPreviewCampaign(c)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-card)', background: 'var(--bg-card)', color: 'var(--accent)', fontSize: '11px', cursor: 'pointer', fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif' }}
+                      >
                         <Eye size={11} /> Preview
                       </button>
-                      <span style={{
-                        fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '999px',
-                        background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, whiteSpace: 'nowrap',
-                      }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px', background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, whiteSpace: 'nowrap', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.04em', textTransform: 'capitalize' }}>
                         {statusLabel}
                       </span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
-                    <span style={{
-                      fontSize: '11px',
-                      padding: '3px 8px',
-                      borderRadius: '999px',
-                      background: 'rgba(99,102,241,0.08)',
-                      border: '1px solid rgba(99,102,241,0.18)',
-                      color: '#818cf8'
-                    }}>
+                    <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '999px', background: 'rgba(57,255,20,0.06)', border: '1px solid rgba(57,255,20,0.15)', color: 'var(--accent)', fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>
                       {c.activity_window}
                     </span>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
                       Spent: <strong style={{ color: 'var(--text-secondary)' }}>${Number(c.spent_usd).toFixed(2)}</strong>
                       {' '}of{' '}
                       <strong style={{ color: 'var(--text-secondary)' }}>${Number(c.budget_usd).toFixed(2)}</strong>
                     </span>
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', fontFamily: 'Inter, sans-serif' }}>
                     Impressions: {Number(c.impressions_count)} / {Number(c.target_audience_count)}
                   </div>
                   <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '999px', height: '4px', overflow: 'hidden' }}>
-                    <div style={{ background: '#3b82f6', height: '100%', width: `${pct}%`, borderRadius: '999px', transition: 'width 0.3s' }} />
+                    <div style={{ background: 'var(--accent)', height: '100%', width: `${pct}%`, borderRadius: '999px', transition: 'width 0.3s', boxShadow: '0 0 8px var(--accent-glow)' }} />
                   </div>
                   {c.status === 'rejected' && c.rejection_reason && (
-                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#FCA5A5', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '6px', padding: '6px 10px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                      <span style={{ flexShrink: 0 }}>✕</span>
+                    <div style={{ marginTop: '10px', fontSize: '12px', color: '#FCA5A5', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', display: 'flex', alignItems: 'flex-start', gap: '6px', fontFamily: 'Inter, sans-serif' }}>
+                      <AlertCircle size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
                       <span><strong>Rejection reason:</strong> {c.rejection_reason}</span>
                     </div>
                   )}

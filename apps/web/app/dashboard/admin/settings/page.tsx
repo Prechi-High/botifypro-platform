@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, Eye, EyeOff, Settings, DollarSign, Megaphone } from 'lucide-react'
+import { Save, Eye, EyeOff, Settings, DollarSign, Megaphone, RefreshCw } from 'lucide-react'
+import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 export default function AdminSettingsPage() {
   const supabase = createClient()
+  const { toasts, removeToast, toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{msg:string;ok:boolean}|null>(null)
 
   const [oxapayMerchantKey, setOxapayMerchantKey] = useState('')
   const [oxapaySecretKey, setOxapaySecretKey] = useState('')
@@ -26,16 +27,10 @@ export default function AdminSettingsPage() {
   const [proPlanPrice, setProPlanPrice] = useState(10)
   const [minAdvertiserDeposit, setMinAdvertiserDeposit] = useState(1)
 
-  function notify(msg: string, ok = true) {
-    setToast({msg, ok})
-    setTimeout(() => setToast(null), 3500)
-  }
-
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await supabase
-        .from('platform_settings').select('*').single()
+      const { data } = await supabase.from('platform_settings').select('*').single()
       if (data) {
         setOxapayMerchantKey(data.oxapay_merchant_key || '')
         setOxapaySecretKey(data.oxapay_secret_key || '')
@@ -71,128 +66,235 @@ export default function AdminSettingsPage() {
       min_advertiser_deposit_usd: minAdvertiserDeposit,
       updated_at: new Date().toISOString()
     })
-    if (error) notify(error.message, false)
-    else notify('Settings saved ✓')
+    if (error) toast.error(error.message)
+    else toast.success('Settings saved ✓')
     setSaving(false)
   }
 
-  const section = (title: string, icon: any, children: any) => (
-    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {icon} {title}
-      </h3>
-      {children}
-    </div>
-  )
+  function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+    return (
+      <div className="glass" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: "'Space Grotesk', sans-serif" }}>
+          {icon} {title}
+        </h3>
+        {children}
+      </div>
+    )
+  }
 
-  const field = (label: string, input: any, hint?: string) => (
-    <div style={{ marginBottom: '16px' }}>
-      <label style={{ display: 'block', fontSize: '13px', color: '#374151', fontWeight: 500, marginBottom: '6px' }}>{label}</label>
-      {input}
-      {hint && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>{hint}</div>}
-    </div>
-  )
+  function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+    return (
+      <div>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          {label}
+        </label>
+        {children}
+        {hint && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontFamily: 'Inter, sans-serif' }}>{hint}</div>}
+      </div>
+    )
+  }
 
-  const secretInput = (value: string, onChange: any, show: boolean, setShow: any, placeholder: string) => (
-    <div style={{ position: 'relative' }}>
-      <input
-        type={show ? 'text' : 'password'}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{ width: '100%', padding: '9px 44px 9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b', boxSizing: 'border-box' as const }}
-      />
-      <button
-        type="button"
-        onClick={() => setShow(!show)}
-        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
-      >
-        {show ? <EyeOff size={16} /> : <Eye size={16} />}
-      </button>
-    </div>
-  )
+  function SecretInput({ value, onChange, show, setShow, placeholder }: { value: string; onChange: (v: string) => void; show: boolean; setShow: (v: boolean) => void; placeholder: string }) {
+    return (
+      <div style={{ position: 'relative' }}>
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="input-field"
+          style={{ paddingRight: '44px' }}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(!show)}
+          style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
+        >
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <div style={{ background: '#f8fafc', minHeight: '100vh', padding: '24px' }}>
-      {toast && (
-        <div style={{
-          position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
-          padding: '11px 16px', borderRadius: '10px', fontSize: '13px',
-          background: toast.ok ? '#f0fdf4' : '#fef2f2',
-          border: `1px solid ${toast.ok ? '#bbf7d0' : '#fecaca'}`,
-          color: toast.ok ? '#166534' : '#dc2626'
-        }}>{toast.msg}</div>
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-      <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b', margin: 0 }}>
-            ⚙️ Platform Settings
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Settings size={22} color="var(--accent)" /> Platform Settings
           </h1>
-          <button onClick={save} disabled={saving}
-            style={{ padding: '9px 20px', background: '#2563eb', border: 'none', borderRadius: '8px', color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Save size={14} /> {saving ? 'Saving...' : 'Save All'}
-          </button>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '4px 0 0', fontFamily: 'Inter, sans-serif' }}>
+            Configure OxaPay keys, CPM rates, and revenue settings
+          </p>
         </div>
-
-        {loading ? (
-          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '32px', color: '#64748b', fontSize: '14px' }}>
-            Loading settings...
-          </div>
-        ) : (
-          <>
-            {section('💳 OxaPay Integration', <DollarSign size={16} color="#2563eb" />, <>
-              {field('Merchant API Key', secretInput(oxapayMerchantKey, setOxapayMerchantKey, showMerchantKey, setShowMerchantKey, 'OxaPay Merchant API Key'), 'Used for receiving deposits and creating payment links')}
-              {field('Secret Key', secretInput(oxapaySecretKey, setOxapaySecretKey, showSecretKey, setShowSecretKey, 'OxaPay Secret Key'), 'Used to verify webhook callbacks')}
-            </>)}
-
-            {section('📢 Ad System Settings', <Megaphone size={16} color="#8b5cf6" />, <>
-              {field('Minimum Campaign Budget (USD)',
-                <input type="number" min="5" value={minCampaignBudget} onChange={e => setMinCampaignBudget(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                'Minimum budget an advertiser must set for a campaign')}
-              {field('Ad Dispatch Interval (hours)',
-                <input type="number" min="1" value={adIntervalHours} onChange={e => setAdIntervalHours(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                'How often the ad cron runs (default: 5 hours)')}
-              {field('CPM Rate — 24h Window ($ per 1,000 impressions)',
-                <input type="number" min="0" step="0.01" value={cpmRate24h} onChange={e => setCpmRate24h(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate24h) * 1000).toLocaleString()} users`)}
-              {field('CPM Rate — 48h Window ($ per 1,000 impressions)',
-                <input type="number" min="0" step="0.01" value={cpmRate48h} onChange={e => setCpmRate48h(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate48h) * 1000).toLocaleString()} users`)}
-              {field('CPM Rate — 72h Window ($ per 1,000 impressions)',
-                <input type="number" min="0" step="0.01" value={cpmRate72h} onChange={e => setCpmRate72h(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate72h) * 1000).toLocaleString()} users`)}
-              {field('CPM Rate — 7d Window ($ per 1,000 impressions)',
-                <input type="number" min="0" step="0.01" value={cpmRate7d} onChange={e => setCpmRate7d(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                `$${minCampaignBudget} budget → ${Math.floor((minCampaignBudget / cpmRate7d) * 1000).toLocaleString()} users`)}
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', fontSize: '12px', color: '#166534' }}>
-                💡 Formula: Audience = (Budget ÷ CPM) × 1,000. Example: $20 budget at $1.00 CPM = 20,000 users.
-              </div>
-            </>)}
-
-            {section('💰 Platform Revenue', <Settings size={16} color="#059669" />, <>
-              {field('Platform Fee on Withdrawals (%)',
-                <input type="number" min="0" max="50" value={platformFeePercent} onChange={e => setPlatformFeePercent(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                'Percentage cut taken from each bot withdrawal')}
-              {field('Pro Plan Price (USD/month)',
-                <input type="number" min="1" value={proPlanPrice} onChange={e => setProPlanPrice(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                'Monthly price for Pro plan charged from advertiser balance')}
-              {field('Min Advertiser Deposit (USD)',
-                <input type="number" min="1" step="0.01" value={minAdvertiserDeposit} onChange={e => setMinAdvertiserDeposit(Number(e.target.value))}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#1e293b' }} />,
-                'Minimum deposit amount for advertising balance top-ups')}
-            </>)}
-          </>
-        )}
+        <button
+          onClick={save}
+          disabled={saving}
+          className="btn-primary"
+          style={{ padding: '9px 20px', fontSize: '13px', borderRadius: 'var(--radius-md)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <Save size={14} /> {saving ? 'Saving...' : 'Save All'}
+        </button>
       </div>
+
+      {loading ? (
+        <div className="skeleton" style={{ height: '120px', borderRadius: 'var(--radius-lg)' }} />
+      ) : (
+        <>
+          <Section title="OxaPay Integration" icon={<DollarSign size={16} color="var(--accent)" />}>
+            <Field
+              label="Merchant API Key"
+              hint="Used for receiving deposits and creating payment links"
+            >
+              <SecretInput
+                value={oxapayMerchantKey}
+                onChange={setOxapayMerchantKey}
+                show={showMerchantKey}
+                setShow={setShowMerchantKey}
+                placeholder="OxaPay Merchant API Key"
+              />
+            </Field>
+            <Field
+              label="Secret Key"
+              hint="Used to verify webhook callbacks"
+            >
+              <SecretInput
+                value={oxapaySecretKey}
+                onChange={setOxapaySecretKey}
+                show={showSecretKey}
+                setShow={setShowSecretKey}
+                placeholder="OxaPay Secret Key"
+              />
+            </Field>
+          </Section>
+
+          <Section title="Ad System Settings" icon={<Megaphone size={16} color="var(--accent)" />}>
+            <Field
+              label="Minimum Campaign Budget (USD)"
+              hint="Minimum budget an advertiser must set for a campaign"
+            >
+              <input
+                type="number"
+                min="5"
+                value={minCampaignBudget}
+                onChange={e => setMinCampaignBudget(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <Field
+              label="Ad Dispatch Interval (hours)"
+              hint="How often the ad cron runs (default: 5 hours)"
+            >
+              <input
+                type="number"
+                min="1"
+                value={adIntervalHours}
+                onChange={e => setAdIntervalHours(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <Field
+              label="CPM Rate — 24h Window ($ per 1,000 impressions)"
+              hint={`$${minCampaignBudget} budget → ${cpmRate24h > 0 ? Math.floor((minCampaignBudget / cpmRate24h) * 1000).toLocaleString() : '∞'} users`}
+            >
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={cpmRate24h}
+                onChange={e => setCpmRate24h(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <Field
+              label="CPM Rate — 48h Window ($ per 1,000 impressions)"
+              hint={`$${minCampaignBudget} budget → ${cpmRate48h > 0 ? Math.floor((minCampaignBudget / cpmRate48h) * 1000).toLocaleString() : '∞'} users`}
+            >
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={cpmRate48h}
+                onChange={e => setCpmRate48h(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <Field
+              label="CPM Rate — 72h Window ($ per 1,000 impressions)"
+              hint={`$${minCampaignBudget} budget → ${cpmRate72h > 0 ? Math.floor((minCampaignBudget / cpmRate72h) * 1000).toLocaleString() : '∞'} users`}
+            >
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={cpmRate72h}
+                onChange={e => setCpmRate72h(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <Field
+              label="CPM Rate — 7d Window ($ per 1,000 impressions)"
+              hint={`$${minCampaignBudget} budget → ${cpmRate7d > 0 ? Math.floor((minCampaignBudget / cpmRate7d) * 1000).toLocaleString() : '∞'} users`}
+            >
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={cpmRate7d}
+                onChange={e => setCpmRate7d(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <div style={{ background: 'rgba(57,255,20,0.06)', border: '1px solid rgba(57,255,20,0.2)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontSize: '12px', color: 'var(--accent)', fontFamily: 'Inter, sans-serif', lineHeight: 1.6 }}>
+              Formula: Audience = (Budget ÷ CPM) × 1,000. Example: $20 budget at $1.00 CPM = 20,000 users.
+            </div>
+          </Section>
+
+          <Section title="Platform Revenue" icon={<DollarSign size={16} color="#FBBF24" />}>
+            <Field
+              label="Platform Fee on Withdrawals (%)"
+              hint="Percentage cut taken from each bot withdrawal"
+            >
+              <input
+                type="number"
+                min="0"
+                max="50"
+                value={platformFeePercent}
+                onChange={e => setPlatformFeePercent(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <Field
+              label="Pro Plan Price (USD/month)"
+              hint="Monthly price for Pro plan charged from advertiser balance"
+            >
+              <input
+                type="number"
+                min="1"
+                value={proPlanPrice}
+                onChange={e => setProPlanPrice(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+            <Field
+              label="Min Advertiser Deposit (USD)"
+              hint="Minimum deposit amount for advertising balance top-ups"
+            >
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={minAdvertiserDeposit}
+                onChange={e => setMinAdvertiserDeposit(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+          </Section>
+        </>
+      )}
     </div>
   )
 }

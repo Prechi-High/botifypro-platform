@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Bot, Users, Terminal, RefreshCw, Send, CircleHelp, Zap } from 'lucide-react'
+import { Bot, Users, Terminal, RefreshCw, Send, CircleHelp, Zap, Megaphone, ChevronRight } from 'lucide-react'
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 type Stats = {
@@ -291,6 +291,24 @@ export default function DashboardHome() {
           </button>
         </Link>
       </div>
+
+      {/* Advertising Banner */}
+      <Link href="/dashboard/advertise" style={{ textDecoration: 'none' }}>
+        <div className="stat-card" style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(57,255,20,0.12)', border: '1px solid rgba(57,255,20,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Megaphone size={20} color="var(--accent)" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Space Grotesk', sans-serif" }}>
+              Advertise on 1-TouchBot
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'Inter, sans-serif' }}>
+              Reach thousands of active bot users
+            </div>
+          </div>
+          <ChevronRight size={16} color="var(--accent)" />
+        </div>
+      </Link>
 
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

@@ -7,25 +7,25 @@ import { AlertCircle, CheckCircle, ChevronDown, Edit3, Megaphone, Plus, Target, 
 import { ToastContainer, useToast } from '@/components/ui/Toast'
 
 const ACTIVITY_WINDOWS = [
-  { value: '24h',  label: '⚡ Last 24 hours — Most active users' },
-  { value: '48h',  label: '🕐 24–48 hours ago — Recently active' },
-  { value: '72h',  label: '📅 48–72 hours ago — Moderately active' },
-  { value: '7d',   label: '💤 72hrs–7 days ago — Re-engagement' },
+  { value: '24h',  label: 'Last 24 hours — Most active users' },
+  { value: '48h',  label: '24–48 hours ago — Recently active' },
+  { value: '72h',  label: '48–72 hours ago — Moderately active' },
+  { value: '7d',   label: '72hrs–7 days ago — Re-engagement' },
 ]
 
 const AD_BUTTON_TYPES = [
   { value: '',             label: 'Select button type...' },
-  { value: 'url',          label: '🔗 Open URL / Website' },
-  { value: 'join_channel', label: '📢 Join Channel' },
-  { value: 'learn_more',   label: '📖 Learn More' },
-  { value: 'get_started',  label: '🚀 Get Started' },
-  { value: 'shop_now',     label: '🛒 Shop Now' },
-  { value: 'download',     label: '⬇️ Download' },
-  { value: 'contact_us',   label: '📞 Contact Us' },
-  { value: 'watch_video',  label: '▶️ Watch Video' },
-  { value: 'claim_offer',  label: '🎁 Claim Offer' },
-  { value: 'subscribe',    label: '🔔 Subscribe' },
-  { value: 'view_more',    label: '👀 View More' },
+  { value: 'url',          label: 'Open URL / Website' },
+  { value: 'join_channel', label: 'Join Channel' },
+  { value: 'learn_more',   label: 'Learn More' },
+  { value: 'get_started',  label: 'Get Started' },
+  { value: 'shop_now',     label: 'Shop Now' },
+  { value: 'download',     label: 'Download' },
+  { value: 'contact_us',   label: 'Contact Us' },
+  { value: 'watch_video',  label: 'Watch Video' },
+  { value: 'claim_offer',  label: 'Claim Offer' },
+  { value: 'subscribe',    label: 'Subscribe' },
+  { value: 'view_more',    label: 'View More' },
 ]
 
 // CPM key per window — matches platform_settings columns
