@@ -1,5 +1,23 @@
 import axios from 'axios'
+import { logger } from '../logger'
 import { decryptSecret } from '../paymentSecrets'
+
+/**
+ * FaucetPay amount units per currency (satoshi-equivalent):
+ *   BTC, LTC, ETH, DOGE, etc. → 1e8 units per coin
+ *   USDT, USDC (stablecoins)  → 1e6 units per dollar (6 decimal places)
+ *
+ * Sending the wrong unit count is the most common cause of payout failures.
+ */
+function faucetPayUnits(amountUsd: number, currency: string): number {
+  const cur = (currency || 'USDT').toUpperCase()
+  // Stablecoins use 6 decimal places
+  if (cur === 'USDT' || cur === 'USDC' || cur === 'BUSD' || cur === 'DAI') {
+    return Math.max(1, Math.round(amountUsd * 1e6))
+  }
+  // All other coins use 8 decimal places (satoshi-equivalent)
+  return Math.max(1, Math.round(amountUsd * 1e8))
+}
 
 export const FAUCETPAY_PAYOUT_CURRENCY = 'USDT'
 export const OXAPAY_PAYOUT_CURRENCY = 'USDT'
@@ -64,28 +82,49 @@ export async function executeFaucetPayPayout(settings: any, destination: string,
   }
 
   const apiKey = decryptSecret(encryptedKey)
-  const payoutUnits = Math.max(1, Math.round(amountUsd * 1e8))
+  const currency = (settings?.faucetpayPayoutCurrency || FAUCETPAY_PAYOUT_CURRENCY).toUpperCase()
+  const payoutUnits = faucetPayUnits(amountUsd, currency)
+
+  logger.info('FaucetPay payout request', {
+    destination: destination.trim(),
+    amountUsd,
+    currency,
+    payoutUnits,
+  })
+
   const payload = new URLSearchParams({
     api_key: apiKey,
     amount: String(payoutUnits),
     to: destination.trim(),
-    currency: settings?.faucetpayPayoutCurrency || FAUCETPAY_PAYOUT_CURRENCY,
+    currency,
   })
 
-  const response = await axios.post('https://faucetpay.io/api/v1/send', payload.toString(), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  })
+  let response: any
+  try {
+    response = await axios.post('https://faucetpay.io/api/v1/send', payload.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 15000,
+    })
+  } catch (httpErr: any) {
+    logger.error('FaucetPay HTTP error', {
+      message: httpErr?.message,
+      responseData: httpErr?.response?.data,
+    })
+    throw new Error(`FaucetPay request failed: ${httpErr?.message || 'network error'}`)
+  }
 
   const data = response.data || {}
+  logger.info('FaucetPay payout response', { status: data.status, message: data.message, payoutId: data.payout_id })
+
   if (Number(data.status) !== 200) {
-    throw new Error(data.message || 'FaucetPay payout failed')
+    throw new Error(`FaucetPay error ${data.status}: ${data.message || 'Unknown error'}`)
   }
 
   return {
     gateway: 'faucetpay',
     gatewayTxId: String(data.payout_id || `${Date.now()}`),
     status: 'completed',
-    payoutCurrency: String(data.currency || settings?.faucetpayPayoutCurrency || FAUCETPAY_PAYOUT_CURRENCY),
+    payoutCurrency: String(data.currency || currency),
     payoutAmount: amountUsd,
   }
 }
