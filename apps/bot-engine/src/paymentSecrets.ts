@@ -9,22 +9,36 @@ function getSecretKey() {
 }
 
 export function decryptSecret(payload: string) {
-  const [ivHex, tagHex, encryptedHex] = String(payload || '').split(':')
-  if (!ivHex || !tagHex || !encryptedHex) {
-    throw new Error('Invalid encrypted secret payload')
+  if (!payload) return ''
+
+  // If it doesn't look like an encrypted payload (not 3 colon-separated hex parts),
+  // it's stored as plaintext — return as-is
+  const parts = String(payload).split(':')
+  if (parts.length !== 3) {
+    return payload // plaintext fallback
   }
 
-  const decipher = crypto.createDecipheriv(
-    'aes-256-gcm',
-    getSecretKey(),
-    Buffer.from(ivHex, 'hex')
-  )
-  decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
+  const [ivHex, tagHex, encryptedHex] = parts
+  if (!ivHex || !tagHex || !encryptedHex) {
+    return payload // plaintext fallback
+  }
 
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(encryptedHex, 'hex')),
-    decipher.final(),
-  ])
+  try {
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      getSecretKey(),
+      Buffer.from(ivHex, 'hex')
+    )
+    decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
 
-  return decrypted.toString('utf8')
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(encryptedHex, 'hex')),
+      decipher.final(),
+    ])
+
+    return decrypted.toString('utf8')
+  } catch {
+    // Decryption failed — key may be stored as plaintext or encrypted with a different secret
+    return payload
+  }
 }
