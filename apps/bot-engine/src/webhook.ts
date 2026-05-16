@@ -95,10 +95,14 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
   }
 
   // Use the specified amount or fall back to full balance
-  const currencyAmount = withdrawAmount !== undefined ? withdrawAmount : Number(botUser.balance)
-  const usdAmount = currencyAmount / Number(bot.settings.usdToCurrencyRate)
+  const currencyAmount = withdrawAmount !== undefined && withdrawAmount > 0
+    ? withdrawAmount
+    : Number(botUser.balance)
+  const rate = Number(bot.settings?.usdToCurrencyRate || 1000)
+  const usdAmount = currencyAmount / rate
+  const minWithdrawUsd = Number(bot.settings?.minWithdrawUsd || 0.5)
 
-  if (usdAmount < Number(bot.settings.minWithdrawUsd)) {
+  if (usdAmount < minWithdrawUsd) {
     await sendMessage(bot.botToken, chatId, '❌ Insufficient balance for withdrawal.')
     return
   }
@@ -609,7 +613,10 @@ export async function handleWebhook(req: any, res: any, botToken: string, update
             return
           }
 
-          await handleWithdrawAmountSelected(bot, botUser, chatId, Math.floor(parsed))
+          // Use Math.floor only when rate > 1 (coin-based bots); keep decimals for 1:1 USD bots
+          const rate2 = Number(bot.settings?.usdToCurrencyRate || 1000)
+          const finalAmount = rate2 <= 1 ? parsed : Math.floor(parsed)
+          await handleWithdrawAmountSelected(bot, botUser, chatId, finalAmount)
           return
         } else if (withdrawState === 'awaiting_address') {
           await redisDel('withdraw_state:' + botUser.id)
