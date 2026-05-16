@@ -88,8 +88,10 @@ export async function executeFaucetPayPayout(settings: any, destination: string,
   logger.info('FaucetPay payout request', {
     destination: destination.trim(),
     amountUsd,
+    amountUsdType: typeof amountUsd,
     currency,
     payoutUnits,
+    payoutUnitsCheck: amountUsd * 1e6,
   })
 
   const payload = new URLSearchParams({
