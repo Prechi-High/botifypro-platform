@@ -102,16 +102,6 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
   const usdAmount = currencyAmount / rate
   const minWithdrawUsd = Number(bot.settings?.minWithdrawUsd || 0.5)
 
-  logger.info('processWithdrawal debug', {
-    withdrawAmount,
-    currencyAmount,
-    rawRate: bot.settings?.usdToCurrencyRate,
-    rate,
-    usdAmount,
-    minWithdrawUsd,
-    rawFeePercent: bot.settings?.withdrawFeePercent,
-  })
-
   if (usdAmount < minWithdrawUsd) {
     await sendMessage(bot.botToken, chatId, '❌ Insufficient balance for withdrawal.')
     return
@@ -120,12 +110,6 @@ export async function processWithdrawal(bot: any, botUser: any, address: string,
   const feePercent = Number(bot.settings.withdrawFeePercent || 0)
   const feeUsd = usdAmount * (feePercent / 100)
   const netUsd = usdAmount - feeUsd
-
-  logger.info('processWithdrawal netUsd debug', {
-    feePercent,
-    feeUsd,
-    netUsd,
-  })
   const sym = bot.settings.currencySymbol || '🪙'
   const currencyName = bot.settings.currencyName || 'coins'
   const gateway = getWithdrawProvider(bot.settings)
