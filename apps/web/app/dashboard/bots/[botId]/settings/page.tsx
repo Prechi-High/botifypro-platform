@@ -1018,13 +1018,19 @@ export default function BotSettingsPage() {
                   onClick={async () => {
                     setSavingProOxapay(true)
                     try {
-                      const updates: any = { pro_oxapay_configured: true }
-                      if (proOxapayKeyInput.trim()) updates.pro_oxapay_merchant_key = proOxapayKeyInput
-                      const { error } = await supabase.from('bot_settings').update(updates).eq('bot_id', botId)
-                      if (error) throw error
+                      const res = await fetch(`/api/bots/${botId}/payment-key`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          provider: 'pro-oxapay',
+                          apiKey: proOxapayKeyInput,
+                        }),
+                      })
+                      const payload = await res.json()
+                      if (!res.ok) throw new Error(payload.error || 'Failed to save')
                       setProOxapayConfigured(true)
                       setProOxapayKeyInput('')
-                      toast.success('OxaPay keys saved \u2713')
+                      toast.success('OxaPay keys saved ✓')
                     } catch (e: any) {
                       toast.error(e?.message || 'Failed to save')
                     }

@@ -266,8 +266,9 @@ export async function PUT(request: Request, context: RouteContext) {
         // Only update passphrase if explicitly changed — never reset it
         ...(passphraseUpdate !== undefined ? { withdrawalPassphrase: passphraseUpdate } : {}),
         // Pro plan fields (only saved if pro user)
+        // Only update proPlanEnabled if explicitly sent in the body — never reset it to false silently
         ...(userPlan === 'pro' ? {
-          proPlanEnabled: Boolean(body.proPlanEnabled),
+          ...(body.proPlanEnabled !== undefined ? { proPlanEnabled: Boolean(body.proPlanEnabled) } : {}),
           proPlanDepositMin: Number(body.proPlanDepositMin || 10),
           proPlanDurationDays: Number(body.proPlanDurationDays || 30),
           proPlanDailyBonus: Number(body.proPlanDailyBonus || 50),

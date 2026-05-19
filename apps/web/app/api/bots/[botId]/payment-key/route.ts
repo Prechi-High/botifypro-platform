@@ -89,7 +89,9 @@ async function verifyPassword(email: string, password: string) {
 }
 
 function normalizeProvider(input: string) {
-  return input === 'oxapay' ? 'oxapay' : 'faucetpay'
+  if (input === 'oxapay') return 'oxapay'
+  if (input === 'pro-oxapay') return 'pro-oxapay'
+  return 'faucetpay'
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -103,7 +105,6 @@ export async function POST(request: Request, context: RouteContext) {
     const provider = normalizeProvider(String(body.provider || 'faucetpay'))
     const apiKey = String(body.apiKey || '').trim()
     const currentPassword = String(body.currentPassword || '')
-    const isReplacing = provider === 'oxapay' ? bot.settings.oxapayPayoutConfigured : bot.settings.faucetpayConfigured
 
     if (!apiKey) {
       return NextResponse.json({ error: 'API key is required' }, { status: 400 })
@@ -112,6 +113,16 @@ export async function POST(request: Request, context: RouteContext) {
     if (provider === 'oxapay' && bot.creator.plan !== 'pro') {
       return NextResponse.json({ error: 'OxaPay payout keys are available on Pro only' }, { status: 403 })
     }
+
+    if (provider === 'pro-oxapay' && bot.creator.plan !== 'pro') {
+      return NextResponse.json({ error: 'Investment plan OxaPay keys are available on Pro only' }, { status: 403 })
+    }
+
+    const isReplacing = provider === 'oxapay'
+      ? bot.settings.oxapayPayoutConfigured
+      : provider === 'pro-oxapay'
+        ? Boolean((bot.settings as any).proOxapayConfigured)
+        : bot.settings.faucetpayConfigured
 
     if (isReplacing) {
       if (!currentPassword) {
@@ -127,7 +138,15 @@ export async function POST(request: Request, context: RouteContext) {
     const encrypted = encryptSecret(apiKey)
     const last4 = last4Secret(apiKey)
 
-    if (provider === 'oxapay') {
+    if (provider === 'pro-oxapay') {
+      await prisma.botSettings.update({
+        where: { botId },
+        data: {
+          proOxapayConfigured: true,
+          proOxapayMerchantKey: apiKey,
+        } as any,
+      })
+    } else if (provider === 'oxapay') {
       await prisma.botSettings.update({
         where: { botId },
         data: {
