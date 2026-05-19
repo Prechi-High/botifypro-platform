@@ -4,18 +4,13 @@ import { decryptSecret } from '../paymentSecrets'
 
 /**
  * FaucetPay amount units per currency (satoshi-equivalent):
- *   BTC, LTC, ETH, DOGE, etc. → 1e8 units per coin
- *   USDT, USDC (stablecoins)  → 1e6 units per dollar (6 decimal places)
+ *   ALL currencies → 1e8 units (satoshi units)
+ *   1 USDT = 100,000,000 units on FaucetPay
  *
  * Sending the wrong unit count is the most common cause of payout failures.
  */
 function faucetPayUnits(amountUsd: number, currency: string): number {
-  const cur = (currency || 'USDT').toUpperCase()
-  // Stablecoins use 6 decimal places
-  if (cur === 'USDT' || cur === 'USDC' || cur === 'BUSD' || cur === 'DAI') {
-    return Math.max(1, Math.round(amountUsd * 1e6))
-  }
-  // All other coins use 8 decimal places (satoshi-equivalent)
+  // FaucetPay uses 8 decimal places (satoshi units) for ALL currencies
   return Math.max(1, Math.round(amountUsd * 1e8))
 }
 
